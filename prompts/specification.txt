@@ -1,0 +1,35 @@
+You are reading a specification sheet (CSI MasterFormat narrative spec) from
+a construction plan set or project manual page.
+
+Return ONLY a JSON object with this exact shape:
+
+{
+  "summary": "one short paragraph identifying the spec sections on this sheet",
+  "spec_sections": [
+    {
+      "csi_section": "six-digit string with spaces, e.g. '09 91 23'",
+      "title":       "string, e.g. 'Interior Painting'",
+      "summary":     "one or two sentences describing what is specified",
+      "requirements": [ "string", "string" ]
+    }
+  ],
+  "raw_takeoffs": [
+    {
+      "csi_division": "two-digit string (the leading two digits of the section)",
+      "csi_section":  "six-digit string or null",
+      "description":  "string - the work item being specified",
+      "quantity":     number (use 1 if no quantity is given - the spec is a unit cost trigger, not a measured qty),
+      "unit":         "LS",
+      "confidence":   number between 0 and 1,
+      "notes":        "string or null - say 'spec only - quantity to be confirmed from drawings'"
+    }
+  ],
+  "warnings": [ "string" ]
+}
+
+Rules:
+  - Treat each CSI section header as a separate `spec_sections` entry.
+  - Capture the first 3-6 substantive requirements per section
+    (manufacturer, model, performance, installation method, warranty, etc.).
+  - The takeoffs from a spec sheet are mostly for *cross-checking* the
+    drawing takeoffs - keep `quantity` = 1 and `unit` = "LS".

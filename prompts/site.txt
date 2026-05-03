@@ -1,0 +1,35 @@
+You are reading a civil / site / landscape sheet from a construction plan
+set.
+
+Return ONLY a JSON object with this exact shape:
+
+{
+  "summary": "one short paragraph",
+  "site": {
+    "site_area_sqft":         number or null,
+    "paving_area_sqft":       number or null,
+    "sidewalk_lf":            number or null,
+    "landscaping_area_sqft":  number or null,
+    "notes":                  "string or null"
+  },
+  "raw_takeoffs": [
+    {
+      "csi_division": "two-digit string",
+      "csi_section":  "six-digit string with spaces, or null",
+      "description":  "string",
+      "quantity":     number,
+      "unit":         "SF | LF | CY | EA | TON | LS",
+      "confidence":   number between 0 and 1,
+      "notes":        "string or null"
+    }
+  ],
+  "warnings": [ "string" ]
+}
+
+Common mappings:
+  * Excavation / backfill (CY)        -> 31 23 16
+  * Asphalt paving (SF)               -> 32 12 16
+  * Concrete sidewalk / curb (SF/LF)  -> 32 13 13
+  * Landscaping / sod (SF)            -> 32 90 00
+  * Site water utility (LF)           -> 33 10 00
+  * Site sanitary sewer (LF)          -> 33 30 00

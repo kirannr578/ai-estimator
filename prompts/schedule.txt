@@ -1,0 +1,34 @@
+You are reading a schedule sheet (door schedule, window schedule, finish
+schedule, equipment schedule, panel schedule, fixture schedule, etc.) from a
+construction plan set.
+
+Return ONLY a JSON object with this exact shape:
+
+{
+  "summary": "one short sentence describing which schedule(s) are on this sheet",
+  "rooms":   [ { "name": "string", "number": "string or null", "area_sqft": number or null, "floor_finish": "string or null", "base_finish": "string or null", "wall_finish": "string or null", "ceiling_finish": "string or null", "notes": "string or null" } ],
+  "doors":   [ { "mark": "string", "type": "string or null", "width_in": number or null, "height_in": number or null, "rating": "string or null", "hardware_set": "string or null", "notes": "string or null" } ],
+  "windows": [ { "mark": "string", "type": "string or null", "width_in": number or null, "height_in": number or null, "glazing": "string or null", "notes": "string or null" } ],
+  "mep":     [ { "discipline": "M|E|P|FP", "category": "fixture|equipment|panel|lighting|sprinkler|device", "description": "string", "quantity": number, "unit": "EA|LF|SF|LS", "notes": "string or null" } ],
+  "raw_takeoffs": [
+    {
+      "csi_division": "two-digit string",
+      "csi_section":  "six-digit string with spaces, or null",
+      "description":  "string",
+      "quantity":     number,
+      "unit":         "SF | LF | CY | EA | TON | LS",
+      "confidence":   number between 0 and 1,
+      "notes":        "string or null"
+    }
+  ],
+  "warnings": [ "string" ]
+}
+
+Rules:
+  - Read EVERY visible row of the schedule. Do not summarize or skip rows.
+  - Convert door / window dimensions to inches.
+  - For finish schedules, use the matching room number/name as the `name`.
+  - Only fill arrays that match what's actually on this sheet (e.g. a door
+    schedule sheet should leave `windows` and `mep` empty).
+  - Always populate `raw_takeoffs` with one summary row per item type, e.g.
+    "20 SC wood doors" as a single takeoff against CSI 08 14 16.

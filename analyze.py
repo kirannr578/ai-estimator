@@ -1,0 +1,200 @@
+"""Headless / CLI runner for the Construction Plan Estimator.
+
+Use this when you have a folder full of PDFs and don't want to drag-and-drop
+into the Streamlit UI, or when you want to script a batch run.
+
+Examples (PowerShell):
+
+    # Analyze every PDF under a folder, recursively
+    python analyze.py "C:/path/to/GMP#003-Permit-Set" --recursive --out exports/run1
+
+    # Just the bid packages folder, with a 5-PDF limit (cheap dry run)
+    python analyze.py "C:/.../02-Bid-Packages-(Scope-Specific)" --limit 5 --out exports/dryrun
+
+    # Force a specific provider / model
+    python analyze.py "..." --provider openai --model gpt-4o --out exports/openai_run
+
+The runner writes:
+    <out>/estimate.xlsx   - full Excel workbook
+    <out>/estimate.json   - everything as JSON
+    <out>/run_log.txt     - per-document elapsed time + warnings
+"""
+
+from __future__ import annotations
+
+import argparse
+import logging
+import sys
+import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from pathlib import Path
+
+from dotenv import load_dotenv
+
+from core.estimator import CostDatabase, price_takeoff
+from core.exporter import export_estimate_json, export_estimate_xlsx, save_to_disk
+from core.extractors import extract_bundle, extract_sheet
+from core.llm_client import LLMClient
+from core.pdf_processor import process_pdfs
+from core.schemas import SheetExtraction
+from core.sheet_classifier import classify_sheet
+from core.takeoff import reconcile
+
+load_dotenv()
+
+import json  # noqa: E402
+
+CONFIG_DIR = Path(__file__).resolve().parent / "config"
+
+
+def _gather_pdfs(target: Path, recursive: bool, include_drawings: bool) -> list[Path]:
+    if target.is_file() and target.suffix.lower() == ".pdf":
+        return [target]
+    if not target.is_dir():
+        raise SystemExit(f"Not a PDF or directory: {target}")
+    pattern = "**/*.pdf" if recursive else "*.pdf"
+    pdfs = sorted(p for p in target.glob(pattern) if p.is_file())
+    if not include_drawings:
+        # Heuristic: very large PDFs (>5 MB) are usually drawing sets.
+        pdfs = [p for p in pdfs if p.stat().st_size <= 5 * 1024 * 1024]
+    return pdfs
+
+
+def _process_sheet(args):
+    sheet, provider, model = args
+    llm = LLMClient(provider=provider, model=model)
+    sheet = classify_sheet(sheet, llm)
+    return sheet, extract_sheet(sheet, llm)
+
+
+def _process_bundle(args):
+    bundle, provider, model = args
+    llm = LLMClient(provider=provider, model=model)
+    return bundle, extract_bundle(bundle, llm)
+
+
+def main() -> int:
+    p = argparse.ArgumentParser(description="Run the Construction Plan Estimator on a folder of PDFs.")
+    p.add_argument("path", type=Path, help="A PDF file or a folder containing PDFs.")
+    p.add_argument("--recursive", action="store_true", help="Recurse into subfolders.")
+    p.add_argument("--limit", type=int, default=0, help="Process at most N PDFs (0 = no limit).")
+    p.add_argument("--out", type=Path, default=Path("exports/cli_run"), help="Output directory.")
+    p.add_argument("--provider", choices=["anthropic", "openai"], default=None,
+                   help="Force LLM provider (default: auto-detect from env).")
+    p.add_argument("--model", default=None, help="Override the model name.")
+    p.add_argument("--dpi", type=int, default=200, help="Render DPI for drawing pages (default 200).")
+    p.add_argument("--workers", type=int, default=4, help="Parallel workers (default 4).")
+    p.add_argument("--region", type=float, default=1.00, help="Region cost multiplier (default 1.00).")
+    p.add_argument("--contingency", type=float, default=10.0, help="Contingency %% (default 10).")
+    p.add_argument("--overhead",    type=float, default=10.0, help="Overhead %% (default 10).")
+    p.add_argument("--profit",      type=float, default=5.0,  help="Profit %% (default 5).")
+    p.add_argument("--project-name", default="CLI Run", help="Project name for the estimate header.")
+    p.add_argument("--no-drawings", action="store_true",
+                   help="Skip large PDFs (>5 MB) - cheap text-only run.")
+    p.add_argument("--quiet", action="store_true", help="Less console chatter.")
+    args = p.parse_args()
+
+    logging.basicConfig(
+        level=logging.WARNING if args.quiet else logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    )
+    log = logging.getLogger("analyze")
+
+    pdf_paths = _gather_pdfs(args.path, args.recursive, include_drawings=not args.no_drawings)
+    if args.limit > 0:
+        pdf_paths = pdf_paths[: args.limit]
+    if not pdf_paths:
+        log.error("No PDFs found.")
+        return 2
+
+    log.info("Found %d PDF(s) to analyze.", len(pdf_paths))
+
+    args.out.mkdir(parents=True, exist_ok=True)
+    cache_dir = args.out / "renders"
+
+    t0 = time.time()
+    sheets, bundles = process_pdfs(pdf_paths, cache_dir=cache_dir, dpi=args.dpi)
+    log.info("Split into %d drawing sheets and %d text documents in %.1fs.",
+             len(sheets), len(bundles), time.time() - t0)
+
+    if not sheets and not bundles:
+        log.error("Nothing to analyze after splitting (PDFs were empty or filtered out).")
+        return 3
+
+    extractions: list[SheetExtraction] = []
+    log_lines: list[str] = []
+
+    total_units = len(sheets) + len(bundles)
+    completed = 0
+    t1 = time.time()
+    with ThreadPoolExecutor(max_workers=args.workers) as pool:
+        futures = {}
+        for s in sheets:
+            futures[pool.submit(_process_sheet, (s, args.provider, args.model))] = ("sheet", s)
+        for b in bundles:
+            futures[pool.submit(_process_bundle, (b, args.provider, args.model))] = ("bundle", b)
+
+        for fut in as_completed(futures):
+            kind, src = futures[fut]
+            sid = getattr(src, "sheet_id", None) or getattr(src, "pdf_name", "unknown")
+            unit_t0 = time.time()
+            try:
+                if kind == "sheet":
+                    sheet, ex = fut.result()
+                else:
+                    _, ex = fut.result()
+            except Exception as exc:
+                ex = SheetExtraction(sheet_id=sid, summary=f"Pipeline error: {exc}",
+                                     warnings=[f"pipeline error: {exc}"])
+            extractions.append(ex)
+            completed += 1
+            elapsed = time.time() - unit_t0
+            line = f"[{completed:>3}/{total_units}] {kind:6s} {sid}  ({elapsed:5.1f}s)"
+            if ex.warnings:
+                line += f"  WARN: {ex.warnings[0]}"
+            log_lines.append(line)
+            if not args.quiet:
+                print(line)
+
+    log.info("All extractions done in %.1fs.", time.time() - t1)
+
+    project = reconcile(extractions)
+    final_name = project.project_info.name or args.project_name
+
+    estimate = price_takeoff(
+        project,
+        project_name=final_name,
+        region_multiplier=args.region,
+        contingency_pct=args.contingency,
+        overhead_pct=args.overhead,
+        profit_pct=args.profit,
+        cost_db=CostDatabase(),
+    )
+
+    csi_titles = json.loads((CONFIG_DIR / "csi_divisions.json").read_text(encoding="utf-8"))
+
+    xlsx_bytes = export_estimate_xlsx(estimate, project, csi_titles)
+    save_to_disk(xlsx_bytes, args.out / "estimate.xlsx")
+    json_str = export_estimate_json(estimate, project)
+    save_to_disk(json_str, args.out / "estimate.json")
+    save_to_disk("\n".join(log_lines) + "\n", args.out / "run_log.txt")
+
+    print("")
+    print(f"Project:         {final_name}")
+    if project.project_info.number:
+        print(f"Project number:  {project.project_info.number}")
+    if project.project_info.location:
+        print(f"Location:        {project.project_info.location}")
+    print(f"Drawing sheets:  {len(sheets)}")
+    print(f"Bid packages:    {len(project.bid_packages)}")
+    print(f"Line items:      {len(estimate.line_items)}")
+    print(f"Subtotal:        ${estimate.subtotal:,.2f}")
+    print(f"Grand total:     ${estimate.grand_total:,.2f}")
+    print(f"Output written:  {args.out.resolve()}")
+    if project.warnings:
+        print(f"Warnings:        {len(project.warnings)} (see Warnings sheet in Excel)")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

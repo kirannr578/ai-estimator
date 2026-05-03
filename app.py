@@ -1,0 +1,763 @@
+"""Streamlit UI for the Construction Plan Estimator.
+
+Run with:
+
+    streamlit run app.py
+
+Workflow:
+  1. Upload one or more PDFs (drag and drop in sidebar).
+  2. Configure provider, region multiplier, OH&P, contingency.
+  3. Click 'Analyze plan set' - the app:
+     - splits each PDF into sheets and renders them,
+     - classifies each sheet (discipline + type),
+     - extracts structured takeoffs in parallel,
+     - reconciles cross-sheet duplicates,
+     - prices everything against the cost database.
+  4. Review results across tabs (Estimate, Sheets, Rooms, Doors/Windows,
+     Specs, Raw takeoffs, Warnings).
+  5. Edit unit costs / quantities / OH&P live and re-price.
+  6. Download Excel and JSON.
+"""
+
+from __future__ import annotations
+
+import json
+import logging
+import os
+import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from pathlib import Path
+from typing import Any
+
+import pandas as pd
+import streamlit as st
+from dotenv import load_dotenv
+
+from core.estimator import CostDatabase, price_takeoff
+from core.exporter import export_estimate_json, export_estimate_xlsx
+from core.extractors import extract_bundle, extract_sheet
+from core.llm_client import LLMClient
+from core.pdf_processor import DocumentBundle, process_pdfs
+from core.schemas import Estimate, Sheet, SheetExtraction
+from core.sheet_classifier import classify_sheet
+from core.takeoff import ProjectModel, reconcile
+
+load_dotenv()
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+)
+
+ROOT = Path(__file__).parent
+UPLOAD_DIR = ROOT / "uploads"
+CACHE_DIR = ROOT / ".cache" / "renders"
+EXPORT_DIR = ROOT / "exports"
+CSI_TITLES_PATH = ROOT / "config" / "csi_divisions.json"
+
+UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+CACHE_DIR.mkdir(parents=True, exist_ok=True)
+EXPORT_DIR.mkdir(parents=True, exist_ok=True)
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+
+@st.cache_data(show_spinner=False)
+def _load_csi_titles() -> dict[str, str]:
+    return json.loads(CSI_TITLES_PATH.read_text(encoding="utf-8"))
+
+
+def _save_uploaded_pdfs(uploaded_files) -> list[Path]:
+    paths: list[Path] = []
+    for f in uploaded_files:
+        target = UPLOAD_DIR / f.name
+        target.write_bytes(f.getbuffer())
+        paths.append(target)
+    return paths
+
+
+def _detect_provider() -> str | None:
+    if os.getenv("ANTHROPIC_API_KEY"):
+        return "anthropic"
+    if os.getenv("OPENAI_API_KEY"):
+        return "openai"
+    return None
+
+
+def _process_sheet(args: tuple[Sheet, str, str | None]) -> tuple[Sheet, SheetExtraction]:
+    """Classifier + extractor for a single drawing sheet (thread-pool task)."""
+    sheet, provider, model = args
+    llm = LLMClient(provider=provider, model=model)
+    sheet = classify_sheet(sheet, llm)
+    extraction = extract_sheet(sheet, llm)
+    return sheet, extraction
+
+
+def _process_bundle(args: tuple[DocumentBundle, str, str | None]) -> tuple[DocumentBundle, SheetExtraction]:
+    """Document-level extractor for a whole text PDF (thread-pool task)."""
+    bundle, provider, model = args
+    llm = LLMClient(provider=provider, model=model)
+    extraction = extract_bundle(bundle, llm)
+    return bundle, extraction
+
+
+def _run_pipeline(
+    pdf_paths: list[Path],
+    provider: str,
+    model: str | None,
+    region_mult: float,
+    contingency_pct: float,
+    overhead_pct: float,
+    profit_pct: float,
+    project_name: str,
+    dpi: int,
+    max_workers: int,
+    progress_cb,
+) -> tuple[list[Sheet], list[DocumentBundle], list[SheetExtraction], ProjectModel, Estimate]:
+    progress_cb(0.02, "Splitting PDFs and rendering sheets...")
+    sheets, bundles = process_pdfs(pdf_paths, cache_dir=CACHE_DIR, dpi=dpi)
+    if not sheets and not bundles:
+        raise RuntimeError("No usable pages found in the uploaded PDFs.")
+
+    total_units = len(sheets) + len(bundles)
+    progress_cb(
+        0.08,
+        f"Found {len(sheets)} drawing sheet(s) and {len(bundles)} text document(s). "
+        f"Classifying and extracting...",
+    )
+
+    extractions: list[SheetExtraction] = []
+    completed = 0
+
+    with ThreadPoolExecutor(max_workers=max_workers) as pool:
+        sheet_futures = {
+            pool.submit(_process_sheet, (s, provider, model)): ("sheet", s) for s in sheets
+        }
+        bundle_futures = {
+            pool.submit(_process_bundle, (b, provider, model)): ("bundle", b) for b in bundles
+        }
+        all_futures = {**sheet_futures, **bundle_futures}
+
+        new_sheets: list[Sheet] = list(sheets)
+
+        for fut in as_completed(all_futures):
+            kind, src = all_futures[fut]
+            try:
+                if kind == "sheet":
+                    sheet, ex = fut.result()
+                    # Replace original sheet object with the (possibly mutated) one.
+                    for i, s in enumerate(new_sheets):
+                        if s is src:
+                            new_sheets[i] = sheet
+                            break
+                else:
+                    _, ex = fut.result()
+            except Exception as exc:
+                logging.error("Unit %s failed: %s", getattr(src, "pdf_name", src), exc)
+                sheet_id = getattr(src, "sheet_id", None) or getattr(src, "pdf_name", "unknown")
+                ex = SheetExtraction(
+                    sheet_id=sheet_id,
+                    summary=f"Pipeline error: {exc}",
+                    warnings=[f"pipeline error: {exc}"],
+                )
+            extractions.append(ex)
+            completed += 1
+            progress_cb(
+                0.08 + 0.78 * completed / max(total_units, 1),
+                f"Analyzed {completed}/{total_units} document units...",
+            )
+
+        sheets = new_sheets
+
+    progress_cb(0.88, "Reconciling cross-document data...")
+    project = reconcile(extractions)
+
+    progress_cb(0.94, "Pricing takeoffs against cost database...")
+    final_project_name = project.project_info.name or project_name
+    estimate = price_takeoff(
+        project,
+        project_name=final_project_name,
+        region_multiplier=region_mult,
+        contingency_pct=contingency_pct,
+        overhead_pct=overhead_pct,
+        profit_pct=profit_pct,
+        cost_db=CostDatabase(),
+    )
+
+    progress_cb(1.0, "Done.")
+    return sheets, bundles, extractions, project, estimate
+
+
+# ---------------------------------------------------------------------------
+# UI
+# ---------------------------------------------------------------------------
+
+
+st.set_page_config(
+    page_title="Construction Plan Estimator",
+    page_icon="\U0001F3D7",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
+
+st.title("Construction Plan Estimator")
+st.caption(
+    "Upload a multi-PDF plan set; the app reads every sheet, builds a "
+    "CSI-organized takeoff, and produces a priced estimate with full "
+    "traceability back to the source drawings."
+)
+
+# --- Sidebar -----------------------------------------------------------------
+
+with st.sidebar:
+    st.header("Project")
+    project_name = st.text_input("Project name", value="New Project")
+
+    detected = _detect_provider()
+    provider_choice = st.selectbox(
+        "AI provider",
+        options=[
+            ("auto", "Auto-detect from .env"),
+            ("anthropic", "Anthropic (Claude)"),
+            ("openai", "OpenAI (GPT-4o)"),
+        ],
+        format_func=lambda x: x[1],
+        index=0,
+    )
+    chosen_provider = detected if provider_choice[0] == "auto" else provider_choice[0]
+    if chosen_provider:
+        st.success(f"Using {chosen_provider}")
+    else:
+        st.error(
+            "No API key found. Copy `.env.example` to `.env` and add either "
+            "`ANTHROPIC_API_KEY` or `OPENAI_API_KEY`."
+        )
+
+    custom_model = st.text_input(
+        "Model override (optional)",
+        value="",
+        placeholder="e.g. claude-sonnet-4-5 or gpt-4o",
+    ).strip() or None
+
+    st.divider()
+    st.header("Estimating settings")
+    region_mult = st.number_input(
+        "Region cost multiplier", value=float(os.getenv("REGION_MULTIPLIER", "1.00")),
+        min_value=0.5, max_value=2.5, step=0.01, format="%.2f",
+    )
+    contingency_pct = st.slider("Contingency %", 0.0, 25.0, 10.0, 0.5)
+    overhead_pct = st.slider("Overhead %", 0.0, 25.0, 10.0, 0.5)
+    profit_pct = st.slider("Profit %", 0.0, 20.0, 5.0, 0.5)
+
+    st.divider()
+    st.header("Performance")
+    dpi = st.slider("Render DPI", 100, 300, int(os.getenv("RENDER_DPI", "200")), 25,
+                    help="Higher = better OCR but more tokens. 200 is a good default.")
+    max_workers = st.slider("Parallel sheets", 1, 8, int(os.getenv("MAX_CONCURRENCY", "4")))
+
+    st.divider()
+    st.subheader("Input")
+
+    input_mode = st.radio(
+        "Source",
+        options=["Upload files", "Local folder"],
+        horizontal=True,
+        index=0,
+        help="Use 'Local folder' to point at a directory with many PDFs (e.g. an entire GMP set) without dragging each file.",
+    )
+
+    uploaded_files = []
+    folder_pdfs: list[Path] = []
+    if input_mode == "Upload files":
+        uploaded_files = st.file_uploader(
+            "Upload plan-set PDF(s)",
+            type=["pdf"],
+            accept_multiple_files=True,
+            help="Drag in any number of PDFs. Each page is treated as one sheet.",
+        )
+    else:
+        folder_str = st.text_input(
+            "Folder path",
+            value="",
+            placeholder=r"e.g. C:\Users\you\Project\GMP#003-Permit-Set",
+        ).strip()
+        recursive = st.checkbox("Recurse into subfolders", value=True)
+        skip_large = st.checkbox(
+            "Skip large PDFs (> 5 MB) - cheap text-only run",
+            value=False,
+            help="Useful for processing only the bid packages / specs without burning vision tokens on huge drawing sets.",
+        )
+        if folder_str:
+            folder = Path(folder_str)
+            if folder.exists() and folder.is_dir():
+                pattern = "**/*.pdf" if recursive else "*.pdf"
+                folder_pdfs = sorted(p for p in folder.glob(pattern) if p.is_file())
+                if skip_large:
+                    folder_pdfs = [p for p in folder_pdfs if p.stat().st_size <= 5 * 1024 * 1024]
+                st.success(f"Found {len(folder_pdfs)} PDF(s).")
+                with st.expander("Preview file list", expanded=False):
+                    for p in folder_pdfs[:200]:
+                        st.caption(f"\u2022 {p.relative_to(folder)}  ({p.stat().st_size / 1024:.0f} KB)")
+                    if len(folder_pdfs) > 200:
+                        st.caption(f"... and {len(folder_pdfs) - 200} more.")
+            elif folder.exists():
+                st.error("That path is a file, not a folder.")
+            else:
+                st.error("Folder not found.")
+
+    run_disabled = not chosen_provider or (
+        (input_mode == "Upload files" and not uploaded_files)
+        or (input_mode == "Local folder" and not folder_pdfs)
+    )
+    run_clicked = st.button(
+        "Analyze plan set",
+        type="primary",
+        use_container_width=True,
+        disabled=run_disabled,
+    )
+
+# --- Main area --------------------------------------------------------------
+
+if run_clicked:
+    if input_mode == "Upload files":
+        pdf_paths = _save_uploaded_pdfs(uploaded_files)
+    else:
+        pdf_paths = folder_pdfs   # use the on-disk paths directly; no copy needed
+    progress_bar = st.progress(0.0)
+    status_text = st.empty()
+
+    def update_progress(p: float, msg: str) -> None:
+        progress_bar.progress(min(max(p, 0.0), 1.0))
+        status_text.info(msg)
+
+    started = time.time()
+    try:
+        sheets, bundles, extractions, project, estimate = _run_pipeline(
+            pdf_paths=pdf_paths,
+            provider=chosen_provider,
+            model=custom_model,
+            region_mult=region_mult,
+            contingency_pct=contingency_pct,
+            overhead_pct=overhead_pct,
+            profit_pct=profit_pct,
+            project_name=project_name,
+            dpi=dpi,
+            max_workers=max_workers,
+            progress_cb=update_progress,
+        )
+    except Exception as exc:
+        progress_bar.empty()
+        status_text.empty()
+        st.error(f"Pipeline failed: {exc}")
+        st.stop()
+
+    elapsed = time.time() - started
+    status_text.success(
+        f"Analyzed {len(sheets)} drawing sheet(s) and {len(bundles)} document(s) in {elapsed:.1f}s."
+    )
+
+    st.session_state["sheets"] = sheets
+    st.session_state["bundles"] = bundles
+    st.session_state["extractions"] = extractions
+    st.session_state["project"] = project
+    st.session_state["estimate"] = estimate
+
+# --- Results -----------------------------------------------------------------
+
+if "estimate" in st.session_state:
+    csi_titles = _load_csi_titles()
+    project: ProjectModel = st.session_state["project"]
+    estimate: Estimate = st.session_state["estimate"]
+    sheets: list[Sheet] = st.session_state["sheets"]
+    bundles: list[DocumentBundle] = st.session_state.get("bundles", [])
+    extractions: list[SheetExtraction] = st.session_state["extractions"]
+    pi = project.project_info
+
+    # --- Project header banner ---
+    if pi and (pi.name or pi.number):
+        bits = []
+        if pi.name:        bits.append(f"**{pi.name}**")
+        if pi.number:      bits.append(f"#{pi.number}")
+        if pi.location:    bits.append(pi.location)
+        if pi.contractor:  bits.append(f"GC: {pi.contractor}")
+        if pi.bid_due:     bits.append(f"Bid due: {pi.bid_due}")
+        st.info(" \u2022 ".join(bits))
+
+    # --- KPI row ---
+    k1, k2, k3, k4, k5 = st.columns(5)
+    k1.metric("Drawing sheets", len(sheets))
+    k2.metric("Bid packages", len(project.bid_packages))
+    k3.metric("Line items", len(estimate.line_items))
+    k4.metric("Subtotal", f"${estimate.subtotal:,.0f}")
+    k5.metric("Grand total", f"${estimate.grand_total:,.0f}")
+
+    tabs = st.tabs([
+        "Project", "Bid Packages", "Scope Matrix", "Alternates",
+        "Estimate", "By Division", "Sheets", "Rooms",
+        "Doors / Windows", "Structural / MEP", "Specs",
+        "Raw takeoffs", "Warnings",
+    ])
+
+    # --- Project tab ---
+    with tabs[0]:
+        c1, c2 = st.columns([1, 1])
+        with c1:
+            st.subheader("Project information")
+            st.write(f"**Name:** {pi.name or '(not detected)'}")
+            st.write(f"**Number:** {pi.number or '(not detected)'}")
+            st.write(f"**Location:** {pi.location or '(not detected)'}")
+            st.write(f"**Owner:** {pi.owner or '(not detected)'}")
+            st.write(f"**General contractor:** {pi.contractor or '(not detected)'}")
+            st.write(f"**Bid due:** {pi.bid_due or '(not detected)'}")
+            if pi.sources:
+                st.caption(f"Source PDFs: {', '.join(pi.sources)}")
+        with c2:
+            st.subheader("Document inventory")
+            inventory = [
+                {"Type": "Drawing sheet", "Count": len(sheets)},
+                {"Type": "Bid package",   "Count": sum(1 for b in bundles if b.sheet_type.endswith("bid_package") or "bid_package" in str(b.sheet_type))},
+                {"Type": "Project manual / flyer / questionnaire",
+                 "Count": sum(1 for b in bundles if "project_manual" in str(b.sheet_type) or "bid_form" in str(b.sheet_type))},
+            ]
+            st.dataframe(pd.DataFrame(inventory), hide_index=True, use_container_width=True)
+
+            st.subheader("Coverage by CSI division")
+            sm_rows = []
+            for div in sorted(project.scope_matrix.by_division):
+                pkgs = project.scope_matrix.by_division[div]
+                sm_rows.append({
+                    "Div":      div,
+                    "Title":    csi_titles.get(div, ""),
+                    "# Packages": len(pkgs),
+                    "Trades":   ", ".join(p.trade_name or p.pdf_name for p in pkgs),
+                })
+            if sm_rows:
+                st.dataframe(pd.DataFrame(sm_rows), hide_index=True, use_container_width=True)
+            else:
+                st.caption("No bid-package coverage detected.")
+
+    # --- Bid Packages tab ---
+    with tabs[1]:
+        if not project.bid_packages:
+            st.info("No bid packages detected. Upload Beck-style scope/bid PDFs to populate this view.")
+        else:
+            for p in sorted(project.bid_packages, key=lambda x: x.package_number or x.pdf_name):
+                title_bits = filter(None, [
+                    f"#{p.package_number}" if p.package_number else None,
+                    p.trade_name,
+                    f"({p.pdf_name})",
+                ])
+                with st.expander(" \u2022 ".join(title_bits), expanded=False):
+                    cols = st.columns([1, 2])
+                    with cols[0]:
+                        st.write(f"**Project:** {p.project_name or '?'}  (#{p.project_number or '?'})")
+                        st.write(f"**CSI divisions:** {', '.join(p.csi_divisions) or '?'}")
+                        if p.csi_sections:
+                            st.caption("Sections: " + ", ".join(p.csi_sections))
+                        if p.referenced_drawings:
+                            st.caption("Refd drawings: " + ", ".join(p.referenced_drawings))
+                        if p.referenced_specs:
+                            st.caption("Refd specs: " + ", ".join(p.referenced_specs))
+                    with cols[1]:
+                        if p.summary:
+                            st.write(p.summary)
+                    if p.inclusions:
+                        st.markdown(f"**Inclusions ({len(p.inclusions)}):**")
+                        for it in p.inclusions:
+                            st.markdown(f"- {it}")
+                    if p.exclusions:
+                        st.markdown(f"**Exclusions ({len(p.exclusions)}):**")
+                        for it in p.exclusions:
+                            st.markdown(f"- {it}")
+                    if p.alternates:
+                        st.markdown(f"**Alternates ({len(p.alternates)}):**")
+                        st.dataframe(
+                            pd.DataFrame([a.model_dump() for a in p.alternates]),
+                            hide_index=True, use_container_width=True,
+                        )
+                    if p.unit_prices:
+                        st.markdown(f"**Unit prices ({len(p.unit_prices)}):**")
+                        st.dataframe(
+                            pd.DataFrame([u.model_dump() for u in p.unit_prices]),
+                            hide_index=True, use_container_width=True,
+                        )
+
+    # --- Scope Matrix tab ---
+    with tabs[2]:
+        if not project.scope_matrix.by_division:
+            st.info("No CSI division coverage to display yet.")
+        else:
+            rows = []
+            for div in sorted(project.scope_matrix.by_division):
+                for p in project.scope_matrix.by_division[div]:
+                    rows.append({
+                        "Div":     div,
+                        "Title":   csi_titles.get(div, ""),
+                        "Pkg #":   p.package_number or "",
+                        "Trade":   p.trade_name or "",
+                        "PDF":     p.pdf_name,
+                        "Inclusions": len(p.inclusions),
+                        "Exclusions": len(p.exclusions),
+                        "Alternates": len(p.alternates),
+                        "Unit prices": len(p.unit_prices),
+                    })
+            st.dataframe(pd.DataFrame(rows), hide_index=True, use_container_width=True)
+            if project.scope_matrix.coverage_warnings:
+                st.warning(
+                    "Potential scope overlaps:\n\n- " +
+                    "\n- ".join(project.scope_matrix.coverage_warnings)
+                )
+
+    # --- Alternates tab ---
+    with tabs[3]:
+        if not project.scope_matrix.all_alternates:
+            st.info("No alternates detected.")
+        else:
+            st.dataframe(
+                pd.DataFrame([a.model_dump() for a in project.scope_matrix.all_alternates]),
+                hide_index=True, use_container_width=True,
+            )
+
+    # --- Estimate tab ---
+    with tabs[4]:
+        st.subheader("Priced line items")
+        df = pd.DataFrame([li.model_dump() for li in estimate.line_items])
+        if df.empty:
+            st.info("No priced line items yet.")
+        else:
+            df["source_sheet_ids"] = df["source_sheet_ids"].apply(lambda xs: ", ".join(xs))
+            edited = st.data_editor(
+                df[
+                    [
+                        "csi_division", "csi_section", "description",
+                        "quantity", "unit", "unit_cost", "total_cost",
+                        "confidence", "source_sheet_ids", "cost_source", "notes",
+                    ]
+                ].rename(columns={
+                    "csi_division": "Div", "csi_section": "Section",
+                    "description": "Description", "quantity": "Qty",
+                    "unit": "Unit", "unit_cost": "Unit Cost",
+                    "total_cost": "Total", "confidence": "Conf",
+                    "source_sheet_ids": "Source Sheets",
+                    "cost_source": "Cost Key", "notes": "Notes",
+                }),
+                hide_index=True,
+                use_container_width=True,
+                num_rows="dynamic",
+                column_config={
+                    "Unit Cost": st.column_config.NumberColumn(format="$%.2f"),
+                    "Total":     st.column_config.NumberColumn(format="$%.2f"),
+                    "Conf":      st.column_config.NumberColumn(format="%.2f"),
+                    "Qty":       st.column_config.NumberColumn(format="%.2f"),
+                },
+            )
+            if st.button("Recalculate totals from edited table", use_container_width=True):
+                edited["Total"] = (edited["Qty"].fillna(0) * edited["Unit Cost"].fillna(0)).round(2)
+                # Update estimate in place
+                for i, li in enumerate(estimate.line_items):
+                    if i >= len(edited):
+                        break
+                    li.quantity = float(edited.iloc[i]["Qty"] or 0)
+                    li.unit_cost = float(edited.iloc[i]["Unit Cost"] or 0)
+                    li.total_cost = round(li.quantity * li.unit_cost, 2)
+                st.session_state["estimate"] = estimate
+                st.rerun()
+
+        st.divider()
+        st.subheader("Project totals")
+        c1, c2 = st.columns(2)
+        c1.write(
+            f"**Subtotal:** ${estimate.subtotal:,.2f}\n\n"
+            f"**Contingency ({estimate.contingency_pct:.1f}%):** ${estimate.contingency:,.2f}\n\n"
+            f"**Overhead ({estimate.overhead_pct:.1f}%):** ${estimate.overhead:,.2f}\n\n"
+            f"**Profit ({estimate.profit_pct:.1f}%):** ${estimate.profit:,.2f}\n\n"
+            f"### **GRAND TOTAL: ${estimate.grand_total:,.2f}**"
+        )
+        with c2:
+            st.write("**Download**")
+            xlsx_bytes = export_estimate_xlsx(estimate, project, csi_titles)
+            st.download_button(
+                "Download Excel (.xlsx)",
+                data=xlsx_bytes,
+                file_name=f"{estimate.project_name.replace(' ', '_')}_estimate.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=True,
+            )
+            json_str = export_estimate_json(estimate, project)
+            st.download_button(
+                "Download JSON",
+                data=json_str,
+                file_name=f"{estimate.project_name.replace(' ', '_')}_estimate.json",
+                mime="application/json",
+                use_container_width=True,
+            )
+
+    # --- By Division ---
+    with tabs[5]:
+        rows = []
+        for div, total in sorted(estimate.by_division.items()):
+            rows.append({
+                "Div": div,
+                "Title": csi_titles.get(div, ""),
+                "Subtotal": total,
+                "% of subtotal": (total / estimate.subtotal * 100) if estimate.subtotal else 0.0,
+            })
+        df_div = pd.DataFrame(rows)
+        if df_div.empty:
+            st.info("No priced lines.")
+        else:
+            st.dataframe(
+                df_div,
+                hide_index=True,
+                use_container_width=True,
+                column_config={
+                    "Subtotal":     st.column_config.NumberColumn(format="$%.2f"),
+                    "% of subtotal": st.column_config.ProgressColumn(
+                        format="%.1f%%", min_value=0.0, max_value=100.0,
+                    ),
+                },
+            )
+            st.bar_chart(df_div.set_index("Div")["Subtotal"])
+
+    # --- Sheets ---
+    with tabs[6]:
+        st.subheader("Sheet inventory")
+        for sheet in sheets:
+            with st.expander(
+                f"{sheet.sheet_id} - {sheet.title or '(no title)'} "
+                f"[{sheet.discipline} / {sheet.sheet_type}]",
+                expanded=False,
+            ):
+                cols = st.columns([2, 3])
+                with cols[0]:
+                    if sheet.image_path and Path(sheet.image_path).exists():
+                        st.image(sheet.image_path, use_container_width=True)
+                with cols[1]:
+                    summary = next(
+                        (e.summary for e in extractions if e.sheet_id == sheet.sheet_id),
+                        "",
+                    )
+                    st.write(f"**Source PDF:** {sheet.pdf_name} (page {sheet.page_index + 1})")
+                    st.write(f"**Discipline:** {sheet.discipline}")
+                    st.write(f"**Sheet type:** {sheet.sheet_type}")
+                    st.write(f"**Scale:** {sheet.scale or 'unknown'}")
+                    st.write("**Summary:**")
+                    st.write(summary or "(no summary)")
+
+    # --- Rooms ---
+    with tabs[7]:
+        if not project.rooms:
+            st.info("No rooms identified.")
+        else:
+            st.dataframe(
+                pd.DataFrame([r.model_dump() for r in project.rooms]),
+                hide_index=True,
+                use_container_width=True,
+            )
+
+    # --- Doors / Windows ---
+    with tabs[8]:
+        c1, c2 = st.columns(2)
+        with c1:
+            st.subheader(f"Doors ({len(project.doors)})")
+            if project.doors:
+                st.dataframe(
+                    pd.DataFrame([d.model_dump() for d in project.doors]),
+                    hide_index=True, use_container_width=True,
+                )
+            else:
+                st.info("No doors identified.")
+        with c2:
+            st.subheader(f"Windows ({len(project.windows)})")
+            if project.windows:
+                st.dataframe(
+                    pd.DataFrame([w.model_dump() for w in project.windows]),
+                    hide_index=True, use_container_width=True,
+                )
+            else:
+                st.info("No windows identified.")
+
+    # --- Structural / MEP ---
+    with tabs[9]:
+        c1, c2 = st.columns(2)
+        with c1:
+            st.subheader(f"Structural ({len(project.structural)})")
+            if project.structural:
+                st.dataframe(
+                    pd.DataFrame([s.model_dump() for s in project.structural]),
+                    hide_index=True, use_container_width=True,
+                )
+            else:
+                st.info("No structural items identified.")
+        with c2:
+            st.subheader(f"MEP ({len(project.mep)})")
+            if project.mep:
+                st.dataframe(
+                    pd.DataFrame([m.model_dump() for m in project.mep]),
+                    hide_index=True, use_container_width=True,
+                )
+            else:
+                st.info("No MEP items identified.")
+
+    # --- Specs ---
+    with tabs[10]:
+        if not project.spec_sections:
+            st.info("No specification sections identified.")
+        else:
+            for spec in sorted(project.spec_sections, key=lambda s: s.csi_section):
+                with st.expander(f"{spec.csi_section} - {spec.title}", expanded=False):
+                    if spec.summary:
+                        st.write(spec.summary)
+                    if spec.requirements:
+                        st.write("**Requirements:**")
+                        for req in spec.requirements:
+                            st.write(f"- {req}")
+                    if spec.source_sheet_id:
+                        st.caption(f"Source: {spec.source_sheet_id}")
+
+    # --- Raw takeoffs ---
+    with tabs[11]:
+        if not project.takeoffs:
+            st.info("No raw takeoffs.")
+        else:
+            df_t = pd.DataFrame([t.model_dump() for t in project.takeoffs])
+            df_t["source_sheet_ids"] = df_t["source_sheet_ids"].apply(lambda xs: ", ".join(xs))
+            st.dataframe(df_t, hide_index=True, use_container_width=True)
+
+    # --- Warnings ---
+    with tabs[12]:
+        if not project.warnings:
+            st.success("No warnings.")
+        else:
+            for w in project.warnings:
+                st.warning(w)
+
+else:
+    st.info(
+        "Upload one or more plan-set PDFs in the sidebar and click "
+        "**Analyze plan set** to begin."
+    )
+    with st.expander("How it works", expanded=True):
+        st.markdown(
+            """
+            1. **Split + render.** Each PDF page becomes one sheet, rendered at the
+               configured DPI for the vision model.
+            2. **Classify.** A title-block heuristic (sheet number / keyword in
+               embedded text) handles the easy cases; the vision LLM picks up the
+               rest.
+            3. **Extract.** Each sheet is routed to a discipline-specific
+               extractor (architectural, structural, MEP, schedule, spec, site).
+               Returns strict JSON matching our schema.
+            4. **Reconcile.** Rooms, doors, windows, fixtures and specs are
+               de-duplicated across sheets - the floor plan and the schedule
+               agree on one row per item.
+            5. **Price.** Each takeoff is matched against
+               `config/cost_database.json` (exact CSI section first, then
+               keyword fallback within the same division).
+            6. **Review and edit.** Every line is editable in the table.
+               Recalculate totals and download Excel / JSON when you're happy.
+            """
+        )

@@ -1,0 +1,19 @@
+.env
+.venv/
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+
+# Runtime artifacts
+.cache/
+exports/
+uploads/
+*.xlsx
+*.json.bak
+
+# IDE
+.idea/
+.vscode/
+.DS_Store
