@@ -13,6 +13,13 @@ uploads/
 *.xlsx
 *.json.bak
 
+# CWICR dataset + embedding-index cache — lives in ~/.cache/cwicr/ by
+# default (outside the workspace), but if anyone overrides CWICR_CACHE_DIR
+# to a workspace-relative path we still want it ignored.
+.cache/cwicr/
+*.parquet
+embeddings_v*.npy
+
 # Local-only client-quote overrides (do not commit real customer data)
 config/client_quote.local.json
 

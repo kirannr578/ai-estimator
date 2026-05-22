@@ -105,13 +105,67 @@ default (override via the sidebar in the UI).
 
 ## Editing the cost database
 
-Unit costs live in `config/cost_database.json`, keyed by CSI section. Every
-entry has a `unit_cost`, `unit`, `description` and an optional `notes` field.
-Edit the JSON directly or tweak values per-project from the **Costs** tab in
-the UI.
+Unit costs flow through two layers, in order, for every takeoff line:
 
-A **regional multiplier** in `.env` (or the sidebar) scales every unit cost
-(e.g. `1.18` for higher-cost metros, `0.92` for low-cost markets).
+1. **CWICR open dataset (primary, F1)** — ~55,000 work-item entries from
+   the `datadrivenconstruction/OpenConstructionEstimate-DDC-CWICR` open
+   dataset (CC-BY-4.0). The estimator does a TF-IDF first pass over the
+   full description corpus, then re-ranks the top 200 with a
+   `sentence-transformers/all-MiniLM-L6-v2` semantic similarity score.
+   The best candidate wins if its similarity is at or above
+   `CWICR_MIN_SIMILARITY` (default `0.55`).
+2. **Seed `config/cost_database.json` (fallback)** — the bundled
+   47-entry hand-seeded DB, keyed by CSI section. Used when CWICR misses
+   or when CWICR is disabled.
+
+`CostLine.cost_source` records which lookup won:
+
+* `cwicr:<row_id>` — CWICR match (the row id traces back to the source
+  parquet for audit).
+* The CSI key (e.g. `03 30 00`) — seed-DB match.
+* `(no match)` — neither layer found a unit cost; the line is reported
+  at $0 and is excluded from the headline subtotal.
+
+**Cold start.** The first run downloads the CWICR Parquet (~41 MB) into
+`~/.cache/cwicr/`, then builds the embedding index (~80 MB, on disk) in
+60–120 s on CPU. Every subsequent run is < 5 s warm-up. The Streamlit
+"Estimate" tab and the Excel "Line Items" sheet both surface the
+**Cost Source** (`cwicr` / `seed` / `no match`) and the per-line
+**CWICR Similarity** so reviewers can sanity-check matches.
+
+**Configuration knobs** (`.env` or environment):
+
+| Variable                | Default     | Purpose                                                    |
+| ----------------------- | ----------- | ---------------------------------------------------------- |
+| `CWICR_REGION`          | `usa_usd`   | Reserved for future multi-track support                    |
+| `CWICR_YEAR`            | _(blank)_   | Year ceiling — currently a no-op (dataset has no year col) |
+| `CWICR_MIN_SIMILARITY`  | `0.55`      | Minimum similarity to accept a CWICR match                 |
+| `CWICR_DISABLED`        | `false`     | Set to `true` to bypass CWICR and use the seed DB only     |
+
+**CLI flag.** `analyze.py --cost-db {cwicr,seed,both}` (default
+`both`) overrides the resolution order:
+`cwicr` = CWICR only, `seed` = seed DB only, `both` = layered (default).
+`CWICR_DISABLED=true` always wins over `--cost-db`.
+
+**Editing the seed DB.** `config/cost_database.json` still works as
+before — keyed by CSI section, with `unit_cost`, `unit`, `description`,
+and optional `notes` / `keywords`. Edit the JSON directly or tweak
+values per-project from the **Costs** tab in the UI.
+
+A **regional multiplier** in `.env` (or the sidebar) scales every unit
+cost (CWICR or seed) — e.g. `1.18` for higher-cost metros, `0.92` for
+low-cost markets.
+
+---
+
+## Data attribution
+
+This product uses the **CWICR — Construction Work Items, Components &
+Resources** open dataset by Data Driven Construction
+([github.com/datadrivenconstruction/OpenConstructionEstimate-DDC-CWICR](https://github.com/datadrivenconstruction/OpenConstructionEstimate-DDC-CWICR)),
+licensed under **Creative Commons Attribution 4.0 International
+(CC-BY-4.0)**. The bundled client-quote PDF stamps a small attribution
+line on the last page whenever any line item is sourced from CWICR data.
 
 ---
 
@@ -130,6 +184,8 @@ core/
   takeoff.py                Cross-document reconcile + project-info + scope matrix
   estimator.py              Apply costs, OH&P, contingency
   exporter.py               Excel / JSON export
+  pricing/
+    cwicr_matcher.py        CWICR open cost-dataset matcher (TF-IDF + MiniLM)
 prompts/                    Versioned prompts per extractor
 config/
   csi_divisions.json        CSI MasterFormat reference

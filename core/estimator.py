@@ -1,9 +1,19 @@
 """Apply unit costs to a `ProjectModel` to produce a priced `Estimate`.
 
-Lookup order for each takeoff line:
-  1. Exact CSI section match in `cost_database.json`.
-  2. Keyword match within the same CSI division.
-  3. Skip pricing (line is reported with $0 and a warning).
+Lookup order for each takeoff line (post-F1):
+
+  1. **CWICR open dataset** — semantic + TF-IDF match against the 55k-row
+     CWICR open cost dataset (CC-BY-4.0). Used when the resulting
+     similarity is at or above `CWICR_MIN_SIMILARITY` (default 0.55) and
+     CWICR is not disabled via `CWICR_DISABLED=true` or the `cost_db`
+     CLI flag.
+  2. Exact CSI section match in `config/cost_database.json` (seed DB).
+  3. Keyword match within the same CSI division (seed DB).
+  4. Skip pricing (line is reported with $0 and a `(no match)` source).
+
+`CostLine.cost_source` records which lookup won: ``cwicr:<row_id>`` for a
+CWICR match (traceable back to the source row), the CSI key for a seed-DB
+match, or ``(no match)`` when both layers missed.
 """
 
 from __future__ import annotations
@@ -13,6 +23,13 @@ import logging
 from pathlib import Path
 from typing import Any
 
+from .pricing.cwicr_matcher import (
+    CwicrCandidate,
+    CwicrMatcher,
+    get_default_matcher,
+    is_cwicr_disabled,
+    min_similarity_threshold,
+)
 from .schemas import CostCategory, CostLine, Estimate, TakeoffItem
 from .takeoff import ProjectModel
 
@@ -70,6 +87,148 @@ class CostDatabase:
 
 
 # ---------------------------------------------------------------------------
+# CWICR ↔ seed-DB bridge
+# ---------------------------------------------------------------------------
+
+
+# Per-division fallback waste factor mirroring the seed DB heuristic. Used
+# when CWICR wins the match (CWICR rows don't ship a waste factor). Kept
+# in one place so it stays in sync with `config/cost_database.json` where
+# possible.
+_WASTE_BY_DIVISION: dict[str, float] = {
+    "03": 1.07,  # concrete
+    "04": 1.08,  # masonry
+    "05": 1.03,  # steel
+    "06": 1.10,  # wood / carpentry
+    "07": 1.07,  # thermal / moisture
+    "08": 1.02,  # openings
+    "09": 1.10,  # finishes
+    "31": 1.05,  # earthwork
+    "32": 1.05,  # exterior
+}
+
+
+# Per-division default cost-category used when CWICR doesn't ship one. CWICR
+# carries labour / material / equipment splits per row but no single tag —
+# we infer "subcontractor" for trades that the seed DB also tags that way.
+_CATEGORY_BY_DIVISION: dict[str, CostCategory] = {
+    "01": CostCategory.OTHER,
+    "02": CostCategory.SUBCONTRACTOR,
+    "03": CostCategory.SUBCONTRACTOR,
+    "04": CostCategory.SUBCONTRACTOR,
+    "05": CostCategory.SUBCONTRACTOR,
+    "06": CostCategory.LABOR,
+    "07": CostCategory.SUBCONTRACTOR,
+    "08": CostCategory.MATERIAL,
+    "09": CostCategory.SUBCONTRACTOR,
+    "10": CostCategory.MATERIAL,
+    "11": CostCategory.EQUIPMENT,
+    "21": CostCategory.SUBCONTRACTOR,
+    "22": CostCategory.SUBCONTRACTOR,
+    "23": CostCategory.SUBCONTRACTOR,
+    "26": CostCategory.SUBCONTRACTOR,
+    "31": CostCategory.SUBCONTRACTOR,
+    "32": CostCategory.SUBCONTRACTOR,
+    "33": CostCategory.SUBCONTRACTOR,
+}
+
+
+def _category_for_cwicr_candidate(item: TakeoffItem, candidate: CwicrCandidate) -> CostCategory:
+    """Derive a CostCategory for a CWICR-priced line.
+
+    Prefer the takeoff's CSI division → category map. Fall back to OTHER.
+    """
+    cat = _CATEGORY_BY_DIVISION.get(item.csi_division)
+    if cat:
+        return cat
+    # Heuristic: if a row's labor cost dominates, it's labor; if equipment
+    # dominates, equipment; else subcontractor as a safe default.
+    parts = {
+        CostCategory.LABOR:     candidate.labor_cost,
+        CostCategory.MATERIAL:  candidate.material_cost,
+        CostCategory.EQUIPMENT: candidate.equipment_cost,
+    }
+    biggest = max(parts.items(), key=lambda kv: kv[1])
+    if biggest[1] > 0:
+        return biggest[0]
+    return CostCategory.SUBCONTRACTOR
+
+
+def _waste_for_cwicr(item: TakeoffItem) -> float:
+    """Per-CSI-division waste factor mirroring the seed DB convention."""
+    return _WASTE_BY_DIVISION.get(item.csi_division, 1.0)
+
+
+def _build_cwicr_line(
+    item: TakeoffItem,
+    candidate: CwicrCandidate,
+    region_multiplier: float,
+) -> CostLine:
+    """Construct a `CostLine` from a CWICR candidate, honouring unit-mismatch
+    suppression the same way the seed-DB path does.
+
+    The estimator records `cost_source = "cwicr:<row_id>"` and stamps the
+    candidate's similarity into `confidence` (clamped to [0, 1]).
+    """
+    unit_cost = float(candidate.unit_price) * region_multiplier
+    cost_category = _category_for_cwicr_candidate(item, candidate)
+    waste_factor = _waste_for_cwicr(item)
+
+    raw_qty = item.quantity
+    ordered_qty = round(raw_qty * waste_factor, 4)
+
+    cost_source = f"cwicr:{candidate.source_row_id}"
+    confidence = max(0.0, min(1.0, float(candidate.similarity)))
+
+    takeoff_unit = (item.unit or "").upper().strip()
+    cand_unit = (candidate.unit or "").upper().strip()
+    unit_mismatch = bool(takeoff_unit) and bool(cand_unit) and takeoff_unit != cand_unit
+
+    if unit_mismatch:
+        mismatch_note = (
+            f"unit mismatch: takeoff={item.unit}, cwicr={candidate.unit}; "
+            f"cost suppressed from total — the CWICR best match is metric / "
+            f"differently-keyed. Add a conversion factor or override unit_cost "
+            f"manually to include this line."
+        )
+        return CostLine(
+            csi_division=item.csi_division,
+            csi_section=item.csi_section or "",
+            description=item.description,
+            quantity=ordered_qty,
+            unit=item.unit,
+            unit_cost=0.0,
+            total_cost=0.0,
+            cost_category=cost_category,
+            raw_quantity=raw_qty,
+            waste_factor=waste_factor,
+            confidence=confidence,
+            source_sheet_ids=item.source_sheet_ids,
+            cost_source=cost_source,
+            notes=" | ".join(filter(None, [item.notes, mismatch_note])) or None,
+            suppressed=True,
+        )
+
+    total = round(unit_cost * ordered_qty, 2)
+    return CostLine(
+        csi_division=item.csi_division,
+        csi_section=item.csi_section or "",
+        description=item.description,
+        quantity=ordered_qty,
+        unit=item.unit,
+        unit_cost=round(unit_cost, 2),
+        total_cost=total,
+        cost_category=cost_category,
+        raw_quantity=raw_qty,
+        waste_factor=waste_factor,
+        confidence=confidence,
+        source_sheet_ids=item.source_sheet_ids,
+        cost_source=cost_source,
+        notes=item.notes,
+    )
+
+
+# ---------------------------------------------------------------------------
 # Pricing
 # ---------------------------------------------------------------------------
 
@@ -82,12 +241,71 @@ def price_takeoff(
     overhead_pct: float = 10.0,
     profit_pct: float = 5.0,
     cost_db: CostDatabase | None = None,
+    *,
+    cwicr_matcher: CwicrMatcher | None = None,
+    use_cwicr: bool | None = None,
+    use_seed: bool = True,
 ) -> Estimate:
-    db = cost_db or CostDatabase()
+    """Apply unit costs to a project's takeoffs.
+
+    Resolution order (when both layers are enabled):
+
+      1. CWICR (if `use_cwicr`, `CWICR_DISABLED` is unset, and the best
+         similarity ≥ `CWICR_MIN_SIMILARITY`).
+      2. Seed cost DB (`config/cost_database.json`), exact CSI section
+         then keyword match within the same division.
+      3. `(no match)` placeholder line at $0.
+    """
+    if use_seed:
+        db = cost_db or CostDatabase()
+    else:
+        db = None
+
+    # ---- CWICR layer setup ----
+    if use_cwicr is None:
+        use_cwicr = not is_cwicr_disabled()
+    matcher: CwicrMatcher | None = None
+    if use_cwicr:
+        try:
+            matcher = cwicr_matcher or get_default_matcher()
+        except Exception as exc:
+            logger.warning(
+                "CWICR matcher unavailable (%s); falling back to seed DB only.",
+                exc,
+            )
+            matcher = None
+    cwicr_threshold = min_similarity_threshold()
+
     line_items: list[CostLine] = []
 
     for t in project.takeoffs:
-        entry, key = db.lookup(t)
+        # ---- 1. CWICR ----
+        cwicr_cand: CwicrCandidate | None = None
+        if matcher is not None:
+            try:
+                cands = matcher.match(
+                    t.description,
+                    unit_hint=t.unit,
+                    csi_hint=t.csi_section or t.csi_division,
+                    top_k=1,
+                )
+            except Exception as exc:
+                logger.warning(
+                    "CWICR match failed for %r (%s); falling back to seed DB.",
+                    t.description[:60], exc,
+                )
+                cands = []
+            if cands and cands[0].similarity >= cwicr_threshold:
+                cwicr_cand = cands[0]
+
+        if cwicr_cand is not None:
+            line_items.append(_build_cwicr_line(t, cwicr_cand, region_multiplier))
+            continue
+
+        # ---- 2. Seed DB ----
+        entry, key = (None, "")
+        if db is not None:
+            entry, key = db.lookup(t)
         if entry is None:
             line_items.append(CostLine(
                 csi_division=t.csi_division,

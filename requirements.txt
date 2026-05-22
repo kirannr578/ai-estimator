@@ -19,3 +19,13 @@ reportlab>=4.0,<5.0       # client-quote PDF builder
 # Utilities
 tenacity>=9.0.0           # retries for LLM calls
 rapidfuzz>=3.10.0         # fuzzy matching for room/spec dedupe
+
+# CWICR open cost-database matcher (F1)
+# NOTE: the F1 spec listed `datasets>=2.18,<4.0` for HF dataset access;
+# the actual CWICR dataset (datadrivenconstruction/OpenConstructionEstimate-
+# DDC-CWICR) is distributed via GitHub, not Hugging Face, so we use a direct
+# parquet download + pyarrow + pandas instead. `datasets` is therefore not
+# pulled in.
+scikit-learn>=1.4,<2.0           # TF-IDF first-pass over CWICR descriptions
+sentence-transformers>=2.7,<4.0  # all-MiniLM-L6-v2 semantic re-rank (CPU)
+pyarrow>=15.0                    # parquet reader for the CWICR dataset

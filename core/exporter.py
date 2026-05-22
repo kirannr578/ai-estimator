@@ -128,7 +128,7 @@ def export_estimate_xlsx(
         "Div", "CSI Section", "Category", "Description",
         "Raw Qty", "Waste", "Quantity", "Unit",
         "Unit Cost", "Total", "Suppressed", "Confidence", "Source Sheets",
-        "Cost-DB Key", "Notes",
+        "Cost Source", "CWICR Similarity", "Cost-DB Key", "Notes",
     ]
     _write_header(ws, 1, headers)
 
@@ -144,6 +144,21 @@ def export_estimate_xlsx(
             row += 1
 
         cat_val = li.cost_category.value if hasattr(li.cost_category, "value") else str(li.cost_category)
+        # Decode cost source family + CWICR row-id / similarity for the
+        # post-F1 "Cost Source" + "CWICR Similarity" columns. We keep the
+        # raw cost-DB key around in its own column so users can still see
+        # the exact lookup key the seed DB returned.
+        raw_src = li.cost_source or ""
+        if raw_src.startswith("cwicr:"):
+            src_family = "cwicr"
+            cwicr_sim = li.confidence
+        elif raw_src in ("", "(no match)"):
+            src_family = "no match"
+            cwicr_sim = None
+        else:
+            src_family = "seed"
+            cwicr_sim = None
+
         ws.cell(row=row, column=1, value=li.csi_division)
         ws.cell(row=row, column=2, value=li.csi_section or "")
         ws.cell(row=row, column=3, value=cat_val)
@@ -157,8 +172,12 @@ def export_estimate_xlsx(
         ws.cell(row=row, column=11, value="YES" if li.suppressed else "")
         ws.cell(row=row, column=12, value=li.confidence).number_format = "0.00"
         ws.cell(row=row, column=13, value=", ".join(li.source_sheet_ids))
-        ws.cell(row=row, column=14, value=li.cost_source)
-        ws.cell(row=row, column=15, value=li.notes or "")
+        ws.cell(row=row, column=14, value=src_family)
+        sim_cell = ws.cell(row=row, column=15, value=cwicr_sim)
+        if cwicr_sim is not None:
+            sim_cell.number_format = "0.00"
+        ws.cell(row=row, column=16, value=raw_src)
+        ws.cell(row=row, column=17, value=li.notes or "")
 
         if li.suppressed:
             # Grey-shade the entire row and italicize so the reader sees at a

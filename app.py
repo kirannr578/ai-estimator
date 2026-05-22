@@ -830,6 +830,69 @@ if "estimate" in st.session_state:
             _cat_tile(tile_cols[4], "Other",          "other")
             st.divider()
 
+        # ----- Cost database breakdown (F1) -----
+        st.subheader("Cost database")
+        st.caption(
+            "Where each line's unit cost came from. **cwicr** = matched against "
+            "the 55k-row CWICR open dataset (CC-BY-4.0). **seed** = bundled "
+            "47-entry seed `config/cost_database.json`. **no match** = neither "
+            "layer found a unit cost; the line shows $0 and needs manual entry."
+        )
+
+        src_counts: dict[str, int] = {"cwicr": 0, "seed": 0, "no match": 0}
+        cwicr_sims: list[float] = []
+        for li in estimate.line_items:
+            src = li.cost_source or ""
+            if src.startswith("cwicr:"):
+                src_counts["cwicr"] += 1
+                cwicr_sims.append(float(li.confidence))
+            elif src in ("", "(no match)"):
+                src_counts["no match"] += 1
+            else:
+                src_counts["seed"] += 1
+
+        sc1, sc2, sc3, sc4 = st.columns(4)
+        sc1.metric("CWICR",     src_counts["cwicr"])
+        sc2.metric("Seed DB",   src_counts["seed"])
+        sc3.metric("No match",  src_counts["no match"])
+        avg_sim = (sum(cwicr_sims) / len(cwicr_sims)) if cwicr_sims else 0.0
+        sc4.metric("Avg CWICR sim", f"{avg_sim:.2f}" if cwicr_sims else "—")
+
+        # Pie / bar chart of the breakdown.
+        breakdown_df = pd.DataFrame(
+            [{"source": k, "lines": v} for k, v in src_counts.items() if v > 0]
+        )
+        if not breakdown_df.empty:
+            st.bar_chart(breakdown_df.set_index("source"))
+
+        # Session-scoped toggle to disable CWICR + a re-price button.
+        cwicr_off_now = st.session_state.get("cwicr_disabled_session", False)
+        new_disabled = st.checkbox(
+            "Disable CWICR for this session (use seed DB only)",
+            value=cwicr_off_now,
+            help=(
+                "Toggle to re-price with the seed DB only — useful for "
+                "before/after comparisons. Affects this Streamlit session "
+                "only; does not write to `.env`."
+            ),
+            key="cwicr_disabled_session",
+        )
+        if st.button("Re-price with current CWICR setting", use_container_width=True):
+            with st.spinner("Re-pricing…"):
+                new_estimate = price_takeoff(
+                    project,
+                    project_name=estimate.project_name,
+                    region_multiplier=estimate.region_multiplier,
+                    contingency_pct=estimate.contingency_pct,
+                    overhead_pct=estimate.overhead_pct,
+                    profit_pct=estimate.profit_pct,
+                    cost_db=CostDatabase(),
+                    use_cwicr=not new_disabled,
+                )
+            st.session_state["estimate"] = new_estimate
+            st.rerun()
+
+        st.divider()
         st.subheader("Priced line items")
         priced = estimate.priced_line_items
         suppressed = estimate.suppressed_line_items
@@ -838,13 +901,29 @@ if "estimate" in st.session_state:
             st.info("No priced line items yet.")
         else:
             df["source_sheet_ids"] = df["source_sheet_ids"].apply(lambda xs: ", ".join(xs))
+
+            def _src_family(s: str) -> str:
+                if not s or s == "(no match)":
+                    return "no match"
+                if s.startswith("cwicr:"):
+                    return "cwicr"
+                return "seed"
+
+            df["src_family"] = df["cost_source"].apply(_src_family)
+            # CWICR similarity is the same as `confidence` for CWICR rows;
+            # show it as a separate column for at-a-glance match quality.
+            df["cwicr_sim"] = [
+                float(li.confidence) if (li.cost_source or "").startswith("cwicr:") else None
+                for li in priced
+            ]
             edited = st.data_editor(
                 df[
                     [
                         "csi_division", "csi_section", "cost_category", "description",
                         "raw_quantity", "waste_factor", "quantity", "unit",
                         "unit_cost", "total_cost",
-                        "confidence", "source_sheet_ids", "cost_source", "notes",
+                        "confidence", "src_family", "cwicr_sim",
+                        "source_sheet_ids", "cost_source", "notes",
                     ]
                 ].rename(columns={
                     "csi_division": "Div", "csi_section": "Section",
@@ -854,6 +933,8 @@ if "estimate" in st.session_state:
                     "quantity": "Qty",
                     "unit": "Unit", "unit_cost": "Unit Cost",
                     "total_cost": "Total", "confidence": "Conf",
+                    "src_family": "Cost Source",
+                    "cwicr_sim": "CWICR Sim",
                     "source_sheet_ids": "Source Sheets",
                     "cost_source": "Cost Key", "notes": "Notes",
                 }),
@@ -861,12 +942,13 @@ if "estimate" in st.session_state:
                 use_container_width=True,
                 num_rows="dynamic",
                 column_config={
-                    "Unit Cost": st.column_config.NumberColumn(format="$%.2f"),
-                    "Total":     st.column_config.NumberColumn(format="$%.2f"),
-                    "Conf":      st.column_config.NumberColumn(format="%.2f"),
-                    "Qty":       st.column_config.NumberColumn(format="%.2f"),
-                    "Raw Qty":   st.column_config.NumberColumn(format="%.2f"),
-                    "Waste":     st.column_config.NumberColumn(format="%.2f"),
+                    "Unit Cost":  st.column_config.NumberColumn(format="$%.2f"),
+                    "Total":      st.column_config.NumberColumn(format="$%.2f"),
+                    "Conf":       st.column_config.NumberColumn(format="%.2f"),
+                    "Qty":        st.column_config.NumberColumn(format="%.2f"),
+                    "Raw Qty":    st.column_config.NumberColumn(format="%.2f"),
+                    "Waste":      st.column_config.NumberColumn(format="%.2f"),
+                    "CWICR Sim":  st.column_config.NumberColumn(format="%.2f"),
                 },
             )
             if st.button("Recalculate totals from edited table", use_container_width=True):

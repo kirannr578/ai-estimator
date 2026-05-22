@@ -64,11 +64,19 @@ TEXT_DIM = colors.HexColor("#555555")
 class _NumberedCanvas(Canvas):
     """Two-pass canvas: collects page state, then stamps totals on save."""
 
-    def __init__(self, *args, header_left: str = "", footer_center: str = "", **kwargs):
+    def __init__(
+        self,
+        *args,
+        header_left: str = "",
+        footer_center: str = "",
+        footer_attribution: str = "",
+        **kwargs,
+    ):
         super().__init__(*args, **kwargs)
         self._saved_states: list[dict] = []
         self._header_left = header_left
         self._footer_center = footer_center
+        self._footer_attribution = footer_attribution
 
     def showPage(self) -> None:                 # noqa: N802 (reportlab API)
         self._saved_states.append(dict(self.__dict__))
@@ -105,11 +113,17 @@ class _NumberedCanvas(Canvas):
         # Footer
         self.line(MARGIN, 0.55 * inch, w - MARGIN, 0.55 * inch)
         self.drawCentredString(w / 2.0, 0.4 * inch, self._footer_center)
+        if self._footer_attribution and page_num == total_pages:
+            # Tiny attribution line, last page only, so it doesn't clutter the
+            # main body but keeps us CC-BY-4.0 compliant when CWICR data was
+            # used to price the estimate.
+            self.setFont("Helvetica-Oblique", 6)
+            self.drawCentredString(w / 2.0, 0.27 * inch, self._footer_attribution)
 
         self.restoreState()
 
 
-def _canvas_factory(header_left: str, footer_center: str):
+def _canvas_factory(header_left: str, footer_center: str, footer_attribution: str = ""):
     """Return a Canvas subclass closed over the header/footer strings."""
 
     class _BoundCanvas(_NumberedCanvas):
@@ -118,6 +132,7 @@ def _canvas_factory(header_left: str, footer_center: str):
                 *args,
                 header_left=header_left,
                 footer_center=footer_center,
+                footer_attribution=footer_attribution,
                 **kwargs,
             )
 
@@ -959,6 +974,18 @@ def build_quote_pdf(
     header_left = quote_config.company.name or estimate.project_name or ""
     footer_center = "Confidential — do not distribute"
 
+    # CC-BY-4.0 attribution: stamped on the last page only when at least one
+    # CostLine was sourced from the CWICR open dataset.
+    used_cwicr = any(
+        (li.cost_source or "").startswith("cwicr:")
+        for li in estimate.line_items
+    )
+    footer_attribution = (
+        "Unit costs sourced in part from the CWICR open dataset "
+        "(datadrivenconstruction/OpenConstructionEstimate-DDC-CWICR, CC-BY-4.0)."
+        if used_cwicr else ""
+    )
+
     doc = BaseDocTemplate(
         str(out_path),
         pagesize=PAGE_SIZE,
@@ -981,6 +1008,9 @@ def build_quote_pdf(
         id="content",
     )
     doc.addPageTemplates([PageTemplate(id="main", frames=[frame])])
-    doc.build(story, canvasmaker=_canvas_factory(header_left, footer_center))
+    doc.build(
+        story,
+        canvasmaker=_canvas_factory(header_left, footer_center, footer_attribution),
+    )
 
     return out_path

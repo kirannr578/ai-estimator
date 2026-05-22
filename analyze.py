@@ -149,6 +149,17 @@ def main() -> int:
                    help="Skip large PDFs (>5 MB) - cheap text-only run.")
     p.add_argument("--client-pdf", action="store_true",
                    help="Also render a client-ready quote.pdf using config/client_quote.json.")
+    p.add_argument(
+        "--cost-db",
+        choices=["cwicr", "seed", "both"],
+        default="both",
+        help=(
+            "Which cost source(s) to use. 'cwicr' = CWICR open dataset only "
+            "(no seed fallback). 'seed' = the bundled 47-entry seed cost DB "
+            "only. 'both' (default) = try CWICR first, fall back to seed. "
+            "The env var CWICR_DISABLED=true overrides to seed-only."
+        ),
+    )
     p.add_argument("--quiet", action="store_true", help="Less console chatter.")
     args = p.parse_args()
 
@@ -219,6 +230,10 @@ def main() -> int:
     project = reconcile(extractions)
     final_name = project.project_info.name or args.project_name
 
+    # --cost-db gates which lookup layers are active. CWICR_DISABLED env
+    # overrides --cost-db=cwicr / both to seed-only, mirroring the spec.
+    use_cwicr = args.cost_db in {"cwicr", "both"}
+    use_seed = args.cost_db in {"seed", "both"}
     estimate = price_takeoff(
         project,
         project_name=final_name,
@@ -226,7 +241,9 @@ def main() -> int:
         contingency_pct=args.contingency,
         overhead_pct=args.overhead,
         profit_pct=args.profit,
-        cost_db=CostDatabase(),
+        cost_db=CostDatabase() if use_seed else None,
+        use_cwicr=use_cwicr,
+        use_seed=use_seed,
     )
 
     csi_titles = json.loads((CONFIG_DIR / "csi_divisions.json").read_text(encoding="utf-8"))
