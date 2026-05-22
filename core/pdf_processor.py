@@ -115,6 +115,14 @@ class DocumentBundle:
 
 
 # --- Document-level classification ------------------------------------------
+#
+# This gate decides whether a PDF goes through the text/bundle path (one LLM
+# call per doc) or the per-page sheet path (one LLM call per page). Misrouting
+# a government solicitation into the sheet path inflates LLM cost ~35x AND
+# silently skips bid-package extraction. The hint sets below cover both the
+# original trade-specific bid packages (DISD-style "NN.NN_-_Trade.pdf") and
+# government-RFP / SAM.gov / TX-ESBD solicitations that are the dominant
+# real-world input.
 
 _BID_PACKAGE_HINTS = (
     "BID PACKAGE",
@@ -123,10 +131,79 @@ _BID_PACKAGE_HINTS = (
     "SPECIFIC INCLUSIONS",
     "SPECIFIC EXCLUSIONS",
 )
-_BID_FORM_HINTS = ("BLANK BID FORM", "BID FORM TEMPLATE")
-# Bid-package filenames almost always start with "NN.NN_-_..."
+
+# Government / federal / state-procurement RFP language. Any single hit is a
+# strong "this is a solicitation, not a drawing" signal; two hits lock it in
+# even without filename evidence.
+_GOV_RFP_HINTS = (
+    "REQUEST FOR PROPOSALS",
+    "REQUEST FOR PROPOSAL",
+    "REQUEST FOR QUOTATIONS",
+    "REQUEST FOR QUOTATION",
+    "REQUEST FOR QUOTE",
+    "REQUEST FOR COMPETITIVE SEALED PROPOSAL",
+    "RFCSP",
+    "SOLICITATION NUMBER",
+    "SOLICITATION NO.",
+    "SOLICITATION NO ",
+    "OFFEROR",
+    "OFFERORS",
+    "CONTRACTING OFFICER",
+    "SECTION L",
+    "SECTION M",
+    "STATEMENT OF WORK",
+    "SCOPE OF WORK",
+    "SAM.GOV",
+    "BETA.SAM.GOV",
+    "ELECTRONIC STATE BUSINESS DAILY",
+    "ESBD",
+    "SF 1442",
+    "SF-1442",
+    "STANDARD FORM 1442",
+    "SF 33",
+    "SF-33",
+    "STANDARD FORM 33",
+    "PERIOD OF PERFORMANCE",
+    "MAGNITUDE OF CONSTRUCTION",
+    "PROJECT MAGNITUDE",
+    "NOTICE TO PROCEED",
+)
+
+_BID_FORM_HINTS = (
+    "BLANK BID FORM",
+    "BID FORM TEMPLATE",
+    "BID SCHEDULE",
+    "BID PROPOSAL FORM",
+    "PRICE SCHEDULE",
+    "PROPOSAL FORM",
+    "HUB SUBCONTRACTING PLAN",
+    "HSP GOOD FAITH EFFORT",
+)
+
+# Trade-specific bid-package filenames (legacy DISD/Beck convention).
 _BID_PACKAGE_FILENAME_RE = re.compile(r"^\d{2}[.\-]\d{2}[\s_\-]")
 
+# Government-solicitation filename signals. Any single match routes the doc
+# straight to BID_PACKAGE — these prefixes/tokens are unambiguous in practice
+# (SAM.gov uses "Sol_<number>", TX-ESBD prefixes attachments with "ESBD_",
+# RFCSP and SOW appear in nothing but solicitations).
+_GOV_BID_PACKAGE_FILENAME_RES = (
+    re.compile(r"^Sol[_\-]", re.IGNORECASE),
+    re.compile(r"^ESBD[_\-]\d+", re.IGNORECASE),
+    re.compile(r"\bRFCSP\b", re.IGNORECASE),
+    re.compile(r"\bRFP\b", re.IGNORECASE),
+    re.compile(r"^SOW[_\-]", re.IGNORECASE),
+    re.compile(r"_Solicitation_", re.IGNORECASE),
+    re.compile(r"Notice[_\- ]of[_\- ]Project", re.IGNORECASE),
+)
+
+# Blank bid / pricing-schedule / HUB-plan filenames.
+_BID_FORM_FILENAME_RES = (
+    re.compile(r"Bid[_\- ]Schedule", re.IGNORECASE),
+    re.compile(r"\bHSP\b", re.IGNORECASE),
+    re.compile(r"Subcontracting[_\- ]Plan", re.IGNORECASE),
+    re.compile(r"Attachment[_\- ]A\b", re.IGNORECASE),
+)
 
 _PROJECT_MANUAL_HINTS = (
     "GENERAL INSTRUCTIONS TO BIDDERS",
@@ -135,7 +212,55 @@ _PROJECT_MANUAL_HINTS = (
     "EXHIBIT",
     "TABLE OF CONTENTS",
     "INVITATION TO BID",
+    "WAGE DETERMINATION",
+    "DAVIS-BACON",
+    "DAVIS BACON",
+    "PREVAILING WAGE",
+    "GENERAL CONDITIONS",
+    "SUPPLEMENTARY GENERAL CONDITIONS",
+    "UNIFORM GENERAL CONDITIONS",
+    "SAMPLE CONSTRUCTION SERVICES AGREEMENT",
+    "TAX EXEMPTION",
+    "TAX EXEMPT",
+    "AMENDMENT TO SOLICITATION",
+    "AMENDMENT NUMBER",
+    "SOLICITATION AMENDMENT",
 )
+
+# Filenames that mark a doc as a supporting / boilerplate exhibit
+# (amendments, wage determinations, general conditions, sample contracts).
+# Checked BEFORE the bid-package filename signals so that e.g.
+# "Sol_140P6026Q0029_Amd_0001.pdf" lands in PROJECT_MANUAL, not BID_PACKAGE.
+_PROJECT_MANUAL_FILENAME_RES = (
+    re.compile(r"Wage[_\- ]Determination", re.IGNORECASE),
+    re.compile(r"\bDOL\b", re.IGNORECASE),
+    re.compile(r"Davis[_\- ]Bacon", re.IGNORECASE),
+    re.compile(r"Prevailing[_\- ]Wage", re.IGNORECASE),
+    re.compile(r"General[_\- ]Conditions", re.IGNORECASE),
+    re.compile(r"_Amd[_\- ]?\d+", re.IGNORECASE),
+    re.compile(r"\bAmendment\b", re.IGNORECASE),
+    re.compile(r"Tax[_\- ]Exemption", re.IGNORECASE),
+    re.compile(r"Services[_\- ]Agreement", re.IGNORECASE),
+)
+
+# Hard veto: filenames that obviously indicate a drawing set should never be
+# bundle-routed regardless of body text (some drawing-set cover pages contain
+# the word "SOLICITATION" because the parent procurement is one). We anchor
+# on filename separators (`_`, `-`, space, `.`, or end-of-string) rather than
+# `\b` because Python's word-boundary treats `_` as a word character, so
+# `\bDrawings\b` does NOT match `_Drawings.pdf` — the exact filename pattern
+# we need to catch.
+_DRAWING_FILENAME_RES = (
+    re.compile(r"(?:^|[_\-\s.])Drawings?(?:[_\-\s.]|$)", re.IGNORECASE),
+)
+
+# Page-count cap on body-text PROJECT_MANUAL routing. Government solicitations
+# routinely exceed 100 pages (Carr EFA RFCSP is 311 pages, the TTUS Uniform
+# General Conditions exhibit is 109). The cap exists only to avoid bundling a
+# 1000-page drawing set with a stray "Exhibit" phrase on page 1; 500 is well
+# above any realistic single-document RFP and below any plausible drawing-set
+# spine.
+_BUNDLE_PAGE_CAP = 500
 
 
 def _classify_document(
@@ -147,25 +272,73 @@ def _classify_document(
     """Heuristically decide whether a whole PDF should be treated as a single
     text document (bid package / form / manual) instead of split per-page for
     vision analysis.
+
+    Order matters and is filename-first so that the unambiguous signals in
+    real-world solicitation filenames win over incidental body-text mentions
+    (e.g. a parent RFP that says "complete the attached BID SCHEDULE" must
+    not be misclassified as the bid form itself):
+
+      1. drawing-set filename veto
+      2. supporting-document filename (amendments, wage determinations, …)
+      3. bid-form filename (Bid_Schedule, HSP, Attachment_A, …)
+      4. bid-package filename (Sol_, ESBD_, RFCSP, SOW_, legacy NN.NN_-_, …)
+      5. body-text bid-form hints
+      6. body-text bid-package hints (legacy + government RFP)
+      7. body-text project-manual hints
+      8. tiny-brochure fallback
     """
     upper = text.upper()
     name_upper = pdf_name.upper()
 
-    if "BLANK BID FORM" in name_upper or any(h in upper for h in _BID_FORM_HINTS):
-        return SheetType.BID_FORM
+    # 1. Drawing-set veto. A doc whose filename screams "drawings" must go
+    #    through the per-page sheet path even if it has stray RFP text.
+    if any(rx.search(pdf_name) for rx in _DRAWING_FILENAME_RES):
+        return SheetType.UNKNOWN
 
-    # Bid package: filename pattern OR multiple structural hints
-    bid_hits = sum(1 for h in _BID_PACKAGE_HINTS if h in upper)
-    if bid_hits >= 2 or _BID_PACKAGE_FILENAME_RE.match(pdf_name):
-        return SheetType.BID_PACKAGE
-
-    # Project manual / boilerplate text: text-heavy, modest page count, hits
-    # on at least one project-manual phrase.
-    pm_hits = sum(1 for h in _PROJECT_MANUAL_HINTS if h in upper)
-    if pm_hits >= 1 and page_count <= 30 and avg_chars_per_page > 600:
+    # 2. Supporting / boilerplate documents (amendments, wage determinations,
+    #    general conditions, sample contracts, tax exemptions). Routed ahead
+    #    of bid-package filename signals so that e.g.
+    #    "Sol_140P6026Q0029_Amd_0001.pdf" lands in PROJECT_MANUAL rather
+    #    than getting picked up by the leading `Sol_` prefix.
+    if any(rx.search(pdf_name) for rx in _PROJECT_MANUAL_FILENAME_RES):
         return SheetType.PROJECT_MANUAL
 
-    # Tiny brochure / flyer (1-3 pages, mostly text)
+    # 3. Bid-form filename signals (Bid_Schedule, HSP, Attachment_A, …).
+    #    Checked before the bid-package filename signals so that an ESBD
+    #    attachment like "ESBD_..._Attachment A.pdf" (a bid form on its own)
+    #    isn't routed as the parent solicitation just because of the `ESBD_`
+    #    prefix.
+    if "BLANK BID FORM" in name_upper or any(rx.search(pdf_name) for rx in _BID_FORM_FILENAME_RES):
+        return SheetType.BID_FORM
+
+    # 4. Bid-package filename signals: legacy trade-specific pattern OR a
+    #    government-solicitation prefix/token. These are unambiguous in
+    #    practice, so a single filename match is enough.
+    if (
+        _BID_PACKAGE_FILENAME_RE.match(pdf_name)
+        or any(rx.search(pdf_name) for rx in _GOV_BID_PACKAGE_FILENAME_RES)
+    ):
+        return SheetType.BID_PACKAGE
+
+    # 5. Body-text bid-form hints (BLANK BID FORM, BID SCHEDULE, …).
+    if any(h in upper for h in _BID_FORM_HINTS):
+        return SheetType.BID_FORM
+
+    # 6. Body-text bid-package hints — legacy structural phrases or
+    #    two-or-more government-RFP phrases.
+    bid_hits = sum(1 for h in _BID_PACKAGE_HINTS if h in upper)
+    gov_hits = sum(1 for h in _GOV_RFP_HINTS if h in upper)
+    if bid_hits >= 2 or gov_hits >= 2:
+        return SheetType.BID_PACKAGE
+
+    # 7. Project manual / boilerplate text: at least one project-manual phrase
+    #    in body text, page count within the bundle cap, and meaningful text
+    #    density (rules out drawing-only pages with a stray TOC hit).
+    pm_hits = sum(1 for h in _PROJECT_MANUAL_HINTS if h in upper)
+    if pm_hits >= 1 and page_count <= _BUNDLE_PAGE_CAP and avg_chars_per_page > 600:
+        return SheetType.PROJECT_MANUAL
+
+    # 8. Tiny brochure / flyer (1-3 pages, mostly text).
     if page_count <= 3 and avg_chars_per_page > 400:
         return SheetType.PROJECT_MANUAL
 
