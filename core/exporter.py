@@ -17,6 +17,8 @@ from .takeoff import ProjectModel
 HEADER_FILL = PatternFill("solid", fgColor="1F4E78")
 HEADER_FONT = Font(bold=True, color="FFFFFF")
 DIVISION_FILL = PatternFill("solid", fgColor="D9E1F2")
+SUPPRESSED_FILL = PatternFill("solid", fgColor="F2F2F2")  # light grey for unit-mismatch rows
+SUPPRESSED_FONT = Font(italic=True, color="808080")
 
 
 def _autosize(ws, max_width: int = 60) -> None:
@@ -100,7 +102,7 @@ def export_estimate_xlsx(
     headers = [
         "Div", "CSI Section", "Category", "Description",
         "Raw Qty", "Waste", "Quantity", "Unit",
-        "Unit Cost", "Total", "Confidence", "Source Sheets",
+        "Unit Cost", "Total", "Suppressed", "Confidence", "Source Sheets",
         "Cost-DB Key", "Notes",
     ]
     _write_header(ws, 1, headers)
@@ -127,10 +129,19 @@ def export_estimate_xlsx(
         ws.cell(row=row, column=8, value=li.unit)
         ws.cell(row=row, column=9, value=li.unit_cost).number_format = "$#,##0.00"
         ws.cell(row=row, column=10, value=li.total_cost).number_format = "$#,##0.00"
-        ws.cell(row=row, column=11, value=li.confidence).number_format = "0.00"
-        ws.cell(row=row, column=12, value=", ".join(li.source_sheet_ids))
-        ws.cell(row=row, column=13, value=li.cost_source)
-        ws.cell(row=row, column=14, value=li.notes or "")
+        ws.cell(row=row, column=11, value="YES" if li.suppressed else "")
+        ws.cell(row=row, column=12, value=li.confidence).number_format = "0.00"
+        ws.cell(row=row, column=13, value=", ".join(li.source_sheet_ids))
+        ws.cell(row=row, column=14, value=li.cost_source)
+        ws.cell(row=row, column=15, value=li.notes or "")
+
+        if li.suppressed:
+            # Grey-shade the entire row and italicize so the reader sees at a
+            # glance that this line did NOT roll into the totals below.
+            for col in range(1, len(headers) + 1):
+                cell = ws.cell(row=row, column=col)
+                cell.fill = SUPPRESSED_FILL
+                cell.font = SUPPRESSED_FONT
         row += 1
 
     ws.freeze_panes = "A2"

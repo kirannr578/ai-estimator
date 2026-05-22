@@ -108,14 +108,6 @@ def price_takeoff(
             continue
 
         unit_cost = float(entry["unit_cost"]) * region_multiplier
-        # Unit mismatches (e.g. takeoff is SF but DB entry is LF) get flagged,
-        # not silently mispriced.
-        unit_warning = ""
-        if entry.get("unit", "").upper() != t.unit.upper():
-            unit_warning = (
-                f"Unit mismatch: takeoff is {t.unit}, cost-DB is {entry.get('unit')}. "
-                f"Review before relying on this line."
-            )
 
         # Cost-category tag - default to OTHER if the DB entry is untagged or
         # carries a value we don't recognise.
@@ -134,6 +126,44 @@ def price_takeoff(
 
         raw_qty = t.quantity
         ordered_qty = round(raw_qty * waste_factor, 4)
+
+        # Unit mismatches (e.g. takeoff is LF but DB entry is TON) get
+        # suppressed from the total — calibration v2 found two such lines
+        # silently rolling a $34,608 phantom subcontractor line into the
+        # headline subtotal because the multiplication was dimensionally
+        # nonsensical (LF × TON unit price). Future enhancement: read a
+        # documented conversion factor (e.g. `conversions: {LF: 0.012}`)
+        # off the cost-DB entry and apply it; for now any mismatch without
+        # an explicit override is suppressed.
+        takeoff_unit = (t.unit or "").upper().strip()
+        db_unit = str(entry.get("unit", "")).upper().strip()
+        unit_mismatch = bool(takeoff_unit) and bool(db_unit) and takeoff_unit != db_unit
+
+        if unit_mismatch:
+            mismatch_note = (
+                f"unit mismatch: takeoff={t.unit}, db={entry.get('unit')}; "
+                f"cost suppressed from total — fix takeoff unit or add a "
+                f"conversion factor to the cost DB"
+            )
+            line_items.append(CostLine(
+                csi_division=t.csi_division,
+                csi_section=t.csi_section or key,
+                description=t.description,
+                quantity=ordered_qty,
+                unit=t.unit,
+                unit_cost=0.0,
+                total_cost=0.0,
+                cost_category=cost_category,
+                raw_quantity=raw_qty,
+                waste_factor=waste_factor,
+                confidence=t.confidence,
+                source_sheet_ids=t.source_sheet_ids,
+                cost_source=key,
+                notes=" | ".join(filter(None, [t.notes, mismatch_note])) or None,
+                suppressed=True,
+            ))
+            continue
+
         total = round(unit_cost * ordered_qty, 2)
         line_items.append(CostLine(
             csi_division=t.csi_division,
@@ -149,11 +179,14 @@ def price_takeoff(
             confidence=t.confidence,
             source_sheet_ids=t.source_sheet_ids,
             cost_source=key,
-            notes=" | ".join(filter(None, [t.notes, unit_warning])) or None,
+            notes=t.notes,
         ))
 
-    # Sort: by division ascending, then by total_cost descending within division.
-    line_items.sort(key=lambda li: (li.csi_division, -li.total_cost))
+    # Sort: by division ascending, suppressed lines below priced lines within
+    # each division, then by total_cost descending.
+    line_items.sort(
+        key=lambda li: (li.csi_division, 1 if li.suppressed else 0, -li.total_cost)
+    )
 
     return Estimate(
         project_name=project_name,

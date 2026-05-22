@@ -460,6 +460,71 @@ def extract_project_manual(bundle: "DocumentBundle", llm: LLMClient) -> SheetExt
     )
 
 
+def extract_bid_form(bundle: "DocumentBundle", llm: LLMClient) -> SheetExtraction:
+    """Run the bid-form prompt on a bid-schedule / price-schedule / HUB-plan PDF.
+
+    Calibration v2 surfaced that the previous implementation short-circuited
+    every BID_FORM PDF to a no-op stub. That swallowed the only document in
+    the input set (the San Marcos Bid Schedule) that carried real unit-price
+    line items. This extractor runs the same kind of one-shot text LLM call
+    as `extract_bid_package`, but with a prompt focused on the schedule
+    structure (unit prices, lump-sum lines, allowances) instead of the
+    inclusion / exclusion narrative.
+
+    Falls back to a clear WARNING-level skip stub when the document has
+    essentially no text to send to the model (truly blank scanned form).
+    """
+    sheet_id = bundle.pdf_name
+
+    body = (bundle.full_text or "").strip()
+    if len(body) < 200:
+        logger.warning(
+            "extract_bid_form: %s has very little extractable text "
+            "(%d chars); skipping LLM call.",
+            bundle.pdf_name, len(body),
+        )
+        return SheetExtraction(
+            sheet_id=sheet_id,
+            summary="Bid form skipped: insufficient extractable text.",
+            warnings=[
+                f"bid_form skip: {bundle.pdf_name} had only {len(body)} chars of text "
+                "(probably a scanned blank form)."
+            ],
+        )
+
+    user_prompt = load_prompt("bid_form")
+    body_trunc = _truncate_for_text_call(body)
+    extra = (
+        f"Source PDF filename: {bundle.pdf_name}\n"
+        f"Page count: {bundle.page_count}\n\n"
+        f"FULL DOCUMENT TEXT:\n{body_trunc}"
+    )
+
+    try:
+        resp = llm.analyze_text(system_prompt=SYSTEM, user_prompt=user_prompt + "\n\n" + extra)
+        data = resp.parsed if isinstance(resp.parsed, dict) else {}
+    except Exception as exc:
+        logger.warning("Bid-form extraction failed for %s: %s", bundle.pdf_name, exc)
+        return SheetExtraction(
+            sheet_id=sheet_id,
+            summary=f"Bid-form extraction failed: {exc}",
+            warnings=[f"bid_form extractor error: {exc}"],
+        )
+
+    bp = _coerce_bid_package(data, bundle.pdf_name)
+    if bp is not None and not bp.trade_name:
+        # Default trade label so the Bid Packages sheet shows where it came from.
+        bp = bp.model_copy(update={"trade_name": "Bid Form"})
+
+    summary = (bp.summary if bp and bp.summary else "") or str(data.get("summary") or "")
+    return SheetExtraction(
+        sheet_id=sheet_id,
+        summary=summary or f"Bid form extracted ({len(bp.unit_prices) if bp else 0} unit-price lines).",
+        bid_package=bp,
+        warnings=([str(w) for w in _safe_list(data, "warnings")] if isinstance(data, dict) else []),
+    )
+
+
 def extract_bundle(bundle: "DocumentBundle", llm: LLMClient) -> SheetExtraction:
     """Dispatch a `DocumentBundle` (whole-PDF text) to the right extractor."""
     if bundle.sheet_type == SheetType.BID_PACKAGE:
@@ -467,10 +532,6 @@ def extract_bundle(bundle: "DocumentBundle", llm: LLMClient) -> SheetExtraction:
     if bundle.sheet_type == SheetType.PROJECT_MANUAL:
         return extract_project_manual(bundle, llm)
     if bundle.sheet_type == SheetType.BID_FORM:
-        # Blank bid-form template: no extraction needed.
-        return SheetExtraction(
-            sheet_id=bundle.pdf_name,
-            summary="Blank bid-form template (no extraction).",
-        )
+        return extract_bid_form(bundle, llm)
     # Fallback: project-manual style summary
     return extract_project_manual(bundle, llm)

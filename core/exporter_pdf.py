@@ -505,6 +505,73 @@ def _csi_division_table(
         )
     )
     flow.append(tbl)
+    flow.extend(_suppressed_lines_footnote(estimate, styles))
+    return flow
+
+
+def _suppressed_lines_footnote(
+    estimate: Estimate, styles: dict[str, ParagraphStyle]
+) -> list:
+    """Show suppressed (unit-mismatch) lines as a small table with `—` in the
+    cost columns and a single-sentence footnote. They are intentionally
+    excluded from every total in this proposal."""
+    suppressed = list(getattr(estimate, "suppressed_line_items", []) or [])
+    if not suppressed:
+        return []
+
+    flow: list = [
+        Spacer(1, 0.2 * inch),
+        Paragraph(
+            f"Lines excluded from total ({len(suppressed)})", styles["h2"]
+        ),
+    ]
+    rows = [["Div", "Description", "Qty", "Unit", "Unit Cost", "Total"]]
+    for li in suppressed:
+        rows.append(
+            [
+                li.csi_division,
+                Paragraph(li.description, styles["body_small"]),
+                f"{li.quantity:,.2f}",
+                li.unit or "",
+                "\u2014",
+                "\u2014",
+            ]
+        )
+    col_widths = [
+        0.6 * inch,
+        CONTENT_WIDTH - 0.6 * inch - 0.9 * inch - 0.7 * inch - 1.0 * inch - 0.9 * inch,
+        0.9 * inch,
+        0.7 * inch,
+        1.0 * inch,
+        0.9 * inch,
+    ]
+    tbl = Table(rows, colWidths=col_widths, repeatRows=1)
+    tbl.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, 0), GREY_LIGHT),
+                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                ("FONTSIZE", (0, 0), (-1, -1), 8),
+                ("TEXTCOLOR", (0, 1), (-1, -1), TEXT_DIM),
+                ("GRID", (0, 0), (-1, -1), 0.3, GREY_BORDER),
+                ("ALIGN", (2, 1), (-1, -1), "RIGHT"),
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("TOPPADDING", (0, 0), (-1, -1), 3),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+            ]
+        )
+    )
+    flow.append(tbl)
+    flow.append(Spacer(1, 0.05 * inch))
+    flow.append(
+        Paragraph(
+            "<i>The lines above were detected by the takeoff stage but could not "
+            "be priced safely (typically a unit mismatch between the takeoff and "
+            "the cost-DB entry). They are listed for transparency and are NOT "
+            "included in any of the totals in this proposal.</i>",
+            styles["body_small"],
+        )
+    )
     return flow
 
 

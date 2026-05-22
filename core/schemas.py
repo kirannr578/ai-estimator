@@ -291,6 +291,13 @@ class CostLine(BaseModel):
     is what gets multiplied by `unit_cost` to land at `total_cost`. The
     un-padded measurement is preserved in `raw_quantity` for audit and so
     downstream consumers can re-derive waste without re-running the pipeline.
+
+    `suppressed` lines stay in `line_items` for visibility but are excluded
+    from `Estimate` totals / rollups. The estimator sets this when a takeoff
+    can't be safely priced (e.g. a unit mismatch against the cost-DB entry
+    with no documented conversion factor) — see calibration v2 finding #4
+    where a LF×TON multiplication landed a $34,608 phantom line in the
+    headline subtotal.
     """
 
     csi_division: str
@@ -307,6 +314,7 @@ class CostLine(BaseModel):
     source_sheet_ids: list[str] = Field(default_factory=list)
     cost_source: str = ""                  # which cost-db key was used
     notes: Optional[str] = None
+    suppressed: bool = False               # True -> excluded from Estimate totals
 
 
 class Estimate(BaseModel):
@@ -319,13 +327,26 @@ class Estimate(BaseModel):
     line_items: list[CostLine] = Field(default_factory=list)
 
     @property
+    def priced_line_items(self) -> list[CostLine]:
+        """`line_items` minus any flagged `suppressed=True`.
+
+        Used by every total / rollup so the user still sees suppressed lines
+        in exports but they never inflate the headline number.
+        """
+        return [li for li in self.line_items if not li.suppressed]
+
+    @property
+    def suppressed_line_items(self) -> list[CostLine]:
+        return [li for li in self.line_items if li.suppressed]
+
+    @property
     def subtotal(self) -> float:
-        return round(sum(li.total_cost for li in self.line_items), 2)
+        return round(sum(li.total_cost for li in self.priced_line_items), 2)
 
     @property
     def by_division(self) -> dict[str, float]:
         out: dict[str, float] = {}
-        for li in self.line_items:
+        for li in self.priced_line_items:
             out[li.csi_division] = round(out.get(li.csi_division, 0.0) + li.total_cost, 2)
         return out
 
@@ -333,7 +354,7 @@ class Estimate(BaseModel):
     def by_cost_category(self) -> dict[str, float]:
         """Roll up line totals by labor/material/equipment/sub/other."""
         out: dict[str, float] = {c.value: 0.0 for c in CostCategory}
-        for li in self.line_items:
+        for li in self.priced_line_items:
             key = li.cost_category.value if isinstance(li.cost_category, CostCategory) else str(li.cost_category)
             out[key] = round(out.get(key, 0.0) + li.total_cost, 2)
         return {k: v for k, v in out.items() if v > 0}

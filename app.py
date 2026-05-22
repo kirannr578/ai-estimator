@@ -831,7 +831,9 @@ if "estimate" in st.session_state:
             st.divider()
 
         st.subheader("Priced line items")
-        df = pd.DataFrame([li.model_dump() for li in estimate.line_items])
+        priced = estimate.priced_line_items
+        suppressed = estimate.suppressed_line_items
+        df = pd.DataFrame([li.model_dump() for li in priced])
         if df.empty:
             st.info("No priced line items yet.")
         else:
@@ -869,8 +871,9 @@ if "estimate" in st.session_state:
             )
             if st.button("Recalculate totals from edited table", use_container_width=True):
                 edited["Total"] = (edited["Qty"].fillna(0) * edited["Unit Cost"].fillna(0)).round(2)
-                # Update estimate in place
-                for i, li in enumerate(estimate.line_items):
+                # Update only the priced (non-suppressed) lines in place, in
+                # the same order they were rendered.
+                for i, li in enumerate(priced):
                     if i >= len(edited):
                         break
                     li.quantity = float(edited.iloc[i]["Qty"] or 0)
@@ -878,6 +881,37 @@ if "estimate" in st.session_state:
                     li.total_cost = round(li.quantity * li.unit_cost, 2)
                 st.session_state["estimate"] = estimate
                 st.rerun()
+
+        if suppressed:
+            with st.expander(
+                f"Unmatched / suppressed lines ({len(suppressed)}) — not in totals",
+                expanded=False,
+            ):
+                st.caption(
+                    "These takeoff lines were detected but couldn't be priced "
+                    "safely (typically unit mismatch between the takeoff and the "
+                    "cost-DB entry). They are listed here for visibility and are "
+                    "excluded from every total / rollup."
+                )
+                sup_df = pd.DataFrame([li.model_dump() for li in suppressed])
+                sup_df["source_sheet_ids"] = sup_df["source_sheet_ids"].apply(
+                    lambda xs: ", ".join(xs)
+                )
+                st.dataframe(
+                    sup_df[
+                        [
+                            "csi_division", "csi_section", "description",
+                            "raw_quantity", "quantity", "unit", "cost_source", "notes",
+                        ]
+                    ].rename(columns={
+                        "csi_division": "Div", "csi_section": "Section",
+                        "description": "Description",
+                        "raw_quantity": "Raw Qty", "quantity": "Qty",
+                        "unit": "Unit", "cost_source": "Cost Key", "notes": "Notes",
+                    }),
+                    hide_index=True,
+                    use_container_width=True,
+                )
 
         st.divider()
         st.subheader("Project totals")
