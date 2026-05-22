@@ -86,7 +86,8 @@ class Sheet(BaseModel):
     model_config = ConfigDict(use_enum_values=True)
 
     pdf_name: str
-    page_index: int                  # 0-based within the source PDF
+    pdf_path: str = ""                   # absolute / workspace-relative source path (for the deterministic pre-pass)
+    page_index: int = 0                  # 0-based within the source PDF
     sheet_number: Optional[str] = None   # e.g. "A-101"
     title: Optional[str] = None          # e.g. "First Floor Plan"
     discipline: Discipline = Discipline.UNKNOWN
@@ -249,6 +250,59 @@ class BidPackage(BaseModel):
     warnings: list[str] = Field(default_factory=list)
 
 
+# ---------------------------------------------------------------------------
+# Deterministic drawing pre-pass (F3)
+# ---------------------------------------------------------------------------
+#
+# These mirror the dataclasses in `core.extraction.drawing_prepass` so the
+# result can be serialised onto `SheetExtraction` and round-tripped through
+# the JSON/Excel exports. The pre-pass extracts what is unambiguously
+# present in the PDF's vector text (title block, dimensions, schedule
+# tables) so that high-confidence pages can skip the vision-LLM entirely.
+
+
+class TitleBlockData(BaseModel):
+    project_name: Optional[str] = None
+    project_number: Optional[str] = None
+    sheet_number: Optional[str] = None         # e.g. "A101"
+    sheet_title: Optional[str] = None
+    discipline: Optional[str] = None           # "Architectural", "Structural", ...
+    scale: Optional[str] = None                # e.g. "1/4\" = 1'-0\""
+    scale_factor: Optional[float] = None       # paper inches per real-world inch
+    date: Optional[str] = None
+    revision: Optional[str] = None
+    drawn_by: Optional[str] = None
+    checked_by: Optional[str] = None
+
+
+class Dimension(BaseModel):
+    raw_text: str
+    inches: float                              # normalized to inches
+    kind: str                                  # "feet-inches", "decimal-feet", "metric"
+
+
+class ScheduleRow(BaseModel):
+    columns: dict[str, str] = Field(default_factory=dict)
+
+
+class Schedule(BaseModel):
+    kind: str                                  # "door", "window", "room", "finish", "unknown"
+    headers: list[str] = Field(default_factory=list)
+    rows: list[ScheduleRow] = Field(default_factory=list)
+    source_page: int = 0
+
+
+class DrawingPrepassResult(BaseModel):
+    """Snapshot of everything the deterministic pre-pass could pull off
+    a single drawing page without invoking the vision LLM."""
+
+    title_block: TitleBlockData = Field(default_factory=TitleBlockData)
+    dimensions: list[Dimension] = Field(default_factory=list)
+    schedules: list[Schedule] = Field(default_factory=list)
+    quality_issues: list[str] = Field(default_factory=list)
+    confidence: float = 0.0                    # 0..1
+
+
 class SheetExtraction(BaseModel):
     """Everything extracted from a single sheet (or whole bid-package PDF)."""
 
@@ -264,6 +318,13 @@ class SheetExtraction(BaseModel):
     bid_package: Optional[BidPackage] = None   # set when the source was a bid-package PDF
     raw_takeoffs: list["TakeoffItem"] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
+    # F3 — deterministic drawing pre-pass. `prepass` is the structured
+    # snapshot regardless of whether the LLM was eventually invoked;
+    # `lm_skipped` is True when prepass confidence cleared the threshold
+    # and the LLM call was skipped entirely.
+    prepass: Optional[DrawingPrepassResult] = None
+    lm_skipped: bool = False
+    dimensions: list[Dimension] = Field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------

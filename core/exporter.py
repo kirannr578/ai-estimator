@@ -5,12 +5,13 @@ from __future__ import annotations
 import json
 from io import BytesIO
 from pathlib import Path
+from typing import Iterable
 
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 
-from .schemas import Estimate
+from .schemas import Estimate, SheetExtraction
 from .takeoff import ProjectModel
 
 
@@ -40,6 +41,7 @@ def export_estimate_xlsx(
     estimate: Estimate,
     project: ProjectModel,
     csi_titles: dict[str, str],
+    extractions: Iterable[SheetExtraction] | None = None,
 ) -> bytes:
     wb = Workbook()
 
@@ -76,6 +78,29 @@ def export_estimate_xlsx(
         c = ws.cell(row=row, column=3, value=estimate.by_division[div])
         c.number_format = "$#,##0.00"
         row += 1
+
+    # F3 — drawing-prepass coverage. Single-row tile under the division
+    # breakdown so the reader can see, at a glance, how much of the run
+    # came out of the deterministic pre-pass vs the vision LLM.
+    extraction_list = list(extractions or [])
+    drawing_extractions = [
+        e for e in extraction_list
+        if e.bid_package is None and (e.prepass is not None or e.lm_skipped or e.summary)
+    ]
+    if drawing_extractions:
+        row += 1
+        skipped = sum(1 for e in drawing_extractions if e.lm_skipped)
+        total = len(drawing_extractions)
+        skipped_pct = (skipped / total * 100.0) if total else 0.0
+        ws.cell(row=row, column=1, value="Prepass coverage").font = Font(bold=True)
+        ws.cell(
+            row=row, column=2,
+            value=(
+                f"{skipped_pct:.0f}% pages prepass-only / "
+                f"{100.0 - skipped_pct:.0f}% pages LLM-augmented "
+                f"({skipped} of {total})"
+            ),
+        )
 
     # By cost category rollup (labor / material / equipment / sub / other)
     row += 1
@@ -326,10 +351,20 @@ def export_estimate_xlsx(
     # ----- Sheets analysed -----
     if project.sheet_summaries:
         ws = wb.create_sheet("Sheets")
-        _write_header(ws, 1, ["Sheet", "Summary"])
+        _write_header(ws, 1, ["Sheet", "LLM skipped", "Prepass conf", "Summary"])
+        # Index extractions by sheet_id for the LLM-skipped column.
+        skipped_by_sid: dict[str, tuple[bool, float | None]] = {}
+        for ex in extraction_list:
+            conf = ex.prepass.confidence if ex.prepass is not None else None
+            skipped_by_sid[ex.sheet_id] = (bool(ex.lm_skipped), conf)
         for i, (sid, summary) in enumerate(sorted(project.sheet_summaries.items()), start=2):
             ws.cell(row=i, column=1, value=sid)
-            ws.cell(row=i, column=2, value=summary).alignment = Alignment(wrap_text=True)
+            lm_skipped, conf = skipped_by_sid.get(sid, (False, None))
+            ws.cell(row=i, column=2, value="YES" if lm_skipped else "")
+            if conf is not None:
+                c = ws.cell(row=i, column=3, value=conf)
+                c.number_format = "0.00"
+            ws.cell(row=i, column=4, value=summary).alignment = Alignment(wrap_text=True)
         ws.freeze_panes = "A2"
         _autosize(ws, max_width=120)
 

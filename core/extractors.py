@@ -8,10 +8,17 @@ right extractor based on its classified `discipline` + `sheet_type`.
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 from typing import Any
 
 from prompts import load as load_prompt
 
+from .extraction.drawing_prepass import (
+    CONFIDENCE_THRESHOLD,
+    DrawingPrepassResult as _PrepassDC,
+    prepass_drawing_page,
+    to_schema as prepass_to_schema,
+)
 from .llm_client import LLMClient
 from .pdf_processor import DocumentBundle
 from .schemas import (
@@ -322,8 +329,172 @@ def _select_prompt(sheet: Sheet) -> str:
     return "generic"
 
 
+def _run_prepass(sheet: Sheet) -> _PrepassDC | None:
+    """Run the deterministic pre-pass for a drawing sheet, if possible.
+
+    Returns None when the source PDF can't be located on disk (e.g. tests
+    that construct a `Sheet` without populating `pdf_path`).
+    """
+    if not sheet.pdf_path:
+        return None
+    pdf_path = Path(sheet.pdf_path)
+    if not pdf_path.exists():
+        logger.debug(
+            "drawing-prepass: source PDF missing for %s (%s)",
+            sheet.sheet_id, sheet.pdf_path,
+        )
+        return None
+    try:
+        return prepass_drawing_page(pdf_path, sheet.page_index)
+    except Exception as exc:
+        logger.warning(
+            "drawing-prepass failed for %s page %d: %s",
+            sheet.pdf_name, sheet.page_index + 1, exc,
+        )
+        return None
+
+
+def _build_from_prepass(sheet: Sheet, prepass: _PrepassDC) -> SheetExtraction:
+    """Build a `SheetExtraction` directly from a high-confidence prepass.
+
+    Maps title-block fields into the summary, schedule rows into the
+    appropriate door/window/room structures, and persists the full
+    deterministic snapshot on the result for downstream debugging.
+    """
+    sid = sheet.sheet_id
+    tb = prepass.title_block
+
+    doors: list[DoorEntry] = []
+    windows: list[WindowEntry] = []
+    rooms: list[Room] = []
+
+    for sched in prepass.schedules:
+        if sched.kind == "door":
+            for r in sched.rows:
+                mark = _pick(r.columns, ("MARK", "DOOR", "NO", "NUMBER", "ID"))
+                if not mark:
+                    continue
+                doors.append(DoorEntry(
+                    mark=mark,
+                    type=_pick(r.columns, ("TYPE",)),
+                    hardware_set=_pick(r.columns, ("HARDWARE", "HARDWARE SET", "HW SET")),
+                    rating=_pick(r.columns, ("RATING", "FIRE RATING")),
+                    notes=_pick(r.columns, ("REMARKS", "NOTES")),
+                    source_sheet_id=sid,
+                ))
+        elif sched.kind == "window":
+            for r in sched.rows:
+                mark = _pick(r.columns, ("MARK", "WINDOW", "NO", "NUMBER", "ID"))
+                if not mark:
+                    continue
+                windows.append(WindowEntry(
+                    mark=mark,
+                    type=_pick(r.columns, ("TYPE",)),
+                    glazing=_pick(r.columns, ("GLAZING", "GLASS")),
+                    notes=_pick(r.columns, ("REMARKS", "NOTES")),
+                    source_sheet_id=sid,
+                ))
+        elif sched.kind == "room":
+            for r in sched.rows:
+                name = _pick(r.columns, ("NAME", "ROOM", "ROOM NAME"))
+                if not name:
+                    continue
+                rooms.append(Room(
+                    name=name,
+                    number=_pick(r.columns, ("NUMBER", "NO", "ROOM NO", "ROOM #")),
+                    floor_finish=_pick(r.columns, ("FLOOR", "FLOOR FINISH")),
+                    base_finish=_pick(r.columns, ("BASE",)),
+                    wall_finish=_pick(r.columns, ("WALL", "WALLS")),
+                    ceiling_finish=_pick(r.columns, ("CEILING",)),
+                    source_sheet_id=sid,
+                ))
+
+    bits: list[str] = []
+    if tb.discipline:
+        bits.append(tb.discipline)
+    if tb.sheet_number:
+        bits.append(tb.sheet_number)
+    if tb.sheet_title:
+        bits.append(tb.sheet_title)
+    elif sheet.title:
+        bits.append(sheet.title)
+    if tb.scale:
+        bits.append(f"scale {tb.scale}")
+    bits.append(
+        f"{len(prepass.dimensions)} dimensions, {len(prepass.schedules)} "
+        f"schedule table(s) extracted deterministically"
+    )
+    summary = " — ".join(b for b in bits if b)
+
+    return SheetExtraction(
+        sheet_id=sid,
+        summary=summary,
+        rooms=rooms,
+        doors=doors,
+        windows=windows,
+        prepass=prepass_to_schema(prepass),
+        lm_skipped=True,
+        dimensions=list(_iter_dim_models(prepass.dimensions)),
+    )
+
+
+def _pick(cols: dict[str, str], candidates: tuple[str, ...]) -> str | None:
+    """Look up a header by case-insensitive substring match."""
+    if not cols:
+        return None
+    upper_cols = {k.upper(): v for k, v in cols.items() if k}
+    for cand in candidates:
+        cand_up = cand.upper()
+        if cand_up in upper_cols and upper_cols[cand_up]:
+            return upper_cols[cand_up]
+        for key, val in upper_cols.items():
+            if cand_up in key and val:
+                return val
+    return None
+
+
+def _iter_dim_models(dims):
+    from .extraction.drawing_prepass import iter_dimension_models
+    return iter_dimension_models(dims)
+
+
+def _format_prepass_context(prepass: _PrepassDC) -> str:
+    """Render a compact 'deterministic context' block for the LLM prompt."""
+    tb = prepass.title_block
+    lines = ["DETERMINISTIC CONTEXT (pre-extracted from PDF vector text — trust these and focus on what's missing):"]
+    fields = [
+        ("Project name",   tb.project_name),
+        ("Project number", tb.project_number),
+        ("Sheet number",   tb.sheet_number),
+        ("Sheet title",    tb.sheet_title),
+        ("Discipline",     tb.discipline),
+        ("Scale",          tb.scale),
+        ("Date",           tb.date),
+        ("Revision",       tb.revision),
+    ]
+    for label, val in fields:
+        if val:
+            lines.append(f"  {label}: {val}")
+    if prepass.dimensions:
+        lines.append(f"  Dimensions found: {len(prepass.dimensions)} (e.g. " +
+                     ", ".join(d.raw_text for d in prepass.dimensions[:5]) + ")")
+    if prepass.schedules:
+        kinds = ", ".join(f"{s.kind}({len(s.rows)} rows)" for s in prepass.schedules)
+        lines.append(f"  Schedule tables extracted: {kinds}")
+    lines.append(f"  Pre-pass confidence: {prepass.confidence:.2f}")
+    return "\n".join(lines)
+
+
 def extract_sheet(sheet: Sheet, llm: LLMClient) -> SheetExtraction:
-    """Run the right extractor for this sheet."""
+    """Run the right extractor for this sheet.
+
+    F3 wires in a deterministic pre-pass that pulls the title block,
+    dimensions, and schedule tables from the PDF's vector text. When the
+    pre-pass clears `CONFIDENCE_THRESHOLD` we build a `SheetExtraction`
+    directly from it and skip the vision-LLM call; otherwise the LLM
+    runs as before but receives the pre-pass result as additional
+    context.
+    """
     if sheet.sheet_type in {SheetType.COVER, SheetType.INDEX, SheetType.GENERAL_NOTES}:
         # Cover / index pages have no quantities; skip the LLM call.
         return SheetExtraction(
@@ -331,18 +502,35 @@ def extract_sheet(sheet: Sheet, llm: LLMClient) -> SheetExtraction:
             summary=f"{sheet.sheet_type.value if isinstance(sheet.sheet_type, str) else sheet.sheet_type} sheet - no takeoff",
         )
 
+    prepass = _run_prepass(sheet)
+
+    if prepass is not None and prepass.confidence >= CONFIDENCE_THRESHOLD:
+        logger.info(
+            "drawing-prepass hit page %d (confidence=%.2f, %s schedules, %s dimensions)",
+            sheet.page_index + 1,
+            prepass.confidence,
+            len(prepass.schedules),
+            len(prepass.dimensions),
+        )
+        return _build_from_prepass(sheet, prepass)
+
     prompt_name = _select_prompt(sheet)
     user_prompt = load_prompt(prompt_name)
 
-    extra = (
-        f"Sheet number: {sheet.sheet_number or 'unknown'}\n"
-        f"Sheet title:  {sheet.title or 'unknown'}\n"
-        f"Discipline:   {sheet.discipline}\n"
-        f"Sheet type:   {sheet.sheet_type}\n"
-        f"Scale:        {sheet.scale or 'unknown'}\n"
-        f"\nEmbedded text excerpt (may help with text-heavy sheets):\n"
-        f"{sheet.embedded_text[:3000]}"
-    )
+    extra_bits = [
+        f"Sheet number: {sheet.sheet_number or 'unknown'}",
+        f"Sheet title:  {sheet.title or 'unknown'}",
+        f"Discipline:   {sheet.discipline}",
+        f"Sheet type:   {sheet.sheet_type}",
+        f"Scale:        {sheet.scale or 'unknown'}",
+    ]
+    if prepass is not None:
+        extra_bits.append("")
+        extra_bits.append(_format_prepass_context(prepass))
+    extra_bits.append("")
+    extra_bits.append("Embedded text excerpt (may help with text-heavy sheets):")
+    extra_bits.append(sheet.embedded_text[:3000])
+    extra = "\n".join(extra_bits)
 
     try:
         resp = llm.analyze_image(
@@ -354,13 +542,20 @@ def extract_sheet(sheet: Sheet, llm: LLMClient) -> SheetExtraction:
         data = resp.parsed if isinstance(resp.parsed, dict) else {}
     except Exception as exc:
         logger.warning("Extractor failed for %s: %s", sheet.sheet_id, exc)
-        return SheetExtraction(
+        ex = SheetExtraction(
             sheet_id=sheet.sheet_id,
             summary=f"Extraction failed: {exc}",
             warnings=[f"extractor error: {exc}"],
         )
+        if prepass is not None:
+            ex.prepass = prepass_to_schema(prepass)
+        return ex
 
-    return _build_extraction(sheet, data)
+    extraction = _build_extraction(sheet, data)
+    if prepass is not None:
+        extraction.prepass = prepass_to_schema(prepass)
+        extraction.dimensions = list(_iter_dim_models(prepass.dimensions))
+    return extraction
 
 
 # ---------------------------------------------------------------------------

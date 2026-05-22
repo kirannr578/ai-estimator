@@ -31,13 +31,45 @@ Return ONLY a JSON object with this exact shape:
       "csi_section":  "six-digit string with spaces, e.g. '09 91 23', or null",
       "description":  "string",
       "quantity":     number,
-      "unit":         "SF | LF | CY | EA | TON | LS | HR",
+      "unit":         "EA | LF | SF | BF | CY | TON | HR | LS",
       "confidence":   number between 0 and 1,
       "notes":        "string or null"
     }
   ],
   "warnings": [ "string" ]
 }
+
+UNIT SELECTION RULES (read carefully — this drives downstream pricing):
+
+Emit `unit: "LS"` (lump sum) ONLY when the line item is genuinely a
+lump-sum scope with no measurable quantity (e.g. "demolition of existing
+wall — included", "general clean-up"). Lump-sum lines collide with the
+unit-mismatch suppressor in the cost-DB and will zero out if the cost
+database expects a measurable unit — so pick the right dimensional unit
+whenever one applies.
+
+Default dimensional units by item type:
+
+  * 2x and dimensional lumber (studs, joists, rafters, plates, blocking,
+    beams, posts) → `LF` (linear feet) or `BF` (board feet). Prefer `LF`
+    for linear callouts; use `BF` only when the drawing quotes board-foot
+    quantities directly.
+  * Sheathing, subfloor, plywood, OSB, gypsum board, deck boards →
+    `SF` (square feet).
+  * Hardware, framing connectors, joist hangers, hold-downs, anchors,
+    fasteners-by-the-bag, individual studs called out as count → `EA`.
+  * Doors, windows, plumbing fixtures, electrical fixtures, appliances,
+    casework units → `EA`.
+  * Floor finishes, wall finishes, painted areas, roofing, siding → `SF`.
+  * Concrete, fill, excavation → `CY` (cubic yards).
+  * Structural steel by weight → `TON`.
+
+For wood-framing items in CSI 06 10 00 specifically: use `LF` for studs,
+plates, joists, rafters, beams and posts; `BF` only if a board-foot
+quantity is shown on the drawing; `SF` for sheathing and deck boards;
+`EA` for hangers, connectors, hold-downs and individual posts called out
+by count. Do NOT default to `LS` for any framing item that can be
+measured.
 
 Guidance for floor plans:
   - For each room you can identify, populate `rooms` with the best area you

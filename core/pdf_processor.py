@@ -432,6 +432,7 @@ def process_pdfs(
 
                 sheets.append(Sheet(
                     pdf_name=pdf_path.name,
+                    pdf_path=str(pdf_path),
                     page_index=page_index,
                     sheet_number=sheet_number,
                     title=title,

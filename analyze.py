@@ -231,7 +231,7 @@ def main() -> int:
 
     csi_titles = json.loads((CONFIG_DIR / "csi_divisions.json").read_text(encoding="utf-8"))
 
-    xlsx_bytes = export_estimate_xlsx(estimate, project, csi_titles)
+    xlsx_bytes = export_estimate_xlsx(estimate, project, csi_titles, extractions)
     save_to_disk(xlsx_bytes, args.out / "estimate.xlsx")
     json_str = export_estimate_json(estimate, project)
     save_to_disk(json_str, args.out / "estimate.json")

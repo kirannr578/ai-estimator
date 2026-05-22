@@ -925,7 +925,7 @@ if "estimate" in st.session_state:
         )
         with c2:
             st.write("**Download**")
-            xlsx_bytes = export_estimate_xlsx(estimate, project, csi_titles)
+            xlsx_bytes = export_estimate_xlsx(estimate, project, csi_titles, extractions)
             st.download_button(
                 "Download Excel (.xlsx)",
                 data=xlsx_bytes,
@@ -972,9 +972,35 @@ if "estimate" in st.session_state:
     # --- Sheets ---
     with tabs[7]:
         st.subheader("Sheet inventory")
+
+        # F3 — drawing-prepass coverage tile. Only meaningful when there
+        # are drawing sheets in the run; the bundle path is unaffected.
+        sheet_extractions = [
+            e for e in extractions
+            if any(e.sheet_id == s.sheet_id for s in sheets)
+        ]
+        if sheet_extractions:
+            skipped = sum(1 for e in sheet_extractions if e.lm_skipped)
+            total = len(sheet_extractions)
+            pct = (skipped / total * 100.0) if total else 0.0
+            qt1, qt2, qt3 = st.columns(3)
+            qt1.metric("Prepass-only (LLM skipped)", f"{skipped} / {total}", f"{pct:.0f}%")
+            qt2.metric("LLM-augmented", str(total - skipped))
+            qt3.caption(
+                "\u26A1 = deterministic pre-pass cleared the confidence "
+                "threshold; \U0001F916 = vision-LLM ran with pre-pass "
+                "context. The pre-pass extracts title block, dimensions "
+                "and schedule tables straight from the PDF's vector text."
+            )
+
         for sheet in sheets:
+            extraction = next(
+                (e for e in extractions if e.sheet_id == sheet.sheet_id),
+                None,
+            )
+            icon = "\u26A1" if (extraction and extraction.lm_skipped) else "\U0001F916"
             with st.expander(
-                f"{sheet.sheet_id} - {sheet.title or '(no title)'} "
+                f"{icon} {sheet.sheet_id} - {sheet.title or '(no title)'} "
                 f"[{sheet.discipline} / {sheet.sheet_type}]",
                 expanded=False,
             ):
@@ -983,16 +1009,35 @@ if "estimate" in st.session_state:
                     if sheet.image_path and Path(sheet.image_path).exists():
                         st.image(sheet.image_path, use_container_width=True)
                 with cols[1]:
-                    summary = next(
-                        (e.summary for e in extractions if e.sheet_id == sheet.sheet_id),
-                        "",
-                    )
+                    summary = extraction.summary if extraction else ""
                     st.write(f"**Source PDF:** {sheet.pdf_name} (page {sheet.page_index + 1})")
                     st.write(f"**Discipline:** {sheet.discipline}")
                     st.write(f"**Sheet type:** {sheet.sheet_type}")
                     st.write(f"**Scale:** {sheet.scale or 'unknown'}")
+                    if extraction:
+                        if extraction.lm_skipped:
+                            st.success(
+                                "\u26A1 LLM skipped — deterministic "
+                                "pre-pass extracted this sheet."
+                            )
+                        elif extraction.prepass is not None:
+                            st.caption(
+                                "\U0001F916 LLM ran with pre-pass context "
+                                f"(confidence {extraction.prepass.confidence:.2f})."
+                            )
                     st.write("**Summary:**")
                     st.write(summary or "(no summary)")
+                    if extraction and extraction.prepass is not None:
+                        with st.popover("Prepass details"):
+                            tb = extraction.prepass.title_block
+                            st.write(f"**Title block:** {tb.model_dump()}")
+                            st.write(f"**Confidence:** {extraction.prepass.confidence:.2f}")
+                            st.write(f"**Dimensions:** {len(extraction.prepass.dimensions)}")
+                            st.write(f"**Schedules:** {len(extraction.prepass.schedules)}")
+                            if extraction.prepass.quality_issues:
+                                st.warning("\n".join(
+                                    f"- {q}" for q in extraction.prepass.quality_issues
+                                ))
 
     # --- Rooms ---
     with tabs[8]:

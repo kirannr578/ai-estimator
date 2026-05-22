@@ -136,6 +136,26 @@ config/
   cost_database.json        Editable unit costs
 ```
 
+## Deterministic drawing pre-pass (F3)
+
+Before any vision-LLM call, every drawing page is run through
+`core/extraction/drawing_prepass.py`, a pure-PyMuPDF pass that pulls
+title-block fields, dimensions, and schedule tables straight out of the
+PDF's vector text. The pre-pass computes a confidence score (0..1):
+
+* `confidence ≥ 0.65` — the vision-LLM is **skipped entirely**; the
+  `SheetExtraction` is built from the deterministic snapshot.
+  `lm_skipped` is set to True so the UI / Excel exports can flag it.
+* `confidence < 0.65` — the LLM runs as before, but receives the
+  pre-pass result as a "deterministic context" block in the prompt so
+  it doesn't re-extract what we already have.
+
+The pre-pass result (`SheetExtraction.prepass`) is always persisted for
+downstream debugging, regardless of which path was taken. The Streamlit
+**Sheets** tab tags each sheet with ⚡ (prepass-only) or 🤖
+(LLM-augmented) and the Excel **Summary** carries a one-line "Prepass
+coverage" tile.
+
 ## Document types it understands
 
 | Type                 | Detection                                   | Extractor                | LLM cost  |
