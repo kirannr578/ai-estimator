@@ -13,7 +13,7 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from .schemas import CostLine, Estimate, TakeoffItem
+from .schemas import CostCategory, CostLine, Estimate, TakeoffItem
 from .takeoff import ProjectModel
 
 logger = logging.getLogger(__name__)
@@ -97,6 +97,9 @@ def price_takeoff(
                 unit=t.unit,
                 unit_cost=0.0,
                 total_cost=0.0,
+                cost_category=CostCategory.OTHER,
+                raw_quantity=t.quantity,
+                waste_factor=1.0,
                 confidence=t.confidence,
                 source_sheet_ids=t.source_sheet_ids,
                 cost_source="(no match)",
@@ -114,15 +117,35 @@ def price_takeoff(
                 f"Review before relying on this line."
             )
 
-        total = round(unit_cost * t.quantity, 2)
+        # Cost-category tag - default to OTHER if the DB entry is untagged or
+        # carries a value we don't recognise.
+        cat_raw = str(entry.get("cost_category", "")).lower().strip()
+        try:
+            cost_category = CostCategory(cat_raw) if cat_raw else CostCategory.OTHER
+        except ValueError:
+            cost_category = CostCategory.OTHER
+
+        # Waste factor - clamp to >= 1.0 to keep ordered quantity from going
+        # *below* the measured takeoff. A misconfigured 0.0 would silently
+        # zero out a line, which is worse than ignoring the bad value.
+        waste_factor = float(entry.get("waste_factor", 1.0) or 1.0)
+        if waste_factor < 1.0:
+            waste_factor = 1.0
+
+        raw_qty = t.quantity
+        ordered_qty = round(raw_qty * waste_factor, 4)
+        total = round(unit_cost * ordered_qty, 2)
         line_items.append(CostLine(
             csi_division=t.csi_division,
             csi_section=t.csi_section or key,
             description=t.description,
-            quantity=t.quantity,
+            quantity=ordered_qty,
             unit=t.unit,
             unit_cost=round(unit_cost, 2),
             total_cost=total,
+            cost_category=cost_category,
+            raw_quantity=raw_qty,
+            waste_factor=waste_factor,
             confidence=t.confidence,
             source_sheet_ids=t.source_sheet_ids,
             cost_source=key,

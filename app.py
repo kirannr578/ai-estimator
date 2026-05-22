@@ -395,7 +395,7 @@ if "estimate" in st.session_state:
     k5.metric("Grand total", f"${estimate.grand_total:,.0f}")
 
     tabs = st.tabs([
-        "Project", "Bid Packages", "Scope Matrix", "Alternates",
+        "Project", "Bid Packages", "Scope Matrix", "Scope Coverage", "Alternates",
         "Estimate", "By Division", "Sheets", "Rooms",
         "Doors / Windows", "Structural / MEP", "Specs",
         "Raw takeoffs", "Warnings",
@@ -511,8 +511,45 @@ if "estimate" in st.session_state:
                     "\n- ".join(project.scope_matrix.coverage_warnings)
                 )
 
-    # --- Alternates tab ---
+    # --- Scope Coverage tab ---
     with tabs[3]:
+        agg_inc = project.aggregated_inclusions
+        agg_exc = project.aggregated_exclusions
+        if not agg_inc and not agg_exc:
+            st.info("No aggregated inclusions or exclusions detected. Upload bid-package PDFs to populate this view.")
+        else:
+            st.caption(
+                "Deduplicated across all bid packages using fuzzy text match. "
+                "'# Packages' counts how many bid packages contributed an "
+                "equivalent line; expand a row to see which ones."
+            )
+
+            c1, c2 = st.columns(2)
+            with c1:
+                st.subheader(f"Inclusions ({len(agg_inc)})")
+                if agg_inc:
+                    inc_rows = [{
+                        "Inclusion": it.text,
+                        "# Packages": len(it.source_packages),
+                        "Source Packages": ", ".join(it.source_packages),
+                    } for it in agg_inc]
+                    st.dataframe(pd.DataFrame(inc_rows), hide_index=True, use_container_width=True)
+                else:
+                    st.info("No aggregated inclusions.")
+            with c2:
+                st.subheader(f"Exclusions ({len(agg_exc)})")
+                if agg_exc:
+                    exc_rows = [{
+                        "Exclusion": it.text,
+                        "# Packages": len(it.source_packages),
+                        "Source Packages": ", ".join(it.source_packages),
+                    } for it in agg_exc]
+                    st.dataframe(pd.DataFrame(exc_rows), hide_index=True, use_container_width=True)
+                else:
+                    st.info("No aggregated exclusions.")
+
+    # --- Alternates tab ---
+    with tabs[4]:
         if not project.scope_matrix.all_alternates:
             st.info("No alternates detected.")
         else:
@@ -522,7 +559,25 @@ if "estimate" in st.session_state:
             )
 
     # --- Estimate tab ---
-    with tabs[4]:
+    with tabs[5]:
+        by_cat = estimate.by_cost_category
+        if by_cat:
+            st.subheader("Labor / material / sub split")
+            cat_subtotal = estimate.subtotal or 0.0
+
+            def _cat_tile(col, label: str, key: str) -> None:
+                amount = by_cat.get(key, 0.0)
+                pct = (amount / cat_subtotal * 100.0) if cat_subtotal else 0.0
+                col.metric(label, f"${amount:,.0f}", f"{pct:.1f}% of subtotal")
+
+            tile_cols = st.columns(5)
+            _cat_tile(tile_cols[0], "Labor",          "labor")
+            _cat_tile(tile_cols[1], "Material",       "material")
+            _cat_tile(tile_cols[2], "Equipment",      "equipment")
+            _cat_tile(tile_cols[3], "Subcontractor",  "subcontractor")
+            _cat_tile(tile_cols[4], "Other",          "other")
+            st.divider()
+
         st.subheader("Priced line items")
         df = pd.DataFrame([li.model_dump() for li in estimate.line_items])
         if df.empty:
@@ -532,13 +587,17 @@ if "estimate" in st.session_state:
             edited = st.data_editor(
                 df[
                     [
-                        "csi_division", "csi_section", "description",
-                        "quantity", "unit", "unit_cost", "total_cost",
+                        "csi_division", "csi_section", "cost_category", "description",
+                        "raw_quantity", "waste_factor", "quantity", "unit",
+                        "unit_cost", "total_cost",
                         "confidence", "source_sheet_ids", "cost_source", "notes",
                     ]
                 ].rename(columns={
                     "csi_division": "Div", "csi_section": "Section",
-                    "description": "Description", "quantity": "Qty",
+                    "cost_category": "Category",
+                    "description": "Description",
+                    "raw_quantity": "Raw Qty", "waste_factor": "Waste",
+                    "quantity": "Qty",
                     "unit": "Unit", "unit_cost": "Unit Cost",
                     "total_cost": "Total", "confidence": "Conf",
                     "source_sheet_ids": "Source Sheets",
@@ -552,6 +611,8 @@ if "estimate" in st.session_state:
                     "Total":     st.column_config.NumberColumn(format="$%.2f"),
                     "Conf":      st.column_config.NumberColumn(format="%.2f"),
                     "Qty":       st.column_config.NumberColumn(format="%.2f"),
+                    "Raw Qty":   st.column_config.NumberColumn(format="%.2f"),
+                    "Waste":     st.column_config.NumberColumn(format="%.2f"),
                 },
             )
             if st.button("Recalculate totals from edited table", use_container_width=True):
@@ -596,7 +657,7 @@ if "estimate" in st.session_state:
             )
 
     # --- By Division ---
-    with tabs[5]:
+    with tabs[6]:
         rows = []
         for div, total in sorted(estimate.by_division.items()):
             rows.append({
@@ -623,7 +684,7 @@ if "estimate" in st.session_state:
             st.bar_chart(df_div.set_index("Div")["Subtotal"])
 
     # --- Sheets ---
-    with tabs[6]:
+    with tabs[7]:
         st.subheader("Sheet inventory")
         for sheet in sheets:
             with st.expander(
@@ -648,7 +709,7 @@ if "estimate" in st.session_state:
                     st.write(summary or "(no summary)")
 
     # --- Rooms ---
-    with tabs[7]:
+    with tabs[8]:
         if not project.rooms:
             st.info("No rooms identified.")
         else:
@@ -659,7 +720,7 @@ if "estimate" in st.session_state:
             )
 
     # --- Doors / Windows ---
-    with tabs[8]:
+    with tabs[9]:
         c1, c2 = st.columns(2)
         with c1:
             st.subheader(f"Doors ({len(project.doors)})")
@@ -681,7 +742,7 @@ if "estimate" in st.session_state:
                 st.info("No windows identified.")
 
     # --- Structural / MEP ---
-    with tabs[9]:
+    with tabs[10]:
         c1, c2 = st.columns(2)
         with c1:
             st.subheader(f"Structural ({len(project.structural)})")
@@ -703,7 +764,7 @@ if "estimate" in st.session_state:
                 st.info("No MEP items identified.")
 
     # --- Specs ---
-    with tabs[10]:
+    with tabs[11]:
         if not project.spec_sections:
             st.info("No specification sections identified.")
         else:
@@ -719,7 +780,7 @@ if "estimate" in st.session_state:
                         st.caption(f"Source: {spec.source_sheet_id}")
 
     # --- Raw takeoffs ---
-    with tabs[11]:
+    with tabs[12]:
         if not project.takeoffs:
             st.info("No raw takeoffs.")
         else:
@@ -728,7 +789,7 @@ if "estimate" in st.session_state:
             st.dataframe(df_t, hide_index=True, use_container_width=True)
 
     # --- Warnings ---
-    with tabs[12]:
+    with tabs[13]:
         if not project.warnings:
             st.success("No warnings.")
         else:

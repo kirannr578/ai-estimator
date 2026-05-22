@@ -18,6 +18,20 @@ from pydantic import BaseModel, Field, ConfigDict
 # ---------------------------------------------------------------------------
 
 
+class CostCategory(str, Enum):
+    """Cross-cutting cost-type axis (orthogonal to CSI division).
+
+    Useful for labor/material splits, change-order pricing and cash-flow
+    projections.
+    """
+
+    LABOR = "labor"
+    MATERIAL = "material"
+    EQUIPMENT = "equipment"
+    SUBCONTRACTOR = "subcontractor"
+    OTHER = "other"
+
+
 class Discipline(str, Enum):
     ARCHITECTURAL = "A"
     STRUCTURAL = "S"
@@ -192,6 +206,19 @@ class UnitPrice(BaseModel):
     amount: Optional[float] = None     # known $ if pre-filled
 
 
+class ScopeItem(BaseModel):
+    """A single inclusion or exclusion line aggregated across all bid packages.
+
+    `source_packages` lists every bid-package pdf_name whose inclusions /
+    exclusions list contained a fuzzy match for `text`. Used by the
+    project-level "Scope Coverage" view to surface what is and is not in
+    aggregate scope, with traceability back to the originating package.
+    """
+
+    text: str
+    source_packages: list[str] = Field(default_factory=list)
+
+
 class BidPackage(BaseModel):
     """One trade-specific bid package PDF.
 
@@ -258,7 +285,13 @@ class TakeoffItem(BaseModel):
 
 
 class CostLine(BaseModel):
-    """Priced takeoff line."""
+    """Priced takeoff line.
+
+    `quantity` is the *ordered* quantity (raw_quantity * waste_factor) which
+    is what gets multiplied by `unit_cost` to land at `total_cost`. The
+    un-padded measurement is preserved in `raw_quantity` for audit and so
+    downstream consumers can re-derive waste without re-running the pipeline.
+    """
 
     csi_division: str
     csi_section: Optional[str] = None
@@ -267,6 +300,9 @@ class CostLine(BaseModel):
     unit: str
     unit_cost: float
     total_cost: float
+    cost_category: CostCategory = CostCategory.OTHER
+    raw_quantity: Optional[float] = None   # measured quantity before waste padding
+    waste_factor: float = 1.0              # >= 1.0; quantity = raw_quantity * waste_factor
     confidence: float = 0.7
     source_sheet_ids: list[str] = Field(default_factory=list)
     cost_source: str = ""                  # which cost-db key was used
@@ -292,6 +328,15 @@ class Estimate(BaseModel):
         for li in self.line_items:
             out[li.csi_division] = round(out.get(li.csi_division, 0.0) + li.total_cost, 2)
         return out
+
+    @property
+    def by_cost_category(self) -> dict[str, float]:
+        """Roll up line totals by labor/material/equipment/sub/other."""
+        out: dict[str, float] = {c.value: 0.0 for c in CostCategory}
+        for li in self.line_items:
+            key = li.cost_category.value if isinstance(li.cost_category, CostCategory) else str(li.cost_category)
+            out[key] = round(out.get(key, 0.0) + li.total_cost, 2)
+        return {k: v for k, v in out.items() if v > 0}
 
     @property
     def contingency(self) -> float:

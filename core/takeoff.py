@@ -33,6 +33,7 @@ from .schemas import (
     DoorEntry,
     MEPItem,
     Room,
+    ScopeItem,
     SheetExtraction,
     SiteInfo,
     SpecSection,
@@ -85,6 +86,8 @@ class ProjectModel:
     bid_packages: list[BidPackage]
     project_info: ProjectInfo
     scope_matrix: ScopeMatrix
+    aggregated_inclusions: list[ScopeItem]
+    aggregated_exclusions: list[ScopeItem]
 
 
 # ---------------------------------------------------------------------------
@@ -475,6 +478,48 @@ def _consolidate_project_info(packages: list[BidPackage]) -> ProjectInfo:
     )
 
 
+def _aggregate_scope_items(
+    packages: list[BidPackage],
+    attr: str,
+    fuzz_threshold: int = 88,
+) -> list[ScopeItem]:
+    """Dedupe per-package inclusion/exclusion lines into project-level ScopeItems.
+
+    Two lines are treated as duplicates when `rapidfuzz.fuzz.token_set_ratio`
+    on their `_norm()`-ed text is >= `fuzz_threshold`. When that hits, the
+    new package's `pdf_name` is appended to the existing item's
+    `source_packages` list. The first-seen text wins to keep output stable.
+    """
+    aggregated: list[ScopeItem] = []
+    aggregated_norms: list[str] = []   # parallel cache; avoids re-normalizing each compare
+
+    for p in packages:
+        items: list[str] = getattr(p, attr, []) or []
+        for text in items:
+            text_clean = (text or "").strip()
+            if not text_clean:
+                continue
+            normed = _norm(text_clean)
+            if not normed:
+                continue
+
+            match_idx: int | None = None
+            for i, existing_norm in enumerate(aggregated_norms):
+                if fuzz.token_set_ratio(normed, existing_norm) >= fuzz_threshold:
+                    match_idx = i
+                    break
+
+            if match_idx is None:
+                aggregated.append(ScopeItem(text=text_clean, source_packages=[p.pdf_name]))
+                aggregated_norms.append(normed)
+            else:
+                existing = aggregated[match_idx]
+                if p.pdf_name not in existing.source_packages:
+                    existing.source_packages.append(p.pdf_name)
+
+    return aggregated
+
+
 def _build_scope_matrix(packages: list[BidPackage]) -> ScopeMatrix:
     by_div: dict[str, list[BidPackage]] = {}
     all_alts: list[Alternate] = []
@@ -572,6 +617,9 @@ def reconcile(
     if scope_matrix.coverage_warnings:
         warnings.extend(scope_matrix.coverage_warnings)
 
+    aggregated_inclusions = _aggregate_scope_items(bid_packages, "inclusions")
+    aggregated_exclusions = _aggregate_scope_items(bid_packages, "exclusions")
+
     return ProjectModel(
         rooms=rooms,
         doors=doors,
@@ -586,4 +634,6 @@ def reconcile(
         bid_packages=bid_packages,
         project_info=project_info,
         scope_matrix=scope_matrix,
+        aggregated_inclusions=aggregated_inclusions,
+        aggregated_exclusions=aggregated_exclusions,
     )

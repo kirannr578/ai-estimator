@@ -75,12 +75,31 @@ def export_estimate_xlsx(
         c.number_format = "$#,##0.00"
         row += 1
 
+    # By cost category rollup (labor / material / equipment / sub / other)
+    row += 1
+    by_cat = estimate.by_cost_category
+    if by_cat:
+        ws.cell(row=row, column=1, value="By cost category").font = Font(bold=True)
+        row += 1
+        _write_header(ws, row, ["Category", "Subtotal", "% of subtotal"])
+        row += 1
+        subtotal = estimate.subtotal or 0.0
+        for cat, total in sorted(by_cat.items(), key=lambda kv: -kv[1]):
+            ws.cell(row=row, column=1, value=cat.title())
+            c_total = ws.cell(row=row, column=2, value=total)
+            c_total.number_format = "$#,##0.00"
+            pct = (total / subtotal * 100.0) if subtotal else 0.0
+            c_pct = ws.cell(row=row, column=3, value=round(pct, 2))
+            c_pct.number_format = "0.00\"%\""
+            row += 1
+
     _autosize(ws)
 
     # ----- Line items -----
     ws = wb.create_sheet("Line Items")
     headers = [
-        "Div", "CSI Section", "Description", "Quantity", "Unit",
+        "Div", "CSI Section", "Category", "Description",
+        "Raw Qty", "Waste", "Quantity", "Unit",
         "Unit Cost", "Total", "Confidence", "Source Sheets",
         "Cost-DB Key", "Notes",
     ]
@@ -97,17 +116,21 @@ def export_estimate_xlsx(
             last_div = li.csi_division
             row += 1
 
+        cat_val = li.cost_category.value if hasattr(li.cost_category, "value") else str(li.cost_category)
         ws.cell(row=row, column=1, value=li.csi_division)
         ws.cell(row=row, column=2, value=li.csi_section or "")
-        ws.cell(row=row, column=3, value=li.description)
-        ws.cell(row=row, column=4, value=li.quantity).number_format = "#,##0.00"
-        ws.cell(row=row, column=5, value=li.unit)
-        ws.cell(row=row, column=6, value=li.unit_cost).number_format = "$#,##0.00"
-        ws.cell(row=row, column=7, value=li.total_cost).number_format = "$#,##0.00"
-        ws.cell(row=row, column=8, value=li.confidence).number_format = "0.00"
-        ws.cell(row=row, column=9, value=", ".join(li.source_sheet_ids))
-        ws.cell(row=row, column=10, value=li.cost_source)
-        ws.cell(row=row, column=11, value=li.notes or "")
+        ws.cell(row=row, column=3, value=cat_val)
+        ws.cell(row=row, column=4, value=li.description)
+        ws.cell(row=row, column=5, value=li.raw_quantity if li.raw_quantity is not None else li.quantity).number_format = "#,##0.00"
+        ws.cell(row=row, column=6, value=li.waste_factor).number_format = "0.00"
+        ws.cell(row=row, column=7, value=li.quantity).number_format = "#,##0.00"
+        ws.cell(row=row, column=8, value=li.unit)
+        ws.cell(row=row, column=9, value=li.unit_cost).number_format = "$#,##0.00"
+        ws.cell(row=row, column=10, value=li.total_cost).number_format = "$#,##0.00"
+        ws.cell(row=row, column=11, value=li.confidence).number_format = "0.00"
+        ws.cell(row=row, column=12, value=", ".join(li.source_sheet_ids))
+        ws.cell(row=row, column=13, value=li.cost_source)
+        ws.cell(row=row, column=14, value=li.notes or "")
         row += 1
 
     ws.freeze_panes = "A2"
@@ -249,6 +272,46 @@ def export_estimate_xlsx(
         ws.freeze_panes = "A2"
         _autosize(ws, max_width=100)
 
+    # ----- Scope Coverage (aggregated inclusions / exclusions) -----
+    agg_inc = getattr(project, "aggregated_inclusions", []) or []
+    agg_exc = getattr(project, "aggregated_exclusions", []) or []
+    if agg_inc or agg_exc:
+        ws = wb.create_sheet("Scope Coverage")
+        ws["A1"] = "Aggregated scope coverage"
+        ws["A1"].font = Font(bold=True, size=14)
+        ws["A2"] = (
+            "Deduplicated across all bid packages. 'Source packages' shows "
+            "every bid-package PDF whose inclusion/exclusion list contributed "
+            "to this line."
+        )
+        ws["A2"].alignment = Alignment(wrap_text=True)
+
+        row = 4
+        ws.cell(row=row, column=1, value=f"Inclusions ({len(agg_inc)})").font = Font(bold=True, size=12)
+        row += 1
+        _write_header(ws, row, ["#", "Inclusion", "# Packages", "Source Packages"])
+        row += 1
+        for i, item in enumerate(agg_inc, start=1):
+            ws.cell(row=row, column=1, value=i)
+            ws.cell(row=row, column=2, value=item.text).alignment = Alignment(wrap_text=True)
+            ws.cell(row=row, column=3, value=len(item.source_packages))
+            ws.cell(row=row, column=4, value=", ".join(item.source_packages)).alignment = Alignment(wrap_text=True)
+            row += 1
+
+        row += 1
+        ws.cell(row=row, column=1, value=f"Exclusions ({len(agg_exc)})").font = Font(bold=True, size=12)
+        row += 1
+        _write_header(ws, row, ["#", "Exclusion", "# Packages", "Source Packages"])
+        row += 1
+        for i, item in enumerate(agg_exc, start=1):
+            ws.cell(row=row, column=1, value=i)
+            ws.cell(row=row, column=2, value=item.text).alignment = Alignment(wrap_text=True)
+            ws.cell(row=row, column=3, value=len(item.source_packages))
+            ws.cell(row=row, column=4, value=", ".join(item.source_packages)).alignment = Alignment(wrap_text=True)
+            row += 1
+
+        _autosize(ws, max_width=100)
+
     # ----- Sheets analysed -----
     if project.sheet_summaries:
         ws = wb.create_sheet("Sheets")
@@ -296,6 +359,7 @@ def export_estimate_json(estimate: Estimate, project: ProjectModel) -> str:
         "profit": estimate.profit,
         "grand_total": estimate.grand_total,
         "by_division": estimate.by_division,
+        "by_cost_category": estimate.by_cost_category,
         "line_items": [li.model_dump() for li in estimate.line_items],
         "rooms":   [r.model_dump() for r in project.rooms],
         "doors":   [d.model_dump() for d in project.doors],
@@ -313,6 +377,12 @@ def export_estimate_json(estimate: Estimate, project: ProjectModel) -> str:
             "all_alternates": [a.model_dump() for a in project.scope_matrix.all_alternates],
             "coverage_warnings": project.scope_matrix.coverage_warnings,
         },
+        "aggregated_inclusions": [
+            it.model_dump() for it in getattr(project, "aggregated_inclusions", []) or []
+        ],
+        "aggregated_exclusions": [
+            it.model_dump() for it in getattr(project, "aggregated_exclusions", []) or []
+        ],
         "sheet_summaries": project.sheet_summaries,
         "warnings": project.warnings,
     }

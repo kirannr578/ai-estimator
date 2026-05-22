@@ -3,69 +3,71 @@
     "version": "2026.05",
     "currency": "USD",
     "basis": "Seeded with typical national-average ranges for residential and light commercial in 2026. NOT real RSMeans data. Edit freely per project / region. Apply REGION_MULTIPLIER for locality.",
-    "matching": "Estimator first looks up by exact csi_section, then falls back to keyword match on description within the csi_division."
+    "matching": "Estimator first looks up by exact csi_section, then falls back to keyword match on description within the csi_division.",
+    "cost_category": "Each entry is tagged with a cost_category (labor / material / equipment / subcontractor / other) used for cross-cutting labor-vs-material rollups. Edit per project if your team self-performs vs. subs a trade.",
+    "waste_factor": "Each entry carries a waste_factor (>= 1.00). The estimator multiplies takeoff quantities by this factor at price time and stores the raw (un-padded) quantity alongside. Bumps order quantities to account for cut waste, defects, and field-fit. Set to 1.00 for lump-sum or per-unit-count items where waste is captured upstream of the takeoff."
   },
 
-  "01 00 00": { "description": "General conditions / supervision (per month)", "unit": "MO", "unit_cost": 12000, "keywords": ["general conditions", "supervision", "site management"] },
-  "01 50 00": { "description": "Temporary facilities and controls", "unit": "LS", "unit_cost": 6500, "keywords": ["temporary", "dumpster", "portable toilet", "fence"] },
+  "01 00 00": { "description": "General conditions / supervision (per month)", "unit": "MO", "unit_cost": 12000, "cost_category": "other", "waste_factor": 1.00, "keywords": ["general conditions", "supervision", "site management"] },
+  "01 50 00": { "description": "Temporary facilities and controls", "unit": "LS", "unit_cost": 6500, "cost_category": "other", "waste_factor": 1.00, "keywords": ["temporary", "dumpster", "portable toilet", "fence"] },
 
-  "02 41 16": { "description": "Selective demolition (interior)", "unit": "SF", "unit_cost": 4.50, "keywords": ["demolition", "demo", "remove existing"] },
+  "02 41 16": { "description": "Selective demolition (interior)", "unit": "SF", "unit_cost": 4.50, "cost_category": "subcontractor", "waste_factor": 1.00, "keywords": ["demolition", "demo", "remove existing"] },
 
-  "03 30 00": { "description": "Cast-in-place concrete slab on grade, 4\"", "unit": "SF", "unit_cost": 7.25, "keywords": ["slab on grade", "concrete slab", "sog"] },
-  "03 31 00": { "description": "Concrete footings (CY in place)", "unit": "CY", "unit_cost": 525, "keywords": ["footing", "spread footing", "strip footing"] },
-  "03 35 00": { "description": "Concrete finishing (smooth trowel)", "unit": "SF", "unit_cost": 1.40, "keywords": ["finish", "trowel"] },
+  "03 30 00": { "description": "Cast-in-place concrete slab on grade, 4\"", "unit": "SF", "unit_cost": 7.25, "cost_category": "subcontractor", "waste_factor": 1.07, "keywords": ["slab on grade", "concrete slab", "sog"] },
+  "03 31 00": { "description": "Concrete footings (CY in place)", "unit": "CY", "unit_cost": 525, "cost_category": "subcontractor", "waste_factor": 1.07, "keywords": ["footing", "spread footing", "strip footing"] },
+  "03 35 00": { "description": "Concrete finishing (smooth trowel)", "unit": "SF", "unit_cost": 1.40, "cost_category": "subcontractor", "waste_factor": 1.05, "keywords": ["finish", "trowel"] },
 
-  "04 22 00": { "description": "CMU wall, 8\" reinforced", "unit": "SF", "unit_cost": 18.50, "keywords": ["cmu", "concrete masonry", "block wall"] },
+  "04 22 00": { "description": "CMU wall, 8\" reinforced", "unit": "SF", "unit_cost": 18.50, "cost_category": "subcontractor", "waste_factor": 1.08, "keywords": ["cmu", "concrete masonry", "block wall"] },
 
-  "05 12 00": { "description": "Structural steel framing (erected)", "unit": "TON", "unit_cost": 4200, "keywords": ["structural steel", "wide flange", "w-shape", "beam", "column"] },
-  "05 31 00": { "description": "Steel deck", "unit": "SF", "unit_cost": 4.10, "keywords": ["metal deck", "steel deck"] },
+  "05 12 00": { "description": "Structural steel framing (erected)", "unit": "TON", "unit_cost": 4200, "cost_category": "subcontractor", "waste_factor": 1.03, "keywords": ["structural steel", "wide flange", "w-shape", "beam", "column"] },
+  "05 31 00": { "description": "Steel deck", "unit": "SF", "unit_cost": 4.10, "cost_category": "subcontractor", "waste_factor": 1.03, "keywords": ["metal deck", "steel deck"] },
 
-  "06 10 00": { "description": "Wood framing - rough carpentry", "unit": "SF", "unit_cost": 8.75, "keywords": ["framing", "stud wall", "rough carpentry", "2x4", "2x6"] },
-  "06 16 00": { "description": "Sheathing, OSB / plywood", "unit": "SF", "unit_cost": 2.10, "keywords": ["sheathing", "osb", "plywood"] },
-  "06 41 00": { "description": "Custom cabinetry / millwork", "unit": "LF", "unit_cost": 425, "keywords": ["cabinet", "millwork", "casework"] },
+  "06 10 00": { "description": "Wood framing - rough carpentry", "unit": "SF", "unit_cost": 8.75, "cost_category": "labor", "waste_factor": 1.10, "keywords": ["framing", "stud wall", "rough carpentry", "2x4", "2x6"] },
+  "06 16 00": { "description": "Sheathing, OSB / plywood", "unit": "SF", "unit_cost": 2.10, "cost_category": "labor", "waste_factor": 1.10, "keywords": ["sheathing", "osb", "plywood"] },
+  "06 41 00": { "description": "Custom cabinetry / millwork", "unit": "LF", "unit_cost": 425, "cost_category": "subcontractor", "waste_factor": 1.05, "keywords": ["cabinet", "millwork", "casework"] },
 
-  "07 21 00": { "description": "Thermal insulation, batt", "unit": "SF", "unit_cost": 1.55, "keywords": ["insulation", "batt", "fiberglass"] },
-  "07 31 13": { "description": "Asphalt shingles", "unit": "SF", "unit_cost": 5.25, "keywords": ["shingle", "asphalt roofing"] },
-  "07 41 13": { "description": "Standing seam metal roofing", "unit": "SF", "unit_cost": 14.50, "keywords": ["metal roof", "standing seam"] },
-  "07 92 00": { "description": "Joint sealants", "unit": "LF", "unit_cost": 3.10, "keywords": ["sealant", "caulk"] },
+  "07 21 00": { "description": "Thermal insulation, batt", "unit": "SF", "unit_cost": 1.55, "cost_category": "subcontractor", "waste_factor": 1.07, "keywords": ["insulation", "batt", "fiberglass"] },
+  "07 31 13": { "description": "Asphalt shingles", "unit": "SF", "unit_cost": 5.25, "cost_category": "subcontractor", "waste_factor": 1.10, "keywords": ["shingle", "asphalt roofing"] },
+  "07 41 13": { "description": "Standing seam metal roofing", "unit": "SF", "unit_cost": 14.50, "cost_category": "subcontractor", "waste_factor": 1.07, "keywords": ["metal roof", "standing seam"] },
+  "07 92 00": { "description": "Joint sealants", "unit": "LF", "unit_cost": 3.10, "cost_category": "subcontractor", "waste_factor": 1.10, "keywords": ["sealant", "caulk"] },
 
-  "08 11 13": { "description": "Hollow metal door & frame, 3'-0\" x 7'-0\"", "unit": "EA", "unit_cost": 950, "keywords": ["hollow metal", "hm door", "metal door"] },
-  "08 14 16": { "description": "Solid-core wood door, 3'-0\" x 7'-0\"", "unit": "EA", "unit_cost": 575, "keywords": ["wood door", "sc door", "solid core"] },
-  "08 50 00": { "description": "Window, residential vinyl, avg", "unit": "EA", "unit_cost": 685, "keywords": ["window", "vinyl window"] },
-  "08 51 13": { "description": "Aluminum-framed window, commercial", "unit": "SF", "unit_cost": 78, "keywords": ["aluminum window", "storefront window"] },
-  "08 71 00": { "description": "Door hardware set, average", "unit": "EA", "unit_cost": 425, "keywords": ["hardware", "lockset"] },
+  "08 11 13": { "description": "Hollow metal door & frame, 3'-0\" x 7'-0\"", "unit": "EA", "unit_cost": 950, "cost_category": "material", "waste_factor": 1.02, "keywords": ["hollow metal", "hm door", "metal door"] },
+  "08 14 16": { "description": "Solid-core wood door, 3'-0\" x 7'-0\"", "unit": "EA", "unit_cost": 575, "cost_category": "material", "waste_factor": 1.02, "keywords": ["wood door", "sc door", "solid core"] },
+  "08 50 00": { "description": "Window, residential vinyl, avg", "unit": "EA", "unit_cost": 685, "cost_category": "material", "waste_factor": 1.02, "keywords": ["window", "vinyl window"] },
+  "08 51 13": { "description": "Aluminum-framed window, commercial", "unit": "SF", "unit_cost": 78, "cost_category": "material", "waste_factor": 1.02, "keywords": ["aluminum window", "storefront window"] },
+  "08 71 00": { "description": "Door hardware set, average", "unit": "EA", "unit_cost": 425, "cost_category": "material", "waste_factor": 1.02, "keywords": ["hardware", "lockset"] },
 
-  "09 22 16": { "description": "Metal stud, non-load-bearing partition", "unit": "SF", "unit_cost": 6.40, "keywords": ["metal stud", "partition framing"] },
-  "09 29 00": { "description": "Gypsum board, 5/8\" - one side", "unit": "SF", "unit_cost": 2.85, "keywords": ["drywall", "gypsum", "gwb", "gyp board"] },
-  "09 51 13": { "description": "Acoustical ceiling tile, 2x4", "unit": "SF", "unit_cost": 5.10, "keywords": ["act", "acoustical ceiling", "ceiling tile"] },
-  "09 65 13": { "description": "Resilient base, 4\" rubber", "unit": "LF", "unit_cost": 3.25, "keywords": ["base", "rubber base", "resilient base"] },
-  "09 65 19": { "description": "Vinyl plank flooring (LVT)", "unit": "SF", "unit_cost": 6.40, "keywords": ["lvt", "vinyl plank", "luxury vinyl"] },
-  "09 68 13": { "description": "Carpet tile", "unit": "SF", "unit_cost": 5.85, "keywords": ["carpet", "carpet tile"] },
-  "09 91 23": { "description": "Interior painting (walls, two coats)", "unit": "SF", "unit_cost": 1.65, "keywords": ["paint", "painting"] },
+  "09 22 16": { "description": "Metal stud, non-load-bearing partition", "unit": "SF", "unit_cost": 6.40, "cost_category": "subcontractor", "waste_factor": 1.08, "keywords": ["metal stud", "partition framing"] },
+  "09 29 00": { "description": "Gypsum board, 5/8\" - one side", "unit": "SF", "unit_cost": 2.85, "cost_category": "subcontractor", "waste_factor": 1.12, "keywords": ["drywall", "gypsum", "gwb", "gyp board"] },
+  "09 51 13": { "description": "Acoustical ceiling tile, 2x4", "unit": "SF", "unit_cost": 5.10, "cost_category": "subcontractor", "waste_factor": 1.07, "keywords": ["act", "acoustical ceiling", "ceiling tile"] },
+  "09 65 13": { "description": "Resilient base, 4\" rubber", "unit": "LF", "unit_cost": 3.25, "cost_category": "subcontractor", "waste_factor": 1.05, "keywords": ["base", "rubber base", "resilient base"] },
+  "09 65 19": { "description": "Vinyl plank flooring (LVT)", "unit": "SF", "unit_cost": 6.40, "cost_category": "subcontractor", "waste_factor": 1.07, "keywords": ["lvt", "vinyl plank", "luxury vinyl"] },
+  "09 68 13": { "description": "Carpet tile", "unit": "SF", "unit_cost": 5.85, "cost_category": "subcontractor", "waste_factor": 1.07, "keywords": ["carpet", "carpet tile"] },
+  "09 91 23": { "description": "Interior painting (walls, two coats)", "unit": "SF", "unit_cost": 1.65, "cost_category": "subcontractor", "waste_factor": 1.10, "keywords": ["paint", "painting"] },
 
-  "10 14 00": { "description": "Signage (interior room ID, ADA)", "unit": "EA", "unit_cost": 95, "keywords": ["signage", "sign"] },
-  "10 28 00": { "description": "Toilet accessories (set per restroom)", "unit": "EA", "unit_cost": 850, "keywords": ["toilet accessory", "grab bar", "paper dispenser"] },
+  "10 14 00": { "description": "Signage (interior room ID, ADA)", "unit": "EA", "unit_cost": 95, "cost_category": "material", "waste_factor": 1.00, "keywords": ["signage", "sign"] },
+  "10 28 00": { "description": "Toilet accessories (set per restroom)", "unit": "EA", "unit_cost": 850, "cost_category": "material", "waste_factor": 1.00, "keywords": ["toilet accessory", "grab bar", "paper dispenser"] },
 
-  "11 30 00": { "description": "Residential appliances (kitchen package)", "unit": "LS", "unit_cost": 7500, "keywords": ["appliance", "range", "refrigerator", "dishwasher"] },
+  "11 30 00": { "description": "Residential appliances (kitchen package)", "unit": "LS", "unit_cost": 7500, "cost_category": "equipment", "waste_factor": 1.00, "keywords": ["appliance", "range", "refrigerator", "dishwasher"] },
 
-  "21 13 00": { "description": "Wet-pipe sprinkler system", "unit": "SF", "unit_cost": 4.85, "keywords": ["sprinkler", "fire suppression"] },
+  "21 13 00": { "description": "Wet-pipe sprinkler system", "unit": "SF", "unit_cost": 4.85, "cost_category": "subcontractor", "waste_factor": 1.00, "keywords": ["sprinkler", "fire suppression"] },
 
-  "22 40 00": { "description": "Plumbing fixture, average rough + set", "unit": "EA", "unit_cost": 1850, "keywords": ["plumbing fixture", "lavatory", "water closet", "toilet", "sink"] },
-  "22 11 00": { "description": "Domestic water piping (per fixture allowance)", "unit": "EA", "unit_cost": 525, "keywords": ["water pipe", "domestic water"] },
+  "22 40 00": { "description": "Plumbing fixture, average rough + set", "unit": "EA", "unit_cost": 1850, "cost_category": "subcontractor", "waste_factor": 1.00, "keywords": ["plumbing fixture", "lavatory", "water closet", "toilet", "sink"] },
+  "22 11 00": { "description": "Domestic water piping (per fixture allowance)", "unit": "EA", "unit_cost": 525, "cost_category": "subcontractor", "waste_factor": 1.00, "keywords": ["water pipe", "domestic water"] },
 
-  "23 00 00": { "description": "HVAC system - light commercial RTU + ductwork", "unit": "SF", "unit_cost": 22.50, "keywords": ["hvac", "rooftop unit", "rtu", "air handler", "ductwork"] },
-  "23 81 00": { "description": "Residential split-system A/C, 3-ton", "unit": "EA", "unit_cost": 6800, "keywords": ["split system", "mini split", "residential hvac"] },
+  "23 00 00": { "description": "HVAC system - light commercial RTU + ductwork", "unit": "SF", "unit_cost": 22.50, "cost_category": "subcontractor", "waste_factor": 1.00, "keywords": ["hvac", "rooftop unit", "rtu", "air handler", "ductwork"] },
+  "23 81 00": { "description": "Residential split-system A/C, 3-ton", "unit": "EA", "unit_cost": 6800, "cost_category": "subcontractor", "waste_factor": 1.00, "keywords": ["split system", "mini split", "residential hvac"] },
 
-  "26 05 00": { "description": "Branch wiring + devices, per SF", "unit": "SF", "unit_cost": 8.40, "keywords": ["wiring", "branch circuit", "outlet", "receptacle", "switch"] },
-  "26 24 16": { "description": "Panelboard, 200A residential", "unit": "EA", "unit_cost": 2400, "keywords": ["panel", "panelboard", "load center"] },
-  "26 51 00": { "description": "Interior lighting fixture, average", "unit": "EA", "unit_cost": 285, "keywords": ["light fixture", "lighting", "luminaire"] },
+  "26 05 00": { "description": "Branch wiring + devices, per SF", "unit": "SF", "unit_cost": 8.40, "cost_category": "subcontractor", "waste_factor": 1.00, "keywords": ["wiring", "branch circuit", "outlet", "receptacle", "switch"] },
+  "26 24 16": { "description": "Panelboard, 200A residential", "unit": "EA", "unit_cost": 2400, "cost_category": "subcontractor", "waste_factor": 1.00, "keywords": ["panel", "panelboard", "load center"] },
+  "26 51 00": { "description": "Interior lighting fixture, average", "unit": "EA", "unit_cost": 285, "cost_category": "subcontractor", "waste_factor": 1.00, "keywords": ["light fixture", "lighting", "luminaire"] },
 
-  "31 23 16": { "description": "Excavation and backfill (CY)", "unit": "CY", "unit_cost": 28, "keywords": ["excavation", "backfill", "earthwork"] },
+  "31 23 16": { "description": "Excavation and backfill (CY)", "unit": "CY", "unit_cost": 28, "cost_category": "subcontractor", "waste_factor": 1.05, "keywords": ["excavation", "backfill", "earthwork"] },
 
-  "32 12 16": { "description": "Asphalt paving, 3\" over base", "unit": "SF", "unit_cost": 6.85, "keywords": ["asphalt", "paving", "parking lot"] },
-  "32 13 13": { "description": "Concrete sidewalk, 4\"", "unit": "SF", "unit_cost": 9.25, "keywords": ["sidewalk", "walkway", "concrete walk"] },
-  "32 90 00": { "description": "Landscaping (sod + shrubs allowance)", "unit": "SF", "unit_cost": 4.50, "keywords": ["landscape", "sod", "planting"] },
+  "32 12 16": { "description": "Asphalt paving, 3\" over base", "unit": "SF", "unit_cost": 6.85, "cost_category": "subcontractor", "waste_factor": 1.05, "keywords": ["asphalt", "paving", "parking lot"] },
+  "32 13 13": { "description": "Concrete sidewalk, 4\"", "unit": "SF", "unit_cost": 9.25, "cost_category": "subcontractor", "waste_factor": 1.05, "keywords": ["sidewalk", "walkway", "concrete walk"] },
+  "32 90 00": { "description": "Landscaping (sod + shrubs allowance)", "unit": "SF", "unit_cost": 4.50, "cost_category": "subcontractor", "waste_factor": 1.05, "keywords": ["landscape", "sod", "planting"] },
 
-  "33 10 00": { "description": "Site water utility (per LF)", "unit": "LF", "unit_cost": 95, "keywords": ["water service", "water main"] },
-  "33 30 00": { "description": "Site sanitary sewer (per LF)", "unit": "LF", "unit_cost": 110, "keywords": ["sanitary sewer", "sewer line"] }
+  "33 10 00": { "description": "Site water utility (per LF)", "unit": "LF", "unit_cost": 95, "cost_category": "subcontractor", "waste_factor": 1.05, "keywords": ["water service", "water main"] },
+  "33 30 00": { "description": "Site sanitary sewer (per LF)", "unit": "LF", "unit_cost": 110, "cost_category": "subcontractor", "waste_factor": 1.05, "keywords": ["sanitary sewer", "sewer line"] }
 }
