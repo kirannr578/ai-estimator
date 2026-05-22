@@ -16,6 +16,11 @@ uploads/
 # Local-only client-quote overrides (do not commit real customer data)
 config/client_quote.local.json
 
+# Bid-prep workspaces: per-bid local-only scratch (sub quotes, bonding paperwork,
+# scratch spreadsheets, HUB outreach logs). Per-bid Markdown + JSON deliverables
+# under bids/<opportunity>/ are still committed.
+bids/*/local/
+
 # IDE
 .idea/
 .vscode/
