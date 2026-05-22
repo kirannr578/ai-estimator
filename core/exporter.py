@@ -22,6 +22,78 @@ SUPPRESSED_FILL = PatternFill("solid", fgColor="F2F2F2")  # light grey for unit-
 SUPPRESSED_FONT = Font(italic=True, color="808080")
 
 
+_SUPPORTING_DOC_KIND_PATTERNS: tuple[tuple[str, str], ...] = (
+    # Order matters — first match wins.
+    ("wage determination", "wage determination"),
+    ("wage decision",      "wage determination"),
+    ("davis-bacon",        "wage determination"),
+    ("davis bacon",        "wage determination"),
+    ("prevailing wage",    "wage determination"),
+    ("wage rates",         "wage determination"),
+    ("tax exemption",      "tax exemption certificate"),
+    ("tax-exempt",         "tax exemption certificate"),
+    ("sales tax",          "tax exemption certificate"),
+    ("sample agreement",   "sample agreement"),
+    ("sample contract",    "sample agreement"),
+    ("sample construction services agreement", "sample agreement"),
+    ("template agreement", "sample agreement"),
+    ("csa template",       "sample agreement"),
+    ("hub subcontracting plan", "HSP form"),
+    ("subcontracting plan",     "HSP form"),
+    ("hsp",                "HSP form"),
+    ("ugsc",               "UGSC"),
+    ("uniform general conditions",       "UGSC"),
+    ("supplementary general conditions", "UGSC"),
+    ("instructions to bidders",   "instructions to bidders"),
+    ("instructions to offerors",  "instructions to bidders"),
+    ("aia document",       "AIA template"),
+)
+
+
+def _classify_supporting_doc(p) -> str:
+    """Map a supporting-document BidPackage to a short category label.
+
+    Used by the Excel "Supporting Documents" sheet's Kind column.
+    Falls back to "other" when no keyword matches.
+    """
+    haystack = " ".join([
+        (p.pdf_name or "").lower(),
+        (p.summary or "").lower(),
+        (p.trade_name or "").lower(),
+    ])
+    for needle, label in _SUPPORTING_DOC_KIND_PATTERNS:
+        if needle in haystack:
+            return label
+    return "other"
+
+
+def _extract_supporting_doc_facts(p) -> tuple[str, str]:
+    """Best-effort pull of (effective_date, wage_decision_number) from summary.
+
+    Both are short strings or empty. We deliberately don't try to be clever —
+    the LLM extraction puts these in `summary` when it found them; we just
+    do a tiny regex scan as a convenience for the Excel reader.
+    """
+    import re as _re
+    blob = " ".join([
+        (p.summary or ""),
+        (p.pdf_name or ""),
+    ])
+    effective_date = ""
+    m = _re.search(
+        r"(effective(?:\s+date)?[:\s]+)([A-Z][a-z]+\s+\d{1,2},\s+\d{4}|\d{1,2}/\d{1,2}/\d{2,4})",
+        blob,
+        flags=_re.IGNORECASE,
+    )
+    if m:
+        effective_date = m.group(2)
+    wage_decision = ""
+    m = _re.search(r"\b(TX\s?\d{8}|WD\s*\d{6,}|\d{4}-\d{4,})\b", blob)
+    if m:
+        wage_decision = m.group(1).replace(" ", "")
+    return effective_date, wage_decision
+
+
 def _autosize(ws, max_width: int = 60) -> None:
     for col in ws.columns:
         col_letter = get_column_letter(col[0].column)
@@ -261,31 +333,40 @@ def export_estimate_xlsx(
             ws.cell(row=i, column=2, value=v)
         _autosize(ws, max_width=80)
 
-    # ----- Bid Packages -----
-    if project.bid_packages:
+    # ----- Bid Packages (trade packages only) -----
+    trade_packages = [
+        p for p in project.bid_packages if p.document_kind == "trade_package"
+    ]
+    supporting_docs = [
+        p for p in project.bid_packages if p.document_kind == "supporting_document"
+    ]
+    if trade_packages:
         ws = wb.create_sheet("Bid Packages")
         headers = [
-            "Pkg #", "Trade", "PDF", "Project", "Project #",
+            "Pkg #", "Trade", "PDF", "Owner", "General Contractor",
+            "Project", "Project #",
             "CSI Divs", "CSI Sections",
             "# Inclusions", "# Exclusions", "# Alternates", "# Unit Prices",
             "Refd Drawings", "Refd Specs", "Summary",
         ]
         _write_header(ws, 1, headers)
-        for i, p in enumerate(sorted(project.bid_packages, key=lambda x: x.package_number or x.pdf_name), start=2):
+        for i, p in enumerate(sorted(trade_packages, key=lambda x: x.package_number or x.pdf_name), start=2):
             ws.cell(row=i, column=1, value=p.package_number or "")
             ws.cell(row=i, column=2, value=p.trade_name or "")
             ws.cell(row=i, column=3, value=p.pdf_name)
-            ws.cell(row=i, column=4, value=p.project_name or "")
-            ws.cell(row=i, column=5, value=p.project_number or "")
-            ws.cell(row=i, column=6, value=", ".join(p.csi_divisions))
-            ws.cell(row=i, column=7, value=", ".join(p.csi_sections))
-            ws.cell(row=i, column=8, value=len(p.inclusions))
-            ws.cell(row=i, column=9, value=len(p.exclusions))
-            ws.cell(row=i, column=10, value=len(p.alternates))
-            ws.cell(row=i, column=11, value=len(p.unit_prices))
-            ws.cell(row=i, column=12, value=", ".join(p.referenced_drawings))
-            ws.cell(row=i, column=13, value=", ".join(p.referenced_specs))
-            ws.cell(row=i, column=14, value=p.summary or "").alignment = Alignment(wrap_text=True)
+            ws.cell(row=i, column=4, value=p.owner or "")
+            ws.cell(row=i, column=5, value=p.gc or "")
+            ws.cell(row=i, column=6, value=p.project_name or "")
+            ws.cell(row=i, column=7, value=p.project_number or "")
+            ws.cell(row=i, column=8, value=", ".join(p.csi_divisions))
+            ws.cell(row=i, column=9, value=", ".join(p.csi_sections))
+            ws.cell(row=i, column=10, value=len(p.inclusions))
+            ws.cell(row=i, column=11, value=len(p.exclusions))
+            ws.cell(row=i, column=12, value=len(p.alternates))
+            ws.cell(row=i, column=13, value=len(p.unit_prices))
+            ws.cell(row=i, column=14, value=", ".join(p.referenced_drawings))
+            ws.cell(row=i, column=15, value=", ".join(p.referenced_specs))
+            ws.cell(row=i, column=16, value=p.summary or "").alignment = Alignment(wrap_text=True)
         ws.freeze_panes = "A2"
         _autosize(ws, max_width=80)
 
@@ -293,7 +374,7 @@ def export_estimate_xlsx(
         ws = wb.create_sheet("Scope Matrix")
         _write_header(ws, 1, ["Pkg #", "Trade", "Type", "Detail", "Add/Deduct", "Unit", "Amount"])
         row = 2
-        for p in sorted(project.bid_packages, key=lambda x: x.package_number or x.pdf_name):
+        for p in sorted(trade_packages, key=lambda x: x.package_number or x.pdf_name):
             for inc in p.inclusions:
                 ws.cell(row=row, column=1, value=p.package_number or "")
                 ws.cell(row=row, column=2, value=p.trade_name or "")
@@ -324,6 +405,30 @@ def export_estimate_xlsx(
                 if u.amount is not None:
                     ws.cell(row=row, column=7, value=u.amount).number_format = "$#,##0.00"
                 row += 1
+        ws.freeze_panes = "A2"
+        _autosize(ws, max_width=100)
+
+    # ----- Supporting Documents -----
+    # Wage determinations, sample agreements, tax-exemption certificates,
+    # HSP templates, UGSC docs — anything `document_kind == supporting_document`.
+    # Disjoint from "Bid Packages" above; the master `bid_packages` list
+    # keeps both so reconcile / aggregation still see them.
+    if supporting_docs:
+        ws = wb.create_sheet("Supporting Documents")
+        _write_header(
+            ws, 1,
+            ["Filename", "Source Page", "Kind", "Effective Date",
+             "Wage Decision #", "Notes"],
+        )
+        for i, p in enumerate(sorted(supporting_docs, key=lambda x: x.pdf_name), start=2):
+            kind = _classify_supporting_doc(p)
+            effective_date, wage_decision = _extract_supporting_doc_facts(p)
+            ws.cell(row=i, column=1, value=p.pdf_name)
+            ws.cell(row=i, column=2, value="")  # page reference — not currently tracked
+            ws.cell(row=i, column=3, value=kind)
+            ws.cell(row=i, column=4, value=effective_date)
+            ws.cell(row=i, column=5, value=wage_decision)
+            ws.cell(row=i, column=6, value=p.summary or "").alignment = Alignment(wrap_text=True)
         ws.freeze_panes = "A2"
         _autosize(ws, max_width=100)
 
@@ -434,6 +539,10 @@ def export_estimate_json(estimate: Estimate, project: ProjectModel) -> str:
         "spec_sections": [s.model_dump() for s in project.spec_sections],
         "site": project.site.model_dump(),
         "bid_packages": [p.model_dump() for p in project.bid_packages],
+        "supporting_documents": [
+            p.model_dump() for p in project.bid_packages
+            if p.document_kind == "supporting_document"
+        ],
         "scope_matrix": {
             "by_division": {
                 div: [p.pdf_name for p in pkgs]

@@ -236,6 +236,25 @@ def _coerce_bid_package(data: dict, pdf_name: str) -> BidPackage | None:
             return []
         return [str(x).strip() for x in raw if str(x).strip()]
 
+    # Owner / GC / contractor — read the new fields and fall back to the
+    # legacy `contractor` field when the LLM didn't emit `gc` (old prompts,
+    # cached responses). The BidPackage model_validator then mirrors the
+    # final pair to keep `contractor` populated for backward compatibility.
+    owner = str(data["owner"]).strip() if data.get("owner") else None
+    gc_val = str(data["gc"]).strip() if data.get("gc") else None
+    legacy_contractor = str(data["contractor"]).strip() if data.get("contractor") else None
+    if gc_val is None and legacy_contractor is not None:
+        gc_val = legacy_contractor
+
+    # document_kind — default to "trade_package" when missing. The validator
+    # in the schema is a Literal so anything other than the two allowed
+    # values will fail loudly; coerce unknown values back to the default.
+    dk_raw = data.get("document_kind")
+    if dk_raw in ("trade_package", "supporting_document"):
+        document_kind = dk_raw
+    else:
+        document_kind = "trade_package"
+
     try:
         return BidPackage(
             pdf_name=pdf_name,
@@ -245,8 +264,11 @@ def _coerce_bid_package(data: dict, pdf_name: str) -> BidPackage | None:
             project_number=str(data["project_number"]) if data.get("project_number") else None,
             project_location=str(data["project_location"]) if data.get("project_location") else None,
             bid_due=str(data["bid_due"]) if data.get("bid_due") else None,
-            contractor=str(data["contractor"]) if data.get("contractor") else None,
+            owner=owner,
+            gc=gc_val,
+            contractor=legacy_contractor,
             contact=str(data["contact"]) if data.get("contact") else None,
+            document_kind=document_kind,
             csi_divisions=_strs("csi_divisions"),
             csi_sections=_strs("csi_sections"),
             inclusions=_strs("inclusions"),
@@ -262,6 +284,91 @@ def _coerce_bid_package(data: dict, pdf_name: str) -> BidPackage | None:
     except Exception as exc:
         logger.warning("Failed to coerce bid package %s: %s", pdf_name, exc)
         return None
+
+
+# ---------------------------------------------------------------------------
+# Supporting-document heuristic
+# ---------------------------------------------------------------------------
+#
+# Cross-cutting reference documents (wage determinations, sample agreements,
+# tax-exemption certificates, HSP form templates, UGSC / SGC, Instructions
+# to Bidders boilerplate, AIA contract templates) routinely show up in the
+# project inbox alongside the real trade bid packages. Pre-calibration v3
+# they all landed in the Bid Packages table with `trade_name='other'`,
+# polluting the export.
+#
+# `_supporting_doc_hint` is a cheap, deterministic filename + first-page
+# heuristic the bundle dispatcher can call BEFORE the LLM to seed the
+# extraction prompt with a strong classification hint. It's intentionally
+# generous (better to ask the LLM "is this a supporting doc?" with a hint
+# than to re-run on a misclassification).
+#
+# Keywords are case-insensitive substring matches over the filename and the
+# first ~2000 chars of vector text. Extend this list as new document
+# variants surface — the test suite covers the common cases.
+
+
+_SUPPORTING_DOC_KEYWORDS: tuple[str, ...] = (
+    # Wage determinations / prevailing-wage tables
+    "wage determination",
+    "wage decision",
+    "wage rates",
+    "prevailing wage",
+    "davis-bacon",
+    "davis bacon",
+    "dba wd",
+    "dbra",
+    " wd ",
+    "tx2026",
+    "tx 2026",
+    # Tax exemption / sales-tax cert
+    "tax exemption",
+    "tax-exempt",
+    "tax exempt certificate",
+    "sales tax",
+    # Sample / template construction services agreements
+    "sample agreement",
+    "sample contract",
+    "template agreement",
+    "csa template",
+    "sample construction services agreement",
+    "construction services agreement",
+    # HSP / HUB Subcontracting Plan templates
+    "hub subcontracting plan",
+    "subcontracting plan form",
+    "hsp form",
+    " hsp ",
+    # Uniform / Supplementary General Conditions, ITB, AIA templates
+    "ugsc",
+    "uniform general conditions",
+    "supplementary general conditions",
+    "instructions to bidders",
+    "instructions to offerors",
+    "aia document",
+)
+
+
+def _supporting_doc_hint(filename: str, first_page_text: str) -> bool:
+    """Return True when filename + first-page text look like a supporting document.
+
+    Cheap deterministic check used BEFORE the LLM extraction to seed the
+    prompt with a strong classification hint. False positives are tolerable
+    (the LLM still gets to decide); false negatives just mean the document
+    is treated as a normal trade package, which is the pre-v3 behavior.
+
+    Args:
+        filename: The PDF filename (basename or full path — both work).
+        first_page_text: The vector text from page 1 (truncated to ~2000
+            chars is enough for the keyword scan).
+    """
+    haystack = " ".join([
+        (filename or "").lower(),
+        (first_page_text or "")[:2000].lower(),
+    ])
+    for kw in _SUPPORTING_DOC_KEYWORDS:
+        if kw in haystack:
+            return True
+    return False
 
 
 def _coerce_site(d: dict | None, sheet_id: str) -> SiteInfo | None:
@@ -577,10 +684,37 @@ def _truncate_for_text_call(text: str, char_budget: int = 60000) -> str:
 
 
 def extract_bid_package(bundle: "DocumentBundle", llm: LLMClient) -> SheetExtraction:
-    """Run the bid-package prompt on the whole PDF text in a single call."""
+    """Run the bid-package prompt on the whole PDF text in a single call.
+
+    Calibration v3: cross-cutting reference docs (wage determinations,
+    sample CSA templates, tax-exemption certificates, HSP forms, UGSC
+    boilerplate) frequently arrive in the inbox alongside real trade
+    packages. We run a cheap deterministic filename + first-page
+    heuristic BEFORE the LLM call so the prompt can be seeded with a
+    strong classification hint, and as a safety net we override
+    `document_kind` when the heuristic strongly disagrees with the LLM.
+    """
     user_prompt = load_prompt("bid_package")
     body = _truncate_for_text_call(bundle.full_text)
-    extra = f"Source PDF filename: {bundle.pdf_name}\nPage count: {bundle.page_count}\n\nFULL DOCUMENT TEXT:\n{body}"
+
+    supporting_hint = _supporting_doc_hint(bundle.pdf_name, bundle.full_text or "")
+    hint_block = ""
+    if supporting_hint:
+        hint_block = (
+            "\nCLASSIFICATION HINT (deterministic filename / first-page scan):\n"
+            "This document strongly resembles a SUPPORTING DOCUMENT (wage\n"
+            "determination, sample agreement, tax-exemption certificate,\n"
+            "HSP template, UGSC, or similar) rather than a priced trade\n"
+            "scope. Default to `document_kind: \"supporting_document\"`\n"
+            "unless the body clearly describes a trade scope to price.\n"
+        )
+
+    extra = (
+        f"Source PDF filename: {bundle.pdf_name}\n"
+        f"Page count: {bundle.page_count}\n"
+        f"{hint_block}"
+        f"\nFULL DOCUMENT TEXT:\n{body}"
+    )
 
     sheet_id = bundle.pdf_name
     try:
@@ -593,6 +727,25 @@ def extract_bid_package(bundle: "DocumentBundle", llm: LLMClient) -> SheetExtrac
             summary=f"Bid-package extraction failed: {exc}",
             warnings=[f"bid_package extractor error: {exc}"],
         )
+
+    # If the heuristic strongly says "supporting document" and the LLM
+    # didn't already classify it as such, override. This cleans up the
+    # pre-v3 behavior where Davis-Bacon wage tables landed with
+    # `trade_name='other'` in the Bid Packages export.
+    if supporting_hint and isinstance(data, dict):
+        if data.get("document_kind") not in ("trade_package", "supporting_document"):
+            data["document_kind"] = "supporting_document"
+        elif data.get("document_kind") == "trade_package":
+            # LLM disagreed with the heuristic. Trust the LLM only when the
+            # body has enough scope-looking signals (inclusions, csi_sections,
+            # unit_prices). Otherwise force supporting_document.
+            scope_signals = (
+                bool(_safe_list(data, "inclusions"))
+                or bool(_safe_list(data, "csi_sections"))
+                or bool(_safe_list(data, "unit_prices"))
+            )
+            if not scope_signals:
+                data["document_kind"] = "supporting_document"
 
     bp = _coerce_bid_package(data, bundle.pdf_name)
     summary = (bp.summary if bp and bp.summary else "") or str(data.get("summary") or "")
@@ -635,15 +788,25 @@ def extract_project_manual(bundle: "DocumentBundle", llm: LLMClient) -> SheetExt
         summary_parts.append("Key dates: " + "; ".join(str(d) for d in dates[:4]))
 
     # Stash project info inside a synthetic BidPackage so reconcile can pick
-    # it up uniformly. trade_name == "Project Manual" makes it skippable in
-    # the scope matrix.
+    # it up uniformly. The project manual is a supporting reference doc, so
+    # tag it as such — that keeps it out of the Trade Packages table.
+    # `trade_name` is set to the LLM's `document_kind` label for backward
+    # compatibility with the old `_consolidate_project_info` voting.
+    owner = str(data["owner"]).strip() if data.get("owner") else None
+    gc_val = str(data["gc"]).strip() if data.get("gc") else None
+    legacy_contractor = str(data["contractor"]).strip() if data.get("contractor") else None
+    if gc_val is None and legacy_contractor is not None:
+        gc_val = legacy_contractor
     bp = BidPackage(
         pdf_name=bundle.pdf_name,
-        trade_name=str(data["document_kind"]) if data.get("document_kind") else "project manual",
+        trade_name=None,
         project_name=str(data["project_name"]) if data.get("project_name") else None,
         project_number=str(data["project_number"]) if data.get("project_number") else None,
         project_location=str(data["project_location"]) if data.get("project_location") else None,
-        contractor=str(data["contractor"]) if data.get("contractor") else None,
+        owner=owner,
+        gc=gc_val,
+        contractor=legacy_contractor,
+        document_kind="supporting_document",
         summary=" ".join(summary_parts) if summary_parts else None,
     )
 

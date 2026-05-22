@@ -55,6 +55,13 @@ GREY_BORDER = colors.HexColor("#B8B8B8")
 GREY_LIGHT = colors.HexColor("#F2F2F2")
 TEXT_DIM = colors.HexColor("#555555")
 
+# Soft-warning palette for the all-suppressed exec-summary empty state.
+# Light orange background + dark amber text + warm border — readable in
+# print and on screen, visually distinct from the normal blue tiles.
+WARNING_BG = colors.HexColor("#FFF3CD")
+WARNING_BORDER = colors.HexColor("#FFEEBA")
+WARNING_TEXT = colors.HexColor("#856404")
+
 
 # ---------------------------------------------------------------------------
 # Numbered canvas: stamps "Page N of M" + running header/footer on every page
@@ -381,45 +388,35 @@ def _cover_page(
     return flow
 
 
-def _executive_summary(
-    estimate: Estimate, cfg: QuoteConfig, styles: dict[str, ParagraphStyle]
-) -> list:
-    flow: list = [PageBreak(), Paragraph("Executive summary", styles["h1"])]
+def _is_priced_estimate_empty(estimate: Estimate) -> bool:
+    """True when there are no priced lines contributing to the totals.
 
-    flow.append(
-        Paragraph(
-            f"<b>Total contract value</b><br/>{_money(estimate.grand_total)}",
-            styles["big_money"],
-        )
-    )
-    flow.append(Spacer(1, 0.15 * inch))
+    Two scenarios trigger this:
+      * `estimate.line_items` is empty entirely (nothing extracted).
+      * Every CostLine has `suppressed=True` (unit-mismatch suppression zeroed
+        out the whole takeoff — common during calibration when the cost-DB
+        coverage is patchy).
 
-    if cfg.quote_meta.scope_blurb:
-        flow.append(Paragraph(cfg.quote_meta.scope_blurb, styles["body"]))
-        flow.append(Spacer(1, 0.15 * inch))
+    Either way the three Labor/Material/Subcontractor tiles render as $0.00,
+    which looks broken to a client reading the proposal. We swap in a
+    single explanatory banner instead.
+    """
+    lines = list(estimate.line_items or [])
+    if not lines:
+        return True
+    return all(getattr(li, "suppressed", False) for li in lines)
 
+
+def _render_three_tiles(
+    estimate: Estimate, styles: dict[str, ParagraphStyle]
+) -> Table:
+    """Normal three-tile (Labor / Material / Subcontractor) executive summary."""
     by_cat = estimate.by_cost_category
     tiles_data = [
         ("Labor", by_cat.get("labor", 0.0)),
         ("Material", by_cat.get("material", 0.0)),
         ("Subcontractor", by_cat.get("subcontractor", 0.0)),
     ]
-    tile_cells = []
-    for label, amount in tiles_data:
-        tile_cells.append(
-            [
-                Paragraph(label.upper(), styles["tile_label"]),
-                Paragraph(_money(amount), styles["tile_value"]),
-            ]
-        )
-    # Render as a single row of 3 nested tables
-    tiles_row = Table(
-        [[Table([row], colWidths=[(CONTENT_WIDTH / 3) - 0.1 * inch]) for row in [
-            [Paragraph(label.upper(), styles["tile_label"])] for label, _ in tiles_data
-        ]]],
-        colWidths=[CONTENT_WIDTH / 3] * 3,
-    )
-    # Simpler: build a single 3-column table where each cell stacks label/value
     cell_inner = []
     for label, amount in tiles_data:
         cell_inner.append(
@@ -443,7 +440,91 @@ def _executive_summary(
             ]
         )
     )
-    flow.append(tiles_row)
+    return tiles_row
+
+
+# Exact text required by the empty-state contract — see calibration v3
+# Item 3 and the matching test in tests/test_pdf_empty_state.py. Do NOT
+# reword without updating the test.
+EMPTY_STATE_BANNER_TEXT = "No priced lines yet — cost-database coverage gap"
+EMPTY_STATE_FOOTNOTE_TEXT = (
+    "All extracted takeoff items are suppressed pending cost-database "
+    "matches. The estimate below reflects $0 because no line item could "
+    "be reliably priced. Refresh the cost database, supply unit costs "
+    "manually, or rerun the pipeline with a richer cost source."
+)
+
+
+def _render_empty_state_banner(
+    styles: dict[str, ParagraphStyle]
+) -> list:
+    """Soft-warning full-width banner used when every line is suppressed.
+
+    Replaces the three $0.00 tiles so the proposal doesn't look broken when
+    the cost-DB had no coverage for the extracted takeoff.
+    """
+    banner_para = Paragraph(
+        f"<b>{EMPTY_STATE_BANNER_TEXT}</b>",
+        ParagraphStyle(
+            "EmptyStateBanner",
+            fontName="Helvetica-Bold",
+            fontSize=13,
+            leading=18,
+            textColor=WARNING_TEXT,
+            alignment=TA_CENTER,
+        ),
+    )
+    banner = Table(
+        [[banner_para]],
+        colWidths=[CONTENT_WIDTH],
+        rowHeights=[0.85 * inch],
+    )
+    banner.setStyle(
+        TableStyle(
+            [
+                ("BOX", (0, 0), (-1, -1), 1.0, WARNING_BORDER),
+                ("BACKGROUND", (0, 0), (-1, -1), WARNING_BG),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+                ("TOPPADDING", (0, 0), (-1, -1), 14),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 14),
+                ("LEFTPADDING", (0, 0), (-1, -1), 14),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 14),
+            ]
+        )
+    )
+    footnote = Paragraph(
+        f"<i>{EMPTY_STATE_FOOTNOTE_TEXT}</i>",
+        styles["body_small"],
+    )
+    return [banner, Spacer(1, 0.08 * inch), footnote]
+
+
+def _executive_summary(
+    estimate: Estimate, cfg: QuoteConfig, styles: dict[str, ParagraphStyle]
+) -> list:
+    flow: list = [PageBreak(), Paragraph("Executive summary", styles["h1"])]
+
+    flow.append(
+        Paragraph(
+            f"<b>Total contract value</b><br/>{_money(estimate.grand_total)}",
+            styles["big_money"],
+        )
+    )
+    flow.append(Spacer(1, 0.15 * inch))
+
+    if cfg.quote_meta.scope_blurb:
+        flow.append(Paragraph(cfg.quote_meta.scope_blurb, styles["body"]))
+        flow.append(Spacer(1, 0.15 * inch))
+
+    # Branching point: when every line is suppressed (or there are no lines
+    # at all), render a single explanatory banner instead of three $0.00
+    # tiles. Otherwise render the normal three-tile layout — partially-priced
+    # estimates still get the standard treatment.
+    if _is_priced_estimate_empty(estimate):
+        flow.extend(_render_empty_state_banner(styles))
+    else:
+        flow.append(_render_three_tiles(estimate, styles))
     flow.append(Spacer(1, 0.15 * inch))
 
     # Project totals breakdown
@@ -704,8 +785,13 @@ def _alternates_and_unit_prices(
     project: ProjectModel, styles: dict[str, ParagraphStyle]
 ) -> list:
     flow: list = []
+    # Trade packages only — supporting documents (wage determinations,
+    # sample agreements, etc.) don't have alternates / unit prices to show.
+    trade_pkgs = [
+        p for p in project.bid_packages if p.document_kind == "trade_package"
+    ]
     has_any = any(
-        bool(p.alternates) or bool(p.unit_prices) for p in project.bid_packages
+        bool(p.alternates) or bool(p.unit_prices) for p in trade_pkgs
     )
     if not has_any:
         return flow
@@ -713,7 +799,7 @@ def _alternates_and_unit_prices(
     flow.append(PageBreak())
     flow.append(Paragraph("Alternates and unit prices", styles["h1"]))
 
-    for p in sorted(project.bid_packages, key=lambda x: x.package_number or x.pdf_name):
+    for p in sorted(trade_pkgs, key=lambda x: x.package_number or x.pdf_name):
         if not (p.alternates or p.unit_prices):
             continue
         title_bits = []
@@ -723,6 +809,21 @@ def _alternates_and_unit_prices(
             title_bits.append(p.trade_name)
         title_bits.append(f"({p.pdf_name})")
         flow.append(Paragraph(" \u2022 ".join(title_bits), styles["h2"]))
+
+        # Owner / GC sub-caption so the reader knows whose bid this is.
+        # Renders only when at least one of the two is populated. On
+        # government direct solicitations `gc` will be None — we just show
+        # "Owner: USFWS" in that case, no awkward "GC: —".
+        owner_gc_bits = []
+        if p.owner:
+            owner_gc_bits.append(f"<b>Owner:</b> {p.owner}")
+        if p.gc:
+            owner_gc_bits.append(f"<b>GC:</b> {p.gc}")
+        if owner_gc_bits:
+            flow.append(
+                Paragraph(" &nbsp;&nbsp;&middot;&nbsp;&nbsp; ".join(owner_gc_bits),
+                          styles["body_small"])
+            )
 
         if p.alternates:
             rows = [["Alt #", "Description", "Add/Deduct", "Amount"]]
@@ -763,6 +864,54 @@ def _alternates_and_unit_prices(
             flow.append(tbl)
             flow.append(Spacer(1, 0.15 * inch))
 
+    return flow
+
+
+def _supporting_documents_page(
+    project: ProjectModel, styles: dict[str, ParagraphStyle]
+) -> list:
+    """Render a small page listing supporting / reference documents.
+
+    Wage determinations, sample CSA templates, tax-exemption certificates,
+    HSP form templates, UGSC, AIA contract templates, etc. Skipped
+    entirely when there are no supporting docs — no empty section.
+    """
+    docs = [p for p in project.bid_packages if p.document_kind == "supporting_document"]
+    if not docs:
+        return []
+
+    flow: list = [
+        PageBreak(),
+        Paragraph("Supporting documents", styles["h1"]),
+        Paragraph(
+            "Reference documents that apply across all trades. These are not "
+            "scope packages we price — they're attached for the bid record "
+            "(wage determinations, sample agreements, tax-exemption "
+            "certificates, HSP templates, UGSC, etc.).",
+            styles["body_small"],
+        ),
+        Spacer(1, 0.1 * inch),
+    ]
+    rows = [["Filename", "Kind", "Notes"]]
+    for p in sorted(docs, key=lambda x: x.pdf_name):
+        # Lazy import to avoid a hard circular dep with exporter.py.
+        from .exporter import _classify_supporting_doc
+        kind = _classify_supporting_doc(p)
+        rows.append(
+            [
+                Paragraph(p.pdf_name, styles["body_small"]),
+                kind,
+                Paragraph(p.summary or "", styles["body_small"]),
+            ]
+        )
+    col_widths = [
+        CONTENT_WIDTH * 0.45,
+        CONTENT_WIDTH * 0.20,
+        CONTENT_WIDTH * 0.35,
+    ]
+    tbl = Table(rows, colWidths=col_widths, repeatRows=1)
+    tbl.setStyle(_grid_style())
+    flow.append(tbl)
     return flow
 
 
@@ -967,6 +1116,7 @@ def build_quote_pdf(
     story.extend(_cost_category_table(estimate, styles))
     story.extend(_scope_coverage(project, styles))
     story.extend(_alternates_and_unit_prices(project, styles))
+    story.extend(_supporting_documents_page(project, styles))
     story.extend(_payment_schedule(estimate, quote_config, styles))
     story.extend(_terms_and_conditions(quote_config, styles))
     story.extend(_signature_block(quote_config, styles))

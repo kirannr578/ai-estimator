@@ -12,8 +12,9 @@ Return ONLY a JSON object with this exact shape:
   "project_name":     "string or null",
   "project_number":   "string or null",
   "project_location": "string or null",
-  "owner":            "string or null  (e.g. 'Dallas ISD')",
-  "contractor":       "string or null  (the GC, e.g. 'BECK 3I JOINT VENTURE')",
+  "owner":            "string or null  (the OWNING ENTITY paying for the work — agency, institution, or developer; e.g. 'Dallas ISD', 'Angelo State University', 'U.S. Fish & Wildlife Service')",
+  "gc":               "string or null  (the GENERAL CONTRACTOR / CONSTRUCTION MANAGER running the bid; null on direct gov solicitations)",
+  "contractor":       "string or null  (DEPRECATED — same value as `gc`; e.g. 'BECK 3I JOINT VENTURE'; null on direct gov solicitations)",
   "document_kind":    "string  (e.g. 'general instructions to bidders', 'subcontractor questionnaire', 'project flyer', 'invitation to bid', 'exhibit', 'other')",
   "summary":          "2-4 sentences describing what this document is and the most useful facts in it for an estimator",
   "key_dates":        [ "string", ... ]    (bid dates, schedule milestones, etc., or empty),
@@ -23,6 +24,10 @@ Return ONLY a JSON object with this exact shape:
 
 Rules:
   - Pull the project name/number/owner from THIS document only - do not guess.
+  - `owner` is the entity paying for the work (agency / institution /
+    developer). `gc` is the construction manager / general contractor
+    running the bid; leave `gc` null on direct agency-to-sub solicitations.
+    `contractor` is deprecated — set it equal to `gc`.
   - Be concise. The summary should be skim-readable.
   - If the document is pure boilerplate (e.g. generic GC instructions), say
     so plainly in the summary and leave most other fields null.

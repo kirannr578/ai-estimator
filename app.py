@@ -692,11 +692,20 @@ if "estimate" in st.session_state:
                 st.caption("No bid-package coverage detected.")
 
     # --- Bid Packages tab ---
+    # Split into two sub-sections: trade packages (the existing view, filtered
+    # to `document_kind == 'trade_package'`) and supporting documents (wage
+    # determinations, sample agreements, tax-exemption certificates, HSP
+    # templates, UGSC, etc.). Pre-calibration-v3 these all landed in the same
+    # table with `trade_name='other'`, polluting the export.
     with tabs[1]:
-        if not project.bid_packages:
-            st.info("No bid packages detected. Upload Beck-style scope/bid PDFs to populate this view.")
+        trade_packages = [p for p in project.bid_packages if p.document_kind == "trade_package"]
+        supporting_docs = [p for p in project.bid_packages if p.document_kind == "supporting_document"]
+
+        st.subheader("Trade Packages")
+        if not trade_packages:
+            st.info("No trade packages detected. Upload Beck-style scope/bid PDFs to populate this view.")
         else:
-            for p in sorted(project.bid_packages, key=lambda x: x.package_number or x.pdf_name):
+            for p in sorted(trade_packages, key=lambda x: x.package_number or x.pdf_name):
                 title_bits = filter(None, [
                     f"#{p.package_number}" if p.package_number else None,
                     p.trade_name,
@@ -706,6 +715,12 @@ if "estimate" in st.session_state:
                     cols = st.columns([1, 2])
                     with cols[0]:
                         st.write(f"**Project:** {p.project_name or '?'}  (#{p.project_number or '?'})")
+                        # Owner / GC split — owner is the agency/institution
+                        # paying (USFWS, ASU, TAMU); gc is the construction
+                        # manager running the bid (Beck, JE Dunn). On
+                        # government direct solicitations gc is typically None.
+                        st.write(f"**Owner:** {p.owner or '—'}")
+                        st.write(f"**General contractor:** {p.gc or '—'}")
                         st.write(f"**CSI divisions:** {', '.join(p.csi_divisions) or '?'}")
                         if p.csi_sections:
                             st.caption("Sections: " + ", ".join(p.csi_sections))
@@ -736,6 +751,27 @@ if "estimate" in st.session_state:
                             pd.DataFrame([u.model_dump() for u in p.unit_prices]),
                             hide_index=True, use_container_width=True,
                         )
+
+        st.divider()
+        st.subheader("Supporting Documents")
+        if not supporting_docs:
+            st.caption("No supporting documents extracted yet.")
+        else:
+            # Reuse the exporter's classifier so the UI matches the Excel
+            # "Kind" column exactly.
+            from core.exporter import _classify_supporting_doc
+            sd_rows = []
+            for p in sorted(supporting_docs, key=lambda x: x.pdf_name):
+                sd_rows.append({
+                    "Filename": p.pdf_name,
+                    "Kind": _classify_supporting_doc(p),
+                    "Owner": p.owner or "",
+                    "Summary": (p.summary or "")[:300],
+                })
+            st.dataframe(
+                pd.DataFrame(sd_rows),
+                hide_index=True, use_container_width=True,
+            )
 
     # --- Scope Matrix tab ---
     with tabs[2]:

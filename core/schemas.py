@@ -221,11 +221,23 @@ class ScopeItem(BaseModel):
 
 
 class BidPackage(BaseModel):
-    """One trade-specific bid package PDF.
+    """One trade-specific bid package PDF *or* one supporting reference document.
 
-    Bid packages have no measured quantities - they describe scope, exclusions,
-    alternates and unit prices. They become the *budget shell* that real
-    quantity takeoffs (from drawings) fill in later.
+    For trade packages (the common case): no measured quantities - they describe
+    scope, exclusions, alternates and unit prices. They become the *budget
+    shell* that real quantity takeoffs (from drawings) fill in later.
+
+    For supporting documents (wage determinations, sample CSAs, HSP templates,
+    tax-exemption certs, UGSC, etc.): `document_kind == "supporting_document"`
+    routes them to a separate export channel so they don't pollute the trade
+    Bid Packages table with `trade_name='other'` rows.
+
+    Owner vs GC split (calibration v3): on government solicitations,
+    `BidPackage.contractor` historically captured the *owning agency*
+    (USFWS, ASU, TAMU). The field name implied the GC, conflating two
+    distinct entities. `owner` and `gc` make the split explicit; `contractor`
+    is preserved for backward compatibility and is auto-populated from
+    `gc` (or vice-versa) by the model_validator below.
     """
 
     pdf_name: str
@@ -235,8 +247,27 @@ class BidPackage(BaseModel):
     project_number: Optional[str] = None      # e.g. "9A8001"
     project_location: Optional[str] = None    # e.g. "Dallas, TX"
     bid_due: Optional[str] = None             # date/time string
-    contractor: Optional[str] = None          # e.g. "BECK 3I JOINT VENTURE"
+    # Owner / GC split. On government direct solicitations (USFWS, ASU, TAMU)
+    # `owner` holds the agency/institution name and `gc` is typically None.
+    # On private GMP-style packages `owner` is the developer / end client and
+    # `gc` is the construction manager (Beck, JE Dunn, SSC).
+    owner: Optional[str] = None               # e.g. "U.S. Fish & Wildlife Service" or "Angelo State University"
+    gc: Optional[str] = None                  # e.g. "Beck Group" (None for direct gov solicitations)
+    # DEPRECATED: prefer `gc`. Kept for backward compatibility with the three
+    # active bid-prep workspaces (Angelo State, TAMU Harrington, USFWS San
+    # Marcos). The model_validator below mirrors `contractor` <-> `gc` so old
+    # payloads (LLM emits only `contractor`) and new payloads (LLM emits only
+    # `gc`) both round-trip cleanly.
+    contractor: Optional[str] = None          # DEPRECATED — use `gc`
     contact: Optional[str] = None             # contact name + email
+    # Document kind — separates priced trade scopes from cross-cutting
+    # reference docs (wage determinations, sample agreements, etc.).
+    # "trade_package": a scope-of-work package the bidder prices.
+    # "supporting_document": a reference / compliance document that applies
+    # across all trades (Davis-Bacon wage determination, sample construction
+    # services agreement, tax-exemption certificate, HSP form template,
+    # Uniform General Conditions, etc.).
+    document_kind: Literal["trade_package", "supporting_document"] = "trade_package"
     csi_divisions: list[str] = Field(default_factory=list)   # ["03", "31"]
     csi_sections: list[str] = Field(default_factory=list)    # ["03 30 00", "31 63 29"]
     inclusions: list[str] = Field(default_factory=list)
@@ -248,6 +279,22 @@ class BidPackage(BaseModel):
     referenced_specs: list[str] = Field(default_factory=list)      # e.g. ["098116"]
     summary: Optional[str] = None
     warnings: list[str] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def _backfill_contractor_gc(self) -> "BidPackage":
+        """Backward-compat: keep `contractor` and `gc` in lock-step.
+
+        * Legacy payload (LLM emitted only `contractor`): copy to `gc`.
+        * New payload (LLM emitted only `gc`): copy to `contractor` so old
+          consumers that still read `contractor` see the right value.
+        * Both set: leave as-is. Caller wins.
+        Neither field is ever cleared by this validator.
+        """
+        if self.contractor and not self.gc:
+            self.gc = self.contractor
+        elif self.gc and not self.contractor:
+            self.contractor = self.gc
+        return self
 
 
 # ---------------------------------------------------------------------------

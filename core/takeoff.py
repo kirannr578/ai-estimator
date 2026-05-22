@@ -89,6 +89,30 @@ class ProjectModel:
     aggregated_inclusions: list[ScopeItem]
     aggregated_exclusions: list[ScopeItem]
 
+    @property
+    def trade_packages(self) -> list[BidPackage]:
+        """Subset of `bid_packages` that describe a priceable scope of work.
+
+        `bid_packages` is the canonical single source of truth (it holds both
+        trade packages and supporting documents); this property gives
+        consumers a fast filter so the Bid Packages export / UI never
+        accidentally pulls in wage determinations or sample agreements.
+        """
+        return [p for p in self.bid_packages if p.document_kind == "trade_package"]
+
+    @property
+    def supporting_documents(self) -> list[BidPackage]:
+        """Subset of `bid_packages` that are reference/compliance docs.
+
+        Wage determinations, sample CSA templates, tax-exemption certificates,
+        HSP form templates, UGSC / supplementary general conditions, etc.
+        These apply across all trades and were previously polluting the
+        Bid Packages export with `trade_name='other'`. The `bid_packages`
+        list intentionally KEEPS them in (single source of truth); this
+        property is the consumer-facing filter.
+        """
+        return [p for p in self.bid_packages if p.document_kind == "supporting_document"]
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -464,15 +488,22 @@ def _consolidate_project_info(packages: list[BidPackage]) -> ProjectInfo:
     name, name_src = _vote("project_name")
     number, _ = _vote("project_number")
     location, _ = _vote("project_location")
-    contractor, _ = _vote("contractor")
+    owner, _ = _vote("owner")
+    # Prefer `gc` (post-v3) over the deprecated `contractor` field. They
+    # mirror each other via BidPackage's model_validator, but voting on
+    # `gc` first means new payloads win when both are set on different
+    # packages.
+    gc_or_contractor, _ = _vote("gc")
+    if not gc_or_contractor:
+        gc_or_contractor, _ = _vote("contractor")
     bid_due, _ = _vote("bid_due")
 
     return ProjectInfo(
         name=name,
         number=number,
         location=location,
-        owner=None,    # could be inferred from name (e.g. "DISD") in a follow-up pass
-        contractor=contractor,
+        owner=owner,
+        contractor=gc_or_contractor,
         bid_due=bid_due,
         sources=name_src,
     )

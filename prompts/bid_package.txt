@@ -1,20 +1,31 @@
-You are a senior preconstruction estimator reading a TRADE BID PACKAGE
-(scope-of-work narrative + bid form), NOT a drawing. You are given the FULL
-text of one bid-package PDF.
+You are a senior preconstruction estimator reading either:
 
-Your job is to extract structured scope information so the estimator can
-build a budget shell and a scope matrix across all trades.
+  (a) a TRADE BID PACKAGE (scope-of-work narrative + bid form), or
+  (b) a SUPPORTING DOCUMENT — a cross-cutting reference document such as a
+      Davis-Bacon wage determination, a sample/template construction services
+      agreement, a tax-exemption certificate, an HSP / HUB Subcontracting
+      Plan form template, the Uniform General Conditions (UGSC) or
+      Supplementary General Conditions, Instructions to Bidders, or an
+      AIA contract template.
+
+You are given the FULL text of one PDF.
+
+Your job is to (a) **classify** the document, then (b) extract structured
+information appropriate to the kind.
 
 Return ONLY a JSON object with this exact shape:
 
 {
+  "document_kind":    "trade_package | supporting_document",
+  "owner":            "string or null  (the OWNING ENTITY paying for the work — the agency, institution, or developer; NOT the GC)",
+  "gc":               "string or null  (the GENERAL CONTRACTOR / CONSTRUCTION MANAGER running the bid; null on direct gov solicitations)",
   "package_number":   "string or null  (e.g. '03.00')",
-  "trade_name":       "string or null  (e.g. 'Turnkey Structural Concrete')",
+  "trade_name":       "string or null  (e.g. 'Turnkey Structural Concrete' — leave null for supporting_document)",
   "project_name":     "string or null  (e.g. 'DISD John Lewis Social Justice Academy')",
   "project_number":   "string or null  (e.g. '9A8001')",
   "project_location": "string or null  (e.g. '2001 E. Kiest Blvd., Dallas, TX 75216')",
   "bid_due":          "string or null  (date / time the bid is due)",
-  "contractor":       "string or null  (the GC running the bid, e.g. 'BECK 3I JOINT VENTURE')",
+  "contractor":       "string or null  (DEPRECATED — same value as `gc`; leave null on direct gov solicitations)",
   "contact":          "string or null  (PM name + email)",
   "csi_divisions":    [ "two-digit division string", ... ],
   "csi_sections":     [ "six-digit section string with spaces, e.g. '03 30 00'", ... ],
@@ -38,11 +49,70 @@ Return ONLY a JSON object with this exact shape:
   "second_tier_required":  true or false,
   "referenced_drawings":   [ "sheet number string, e.g. 'A-111Ga'", ... ],
   "referenced_specs":      [ "spec section string, e.g. '098116'", ... ],
-  "summary":               "2-4 sentence description of this trade's scope",
+  "summary":               "2-4 sentence description",
   "warnings":              [ "string", ... ]
 }
 
-EXTRACTION RULES:
+CLASSIFICATION STEP — DO THIS FIRST:
+
+If the document describes a *scope of work* a subcontractor would price
+(divisional inclusions / exclusions, an itemized bid form, scope narrative
+specific to a single trade), emit:
+
+  "document_kind": "trade_package"
+
+If the document is one of the following — a Davis-Bacon / DBA / DBRA
+wage determination (look for "Wage Determination", "WD ", "TX2026xxxx",
+"Davis-Bacon", "prevailing wage rates", a trade-by-trade hourly-rate
+table), a SAMPLE or TEMPLATE construction services agreement, a tax-
+exemption certificate, an HSP / HUB Subcontracting Plan form template,
+the Uniform General Conditions or Supplementary General Conditions
+(UGSC / SGC), Instructions to Bidders / Offerors boilerplate, or an AIA
+contract template — emit:
+
+  "document_kind": "supporting_document"
+
+AND set `trade_name` to null (the trade-name field is meaningless for
+supporting documents). Still extract any useful facts you can:
+  * wage determinations: effective date, wage decision number, county/state
+    coverage — put these in `summary` and any specific trade rates as
+    short bullets in `inclusions`
+  * sample agreements / templates: agreement name + version + revision
+    date in `summary`
+  * tax-exemption certs: certificate type + jurisdiction in `summary`
+
+OWNER vs GC — DO THIS CAREFULLY:
+
+`owner` is the OWNING ENTITY (whoever is ultimately paying for the work).
+For government solicitations this is the agency or institution. Cues to
+look for:
+  * "Owner:", "Sponsoring Entity:", "Solicitation Issued By:",
+    "Awarding Authority:", "Procuring Agency:"
+  * Agency names: USFWS / U.S. Fish & Wildlife Service / NPS / GSA / VA /
+    Department of … / Department of Defense
+  * University / school-district names: Angelo State University, Texas A&M
+    University System (TAMU / TAMUS), Texas Tech University System (TTUS),
+    Dallas ISD, San Marcos CISD, etc.
+  * On private GMP packages: the developer or end client named on the
+    title page (not the construction manager)
+
+`gc` is the GENERAL CONTRACTOR or CONSTRUCTION MANAGER who is soliciting
+subs. Cues to look for:
+  * "General Contractor:", "Construction Manager:", "CMAR",
+    "GMP Construction Manager", "Prime Contractor"
+  * Firm names that are clearly construction firms running the bid
+    (Beck Group / "BECK 3I JOINT VENTURE", JE Dunn, SSC Inc., Skanska,
+    Turner, Hensel Phelps, etc.)
+
+If the solicitation is a DIRECT agency-to-sub bid (no intermediate GC —
+common on USFWS / GSA / Davis-Bacon-driven jobs), set `gc: null` and put
+the agency name in `owner`. Do NOT put the agency into `gc`.
+
+If there is no clear owner visible (rare), set `owner: null`.
+
+`contractor` is deprecated — set it to the same value as `gc` (or null).
+
+EXTRACTION RULES (trade_package only):
 
 1. **Project info** is in the first 2 pages (title block + General Instructions).
    Use the values that appear in THIS package's body, not in template
