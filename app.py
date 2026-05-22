@@ -38,7 +38,17 @@ from core.exporter import export_estimate_json, export_estimate_xlsx
 from core.extractors import extract_bundle, extract_sheet
 from core.llm_client import LLMClient
 from core.pdf_processor import DocumentBundle, process_pdfs
-from core.schemas import Estimate, Sheet, SheetExtraction
+from core.schemas import (
+    ClientInfo,
+    CompanyInfo,
+    Estimate,
+    PaymentMilestone,
+    PaymentSchedule,
+    QuoteConfig,
+    QuoteMeta,
+    Sheet,
+    SheetExtraction,
+)
 from core.sheet_classifier import classify_sheet
 from core.takeoff import ProjectModel, reconcile
 
@@ -54,10 +64,33 @@ UPLOAD_DIR = ROOT / "uploads"
 CACHE_DIR = ROOT / ".cache" / "renders"
 EXPORT_DIR = ROOT / "exports"
 CSI_TITLES_PATH = ROOT / "config" / "csi_divisions.json"
+CLIENT_QUOTE_CFG_PATH = ROOT / "config" / "client_quote.json"
 
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 CACHE_DIR.mkdir(parents=True, exist_ok=True)
 EXPORT_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def _load_quote_config() -> QuoteConfig:
+    """Read the client-quote config from disk, falling back to defaults."""
+    if CLIENT_QUOTE_CFG_PATH.is_file():
+        try:
+            raw = json.loads(CLIENT_QUOTE_CFG_PATH.read_text(encoding="utf-8"))
+            return QuoteConfig.model_validate(raw)
+        except Exception as exc:
+            logging.warning("client_quote.json failed to parse: %s", exc)
+    return QuoteConfig()
+
+
+def _save_quote_config(cfg: QuoteConfig) -> None:
+    """Atomically replace the client-quote config on disk."""
+    CLIENT_QUOTE_CFG_PATH.parent.mkdir(parents=True, exist_ok=True)
+    tmp = CLIENT_QUOTE_CFG_PATH.with_suffix(".json.tmp")
+    tmp.write_text(
+        json.dumps(cfg.model_dump(mode="json"), indent=2),
+        encoding="utf-8",
+    )
+    os.replace(tmp, CLIENT_QUOTE_CFG_PATH)
 
 
 # ---------------------------------------------------------------------------
@@ -189,6 +222,225 @@ def _run_pipeline(
 
     progress_cb(1.0, "Done.")
     return sheets, bundles, extractions, project, estimate
+
+
+def _render_client_quote_tab(
+    estimate: Estimate, project: ProjectModel, csi_titles: dict[str, str]
+) -> None:
+    """Edit `config/client_quote.json` and generate the proposal PDF (F12/F15)."""
+    st.subheader("Client-ready quote (F12) + payment schedule (F15)")
+    st.caption(
+        "Edits below are saved to `config/client_quote.json`. The PDF reads "
+        "from that file every time it's generated, so the CLI (`analyze.py "
+        "--client-pdf`) and the UI stay in sync."
+    )
+
+    cfg = _load_quote_config()
+
+    # ----- Branding sections -----
+    with st.expander("Company info", expanded=False):
+        cc1, cc2 = st.columns(2)
+        company = CompanyInfo(
+            name=cc1.text_input("Company name", cfg.company.name),
+            license_number=cc2.text_input("License #", cfg.company.license_number),
+            address_line_1=cc1.text_input("Address line 1", cfg.company.address_line_1),
+            address_line_2=cc2.text_input("Address line 2", cfg.company.address_line_2),
+            phone=cc1.text_input("Phone", cfg.company.phone),
+            email=cc2.text_input("Email", cfg.company.email),
+            website=cc1.text_input("Website", cfg.company.website),
+            logo_path=cc2.text_input(
+                "Logo path (optional)",
+                cfg.company.logo_path,
+                help="Absolute path or workspace-relative path to PNG/JPG. Leave blank to skip.",
+            ),
+        )
+
+    with st.expander("Client info", expanded=False):
+        kc1, kc2 = st.columns(2)
+        client = ClientInfo(
+            name=kc1.text_input("Client name", cfg.client.name),
+            contact_name=kc2.text_input("Primary contact", cfg.client.contact_name),
+            address_line_1=kc1.text_input("Client address line 1", cfg.client.address_line_1),
+            address_line_2=kc2.text_input("Client address line 2", cfg.client.address_line_2),
+            phone=kc1.text_input("Client phone", cfg.client.phone),
+            email=kc2.text_input("Client email", cfg.client.email),
+        )
+
+    with st.expander("Quote meta", expanded=True):
+        mc1, mc2 = st.columns([1, 1])
+        quote_number = mc1.text_input(
+            "Quote number", cfg.quote_meta.quote_number,
+            help="Use 'AUTO' to derive from the project name + today's date at build time.",
+        )
+        valid_until_days = mc2.number_input(
+            "Valid for (days)", value=int(cfg.quote_meta.valid_until_days),
+            min_value=1, max_value=365, step=1,
+        )
+        scope_blurb = st.text_area(
+            "Scope-of-work blurb (executive summary paragraph)",
+            cfg.quote_meta.scope_blurb,
+            height=100,
+        )
+        payment_terms_text = st.text_area(
+            "Payment terms footer (rendered under the payment schedule)",
+            cfg.quote_meta.payment_terms_text,
+            height=70,
+        )
+        meta = QuoteMeta(
+            quote_number=quote_number,
+            valid_until_days=int(valid_until_days),
+            scope_blurb=scope_blurb,
+            payment_terms_text=payment_terms_text,
+        )
+
+    # ----- Payment schedule -----
+    st.markdown("##### Payment schedule")
+    st.caption(
+        "Percentage mode auto-computes dollar amounts against the estimate's "
+        "grand total. Milestone mode lets you set fixed dollar amounts."
+    )
+    sched_mode = st.radio(
+        "Mode",
+        options=["percentage", "milestone"],
+        index=0 if cfg.payment_schedule.mode == "percentage" else 1,
+        horizontal=True,
+    )
+
+    existing_rows = [
+        {
+            "label": m.label,
+            "percentage": m.percentage if m.percentage is not None else 0.0,
+            "amount": m.amount if m.amount is not None else 0.0,
+            "notes": m.notes or "",
+        }
+        for m in cfg.payment_schedule.milestones
+    ] or [{"label": "", "percentage": 0.0, "amount": 0.0, "notes": ""}]
+
+    if sched_mode == "percentage":
+        col_cfg = {
+            "label":      st.column_config.TextColumn("Milestone", required=True),
+            "percentage": st.column_config.NumberColumn("% of contract", min_value=0.0, max_value=100.0, step=0.5, format="%.1f"),
+            "amount":     None,
+            "notes":      st.column_config.TextColumn("Notes"),
+        }
+    else:
+        col_cfg = {
+            "label":      st.column_config.TextColumn("Milestone", required=True),
+            "percentage": None,
+            "amount":     st.column_config.NumberColumn("$ amount", min_value=0.0, step=100.0, format="$%.2f"),
+            "notes":      st.column_config.TextColumn("Notes"),
+        }
+    edited = st.data_editor(
+        pd.DataFrame(existing_rows),
+        column_config=col_cfg,
+        hide_index=True,
+        use_container_width=True,
+        num_rows="dynamic",
+        key="payment_schedule_editor",
+    )
+
+    milestones: list[PaymentMilestone] = []
+    for _, r in edited.iterrows():
+        label = str(r.get("label", "") or "").strip()
+        if not label:
+            continue
+        if sched_mode == "percentage":
+            milestones.append(PaymentMilestone(
+                label=label,
+                percentage=float(r.get("percentage") or 0.0),
+                amount=None,
+                notes=str(r.get("notes", "") or ""),
+            ))
+        else:
+            milestones.append(PaymentMilestone(
+                label=label,
+                percentage=None,
+                amount=float(r.get("amount") or 0.0),
+                notes=str(r.get("notes", "") or ""),
+            ))
+
+    # Build the candidate schedule WITHOUT raising — we want to show validation
+    # errors inline instead of crashing the tab.
+    schedule_valid = True
+    schedule_err = ""
+    try:
+        schedule = PaymentSchedule(mode=sched_mode, milestones=milestones)
+    except Exception as exc:
+        schedule_valid = False
+        schedule_err = str(exc)
+        schedule = cfg.payment_schedule  # fall back so downstream code has something usable
+
+    if not schedule_valid:
+        st.warning(f"Payment schedule is invalid and will not be saved:\n\n{schedule_err}")
+    elif sched_mode == "milestone":
+        warns = schedule.validate_against_total(estimate.grand_total or 0.0)
+        for w in warns:
+            st.info(w)
+
+    # ----- Terms -----
+    with st.expander("Terms and conditions (optional)", expanded=False):
+        terms_text = st.text_area(
+            "Full T&Cs (blank to omit the page)",
+            cfg.terms_text,
+            height=240,
+            help="Paragraph breaks are preserved (separate with a blank line).",
+        )
+
+    candidate_cfg = QuoteConfig(
+        company=company,
+        client=client,
+        quote_meta=meta,
+        payment_schedule=schedule,
+        terms_text=terms_text,
+    )
+
+    # ----- Action buttons -----
+    ac1, ac2 = st.columns(2)
+    with ac1:
+        if st.button(
+            "Save configuration",
+            type="secondary",
+            use_container_width=True,
+            disabled=not schedule_valid,
+        ):
+            try:
+                _save_quote_config(candidate_cfg)
+                st.success(f"Saved to {CLIENT_QUOTE_CFG_PATH.relative_to(ROOT)}.")
+            except Exception as exc:
+                st.error(f"Could not save: {exc}")
+
+    with ac2:
+        # Generate the PDF in-memory so the download works without writing
+        # a (potentially client-identifying) file to disk by accident.
+        pdf_bytes: bytes | None = None
+        if schedule_valid:
+            try:
+                from core.exporter_pdf import build_quote_pdf  # local import for friendlier error
+                tmp_pdf = EXPORT_DIR / "_quote_preview.pdf"
+                build_quote_pdf(
+                    estimate=estimate,
+                    project=project,
+                    quote_config=candidate_cfg,
+                    out_path=tmp_pdf,
+                    csi_titles=csi_titles,
+                )
+                pdf_bytes = tmp_pdf.read_bytes()
+            except ImportError:
+                st.error(
+                    "`reportlab` is not installed. Run "
+                    "`pip install 'reportlab>=4.0,<5.0'` in the venv."
+                )
+            except Exception as exc:
+                st.error(f"PDF render failed: {exc}")
+
+        st.download_button(
+            "Generate & download PDF",
+            data=pdf_bytes or b"",
+            file_name=f"{estimate.project_name.replace(' ', '_')}_quote.pdf",
+            mime="application/pdf",
+            use_container_width=True,
+            disabled=pdf_bytes is None,
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -398,7 +650,7 @@ if "estimate" in st.session_state:
         "Project", "Bid Packages", "Scope Matrix", "Scope Coverage", "Alternates",
         "Estimate", "By Division", "Sheets", "Rooms",
         "Doors / Windows", "Structural / MEP", "Specs",
-        "Raw takeoffs", "Warnings",
+        "Raw takeoffs", "Warnings", "Client Quote",
     ])
 
     # --- Project tab ---
@@ -795,6 +1047,10 @@ if "estimate" in st.session_state:
         else:
             for w in project.warnings:
                 st.warning(w)
+
+    # --- Client Quote (F12 + F15) ---
+    with tabs[14]:
+        _render_client_quote_tab(estimate, project, csi_titles)
 
 else:
     st.info(

@@ -73,6 +73,62 @@ def _process_bundle(args):
     return bundle, extract_bundle(bundle, llm)
 
 
+_CLIENT_QUOTE_CONFIG = CONFIG_DIR / "client_quote.json"
+
+
+def _build_client_pdf(
+    estimate,
+    project,
+    csi_titles: dict,
+    out_dir: Path,
+    log: logging.Logger,
+) -> str:
+    """Best-effort client-quote PDF render. Returns a log-line summary.
+
+    Never raises: a missing optional dep, missing config, or render error
+    must not break the primary Excel/JSON deliverable.
+    """
+    try:
+        from core.exporter_pdf import build_quote_pdf
+        from core.schemas import QuoteConfig
+    except ImportError as exc:
+        msg = (
+            f"client-pdf skipped: reportlab is not installed ({exc}). "
+            f"Install it with: pip install 'reportlab>=4.0,<5.0'"
+        )
+        log.warning(msg)
+        return msg
+
+    if _CLIENT_QUOTE_CONFIG.is_file():
+        try:
+            raw = json.loads(_CLIENT_QUOTE_CONFIG.read_text(encoding="utf-8"))
+            cfg = QuoteConfig.model_validate(raw)
+        except Exception as exc:
+            msg = (
+                f"client-pdf: config/client_quote.json failed to parse ({exc}); "
+                f"falling back to skeleton defaults."
+            )
+            log.warning(msg)
+            cfg = QuoteConfig()
+    else:
+        msg = (
+            f"client-pdf: {_CLIENT_QUOTE_CONFIG.name} not found; "
+            f"using built-in skeleton defaults."
+        )
+        log.warning(msg)
+        cfg = QuoteConfig()
+
+    out_pdf = out_dir / "quote.pdf"
+    try:
+        build_quote_pdf(estimate, project, cfg, out_pdf, csi_titles=csi_titles)
+    except Exception as exc:
+        msg = f"client-pdf: render failed ({exc}); Excel/JSON output is unaffected."
+        log.error(msg)
+        return msg
+
+    return f"client-pdf written: {out_pdf} ({out_pdf.stat().st_size:,} bytes)"
+
+
 def main() -> int:
     p = argparse.ArgumentParser(description="Run the Construction Plan Estimator on a folder of PDFs.")
     p.add_argument("path", type=Path, help="A PDF file or a folder containing PDFs.")
@@ -91,6 +147,8 @@ def main() -> int:
     p.add_argument("--project-name", default="CLI Run", help="Project name for the estimate header.")
     p.add_argument("--no-drawings", action="store_true",
                    help="Skip large PDFs (>5 MB) - cheap text-only run.")
+    p.add_argument("--client-pdf", action="store_true",
+                   help="Also render a client-ready quote.pdf using config/client_quote.json.")
     p.add_argument("--quiet", action="store_true", help="Less console chatter.")
     args = p.parse_args()
 
@@ -177,6 +235,12 @@ def main() -> int:
     save_to_disk(xlsx_bytes, args.out / "estimate.xlsx")
     json_str = export_estimate_json(estimate, project)
     save_to_disk(json_str, args.out / "estimate.json")
+
+    if args.client_pdf:
+        pdf_msg = _build_client_pdf(estimate, project, csi_titles, args.out, log)
+        if pdf_msg:
+            log_lines.append(pdf_msg)
+
     save_to_disk("\n".join(log_lines) + "\n", args.out / "run_log.txt")
 
     print("")
@@ -191,6 +255,12 @@ def main() -> int:
     print(f"Subtotal:        ${estimate.subtotal:,.2f}")
     print(f"Grand total:     ${estimate.grand_total:,.2f}")
     print(f"Output written:  {args.out.resolve()}")
+    if args.client_pdf:
+        quote_pdf = args.out / "quote.pdf"
+        if quote_pdf.is_file():
+            print(f"Client quote:    {quote_pdf.resolve()}")
+        else:
+            print("Client quote:    (skipped — see run_log.txt)")
     if project.warnings:
         print(f"Warnings:        {len(project.warnings)} (see Warnings sheet in Excel)")
     return 0

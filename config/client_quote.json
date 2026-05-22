@@ -1,0 +1,36 @@
+{
+  "company": {
+    "name": "RK Residential Homes and Commercial LLC",
+    "address_line_1": "<street>",
+    "address_line_2": "<city, TX zip>",
+    "phone": "<phone>",
+    "email": "<email>",
+    "website": "<website>",
+    "license_number": "<TX contractor license #>",
+    "logo_path": ""
+  },
+  "client": {
+    "name": "",
+    "contact_name": "",
+    "address_line_1": "",
+    "address_line_2": "",
+    "phone": "",
+    "email": ""
+  },
+  "quote_meta": {
+    "quote_number": "AUTO",
+    "valid_until_days": 30,
+    "scope_blurb": "Furnish all labor, materials, equipment, supervision, and incidentals required to perform the work described in the attached scope.",
+    "payment_terms_text": "Payments are due within 30 days of invoice. Late payments accrue interest at 1.5% per month."
+  },
+  "payment_schedule": {
+    "mode": "percentage",
+    "milestones": [
+      { "label": "Mobilization",  "percentage": 30.0, "amount": null, "notes": "Due at Notice to Proceed" },
+      { "label": "Rough-in 50%",  "percentage": 30.0, "amount": null, "notes": "Due at framing/MEP rough-in inspection" },
+      { "label": "Finish 90%",    "percentage": 30.0, "amount": null, "notes": "Due at substantial completion" },
+      { "label": "Retainage",     "percentage": 10.0, "amount": null, "notes": "Due 30 days after final acceptance" }
+    ]
+  },
+  "terms_text": ""
+}

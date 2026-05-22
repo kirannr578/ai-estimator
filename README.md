@@ -173,6 +173,31 @@ from, so reviewers can quickly verify or adjust.
 
 ---
 
+## Client-ready quote PDF (F12 + F15)
+
+In addition to the estimator workbook, the app can produce a polished
+proposal PDF for clients with payment schedule and signature block.
+
+- **Config:** `config/client_quote.json` holds branding, client info, quote
+  meta, payment schedule, and T&Cs. The defaults ship with placeholder
+  strings only — fill them in before sending a real quote.
+- **Edit in the UI:** the **Client Quote** tab loads the JSON, exposes form
+  fields for every section (Company, Client, Quote Meta, Payment Schedule,
+  Terms), atomically writes back on **Save configuration**, and produces
+  a PDF on **Generate & download PDF**.
+- **Payment schedule:** defaults to percentage mode (30/30/30/10
+  mobilization → rough-in → finish → retainage). Switch to milestone mode
+  for fixed-dollar billing — amounts must add up to the contract total
+  (warning surfaced inline).
+- **From the CLI:** `python analyze.py <path> --client-pdf --out exports\foo`
+  writes `quote.pdf` next to `estimate.xlsx`. Missing config or missing
+  `reportlab` are logged to `run_log.txt` rather than crashing the run.
+- **Note:** the placeholder company name
+  `RK Residential Homes and Commercial LLC` was inferred from a source zip
+  filename — change it in the Client Quote tab before issuing a real proposal.
+
+---
+
 ## Roadmap (easy adds)
 
 - Vector-geometry takeoff (true polygon area / linework length from PDF

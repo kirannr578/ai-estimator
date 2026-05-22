@@ -8,9 +8,9 @@ the result on the way back.
 from __future__ import annotations
 
 from enum import Enum
-from typing import Optional
+from typing import Literal, Optional
 
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 # ---------------------------------------------------------------------------
@@ -360,3 +360,128 @@ class Estimate(BaseModel):
 
 # Resolve forward reference (TakeoffItem used inside SheetExtraction).
 SheetExtraction.model_rebuild()
+
+
+# ---------------------------------------------------------------------------
+# Client-quote configuration (F12 / F15)
+# ---------------------------------------------------------------------------
+
+
+class CompanyInfo(BaseModel):
+    """Company / contractor branding block printed on every quote."""
+
+    name: str = ""
+    address_line_1: str = ""
+    address_line_2: str = ""
+    phone: str = ""
+    email: str = ""
+    website: str = ""
+    license_number: str = ""
+    logo_path: str = ""              # absolute or workspace-relative path; "" = skip
+
+
+class ClientInfo(BaseModel):
+    """Recipient block printed on the cover page."""
+
+    name: str = ""                   # company / org / individual
+    contact_name: str = ""           # primary point of contact
+    address_line_1: str = ""
+    address_line_2: str = ""
+    phone: str = ""
+    email: str = ""
+
+
+class QuoteMeta(BaseModel):
+    """Per-quote metadata: numbering, validity window, narrative blurbs."""
+
+    quote_number: str = "AUTO"       # "AUTO" means derive from project + date at build time
+    valid_until_days: int = 30
+    scope_blurb: str = ""
+    payment_terms_text: str = ""
+
+
+class PaymentMilestone(BaseModel):
+    """One row of the payment schedule.
+
+    Either `percentage` or `amount` is populated depending on the parent
+    schedule's mode. The unused field is left None.
+    """
+
+    label: str
+    percentage: Optional[float] = None     # 0..100; used when parent mode == "percentage"
+    amount: Optional[float] = None         # dollars; used when parent mode == "milestone"
+    notes: str = ""
+
+
+class PaymentSchedule(BaseModel):
+    """Payment schedule attached to a quote (F15).
+
+    Two modes:
+      * `percentage` - each milestone has a `percentage` of the contract; the
+        dollar amounts are computed at PDF-build time against the estimate's
+        grand total.
+      * `milestone`  - each milestone has a fixed dollar `amount`. Use
+        `validate_against_total()` at render time to confirm the milestones
+        cover the full contract value.
+    """
+
+    mode: Literal["percentage", "milestone"] = "percentage"
+    milestones: list[PaymentMilestone] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def _check_consistency(self) -> "PaymentSchedule":
+        if not self.milestones:
+            return self
+        if self.mode == "percentage":
+            for m in self.milestones:
+                if m.percentage is None:
+                    raise ValueError(
+                        f"Milestone '{m.label}' is missing a percentage in percentage mode."
+                    )
+                if m.percentage < 0 or m.percentage > 100:
+                    raise ValueError(
+                        f"Milestone '{m.label}' percentage {m.percentage} out of range 0..100."
+                    )
+            total_pct = sum(m.percentage or 0.0 for m in self.milestones)
+            if abs(total_pct - 100.0) > 0.5:
+                raise ValueError(
+                    f"Payment percentages must sum to 100 (got {total_pct:.2f})."
+                )
+        else:  # milestone
+            for m in self.milestones:
+                if m.amount is None:
+                    raise ValueError(
+                        f"Milestone '{m.label}' is missing an amount in milestone mode."
+                    )
+                if m.amount < 0:
+                    raise ValueError(
+                        f"Milestone '{m.label}' amount {m.amount} must be non-negative."
+                    )
+        return self
+
+    def validate_against_total(self, contract_total: float, tolerance: float = 1.0) -> list[str]:
+        """Return a list of human-readable warnings (empty when valid).
+
+        Only meaningful in `milestone` mode. We don't raise so the PDF still
+        renders; the caller decides whether to log or surface to the user.
+        """
+        warnings: list[str] = []
+        if self.mode != "milestone":
+            return warnings
+        total = sum(m.amount or 0.0 for m in self.milestones)
+        if abs(total - contract_total) > tolerance:
+            warnings.append(
+                f"Milestone amounts sum to ${total:,.2f} but contract total is "
+                f"${contract_total:,.2f} (delta ${total - contract_total:+,.2f})."
+            )
+        return warnings
+
+
+class QuoteConfig(BaseModel):
+    """Top-level container persisted to `config/client_quote.json`."""
+
+    company: CompanyInfo = Field(default_factory=CompanyInfo)
+    client: ClientInfo = Field(default_factory=ClientInfo)
+    quote_meta: QuoteMeta = Field(default_factory=QuoteMeta)
+    payment_schedule: PaymentSchedule = Field(default_factory=PaymentSchedule)
+    terms_text: str = ""

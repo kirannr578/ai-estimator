@@ -13,6 +13,9 @@ uploads/
 *.xlsx
 *.json.bak
 
+# Local-only client-quote overrides (do not commit real customer data)
+config/client_quote.local.json
+
 # IDE
 .idea/
 .vscode/
