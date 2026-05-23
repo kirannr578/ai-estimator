@@ -1,0 +1,773 @@
+{
+  "_meta": {
+    "schema": "CSI-grouped Estimate skeleton; each CSI division is a container with a list of CostLine entries grouped by trade. After the takeoff lands and sub-quotes arrive, fill `quantity`, `unit_cost`, and `notes` per row. Roll up subtotals per division, then apply the markup stack (contingency / overhead / profit / bond+insurance) per `proposal/10-price-proposal.md` § B.",
+    "schema_reference": "core/schemas.py — Estimate / CostLine. This file complements takeoff-template.json — takeoff-template.json is a flat list of CostLines pre-shaped for the core estimator; this skeleton is grouped by CSI division for the per-trade roll-up that drives the Attachment A pricing summary.",
+    "project_name": "Carr EFA Dressing Room Renovation",
+    "project_number": "26-007 (ESBD 516718)",
+    "owner": "Angelo State University / Texas Tech University System",
+    "fill_instructions": [
+      "1. Wait for drawings + spec book + finish/door/equipment schedule from ASU FP&C (target 2026-05-25 per timeline.md).",
+      "2. Run takeoff per CSI division against takeoff-template.json line items (fill quantity + unit).",
+      "3. Solicit sub quotes (target 2026-05-29 EOD per timeline.md and outreach/05-email-hub-subs-template.md).",
+      "4. Transfer sub-quote totals into the per-division blocks below.",
+      "5. Roll up per-division subtotals.",
+      "6. Apply markup stack per proposal/10-price-proposal.md § B.",
+      "7. Transfer base proposal price + $25K allowance to Attachment A § 2a and § 2b separately.",
+      "8. Transfer unit prices to Attachment A § 2d per the formulas in proposal/10-price-proposal.md § D."
+    ],
+    "owner_furnished_excluded_from_pricing": [
+      "Fire suppression — Division 21 entries below carry quantity=0 and unit_cost=0",
+      "AV/IT systems and data cabling termination — Division 27 cable + termination entries carry quantity=0; only pathway (conduit/J-box) is priced",
+      "CBORD readers/controllers/electric strikes themselves — Division 28 device entries carry quantity=0; door prep + low-voltage pathway is priced separately under Division 08 and Division 26",
+      "FF&E / lockers / costume storage / makeup chairs — Division 10 lockers entry carries quantity=0",
+      "Equipment install (post-construction) — not a Division entry; coordination only via Division 01"
+    ],
+    "markup_stack": {
+      "contingency_pct": 8.0,
+      "overhead_pct": 10.0,
+      "profit_pct": 6.0,
+      "bond_and_insurance_pct": 2.5,
+      "cash_contingency_allowance_separate_line": 25000.00,
+      "note": "Apply contingency to direct cost subtotal; apply OH and profit to (direct + contingency); apply bond/insurance to (direct + contingency + OH + profit). Allowance is SEPARATE — not in base, not marked up."
+    },
+    "trade_groups_summary": {
+      "self_perform": ["Div 01 General Requirements", "Div 01 Project Engineering", "Div 01 Closeout"],
+      "subcontracted": ["Div 02 Demo", "Div 04 Masonry", "Div 06 Carpentry + Millwork", "Div 09 Finishes", "Div 22 Plumbing", "Div 23 HVAC", "Div 26 Electrical", "Div 27 Low-voltage pathway", "Div 28 Fire alarm relocation"],
+      "material_only_buy": ["Div 08 Doors/Frames/Hardware (Sargent material via distributor)", "Div 10 Specialties"],
+      "owner_furnished_zero_priced": ["Div 21 Fire suppression", "Div 27 Data cabling + termination", "Div 28 CBORD devices", "FF&E"]
+    },
+    "schema_explanation": "Each division entry below contains: csi_division (2-digit string), title, total (sum-of-cost-lines for the division; populated post-takeoff), cost_lines (array of CostLine objects matching core/schemas.py CostLine shape). After fill, divisions sum to direct_cost_subtotal which feeds the markup stack."
+  },
+
+  "project_name": "Carr EFA Dressing Room Renovation",
+  "region_multiplier": 1.0,
+  "contingency_pct": 8.0,
+  "overhead_pct": 10.0,
+  "profit_pct": 6.0,
+
+  "divisions": [
+    {
+      "csi_division": "01",
+      "title": "General Requirements",
+      "self_perform": true,
+      "expected_pct_of_subtotal": "12-18%",
+      "total": null,
+      "notes": "Self-performed; values per takeoff-template.json div 01 line items + post-quote sub-coordination labor.",
+      "cost_lines": [
+        {
+          "csi_section": "01 00 00",
+          "description": "General conditions / project supervision (PM + super + project engineer; 124-day window)",
+          "quantity": null,
+          "unit": "MO",
+          "unit_cost": null,
+          "total_cost": null,
+          "notes": "Formula: months × monthly burden. ~4 MO from 7/1 to 11/2. Bump for active performing-arts coordination overhead per 07-risk-register.md R-08."
+        },
+        {
+          "csi_section": "01 50 00",
+          "description": "Temporary facilities and controls — dumpster, dust containment w/ negative-air HEPA, walk-off mats, portable toilet, project signage",
+          "quantity": null,
+          "unit": "LS",
+          "unit_cost": null,
+          "total_cost": null,
+          "notes": "Formula: LS allowance. Bump for active building (sound mitigation; daily containment inspection). $10K-$15K range."
+        },
+        {
+          "csi_section": "01 31 00",
+          "description": "Project coordination — owner-vendor coordination POC time (CBORD, AV/IT, EHS, FP, FF&E)",
+          "quantity": null,
+          "unit": "HR",
+          "unit_cost": null,
+          "total_cost": null,
+          "notes": "Formula: PM hours × loaded rate. Carry ~120 hr for the unusually-broad owner-furnished demarcation per 04-scope-of-work.md § A."
+        },
+        {
+          "csi_section": "01 33 00",
+          "description": "Submittal preparation + submittal log management",
+          "quantity": null,
+          "unit": "LS",
+          "unit_cost": null,
+          "total_cost": null,
+          "notes": "Included in Div 01 GCs OR carry separately for visibility. ~15 major submittals per 06-quality-control-plan.md § 3."
+        },
+        {
+          "csi_section": "01 32 16",
+          "description": "Construction CPM schedule — baseline + monthly updates",
+          "quantity": null,
+          "unit": "LS",
+          "unit_cost": null,
+          "total_cost": null,
+          "notes": "Per UGSC Art. 8."
+        },
+        {
+          "csi_section": "01 45 00",
+          "description": "Material testing / independent inspection",
+          "quantity": null,
+          "unit": "LS",
+          "unit_cost": null,
+          "total_cost": null,
+          "notes": "OWNER-PAID per TTUS typical (confirm against RFCSP body). If GC-paid: $2,500-$5,000 allowance. See outreach/06-email-asu-procurement-clarifications.md question 16."
+        },
+        {
+          "csi_section": "01 78 00",
+          "description": "Project closeout — record drawings, O&M manuals, attic stock, owner training coordination, final clean",
+          "quantity": null,
+          "unit": "LS",
+          "unit_cost": null,
+          "total_cost": null,
+          "notes": "$3,500-$6,500 range typical. Per UGSC Art. 11 + 06-quality-control-plan.md § 8."
+        }
+      ]
+    },
+
+    {
+      "csi_division": "02",
+      "title": "Existing Conditions / Selective Demolition",
+      "self_perform": false,
+      "expected_pct_of_subtotal": "6-10%",
+      "total": null,
+      "notes": "Subcontracted to a HUB-certified demo sub per 05-hsp-plan.md § C (target 75% HUB share).",
+      "cost_lines": [
+        {
+          "csi_section": "02 41 16",
+          "description": "Selective interior demolition — existing finishes, casework, ceilings, walls, MEP terminations",
+          "quantity": null,
+          "unit": "SF",
+          "unit_cost": null,
+          "total_cost": null,
+          "notes": "Formula: SF × $/SF. Carry $8-$14/SF for active-building complete-MEP-included strip per 04-scope-of-work.md § C Div 02. Quantity assumes ~2,500 SF; verify against demo drawings."
+        },
+        {
+          "csi_section": "02 41 16",
+          "description": "MEP demo (HVAC + plumbing + electrical) by respective MEP subs in coordination with demo sub",
+          "quantity": null,
+          "unit": "SF",
+          "unit_cost": null,
+          "total_cost": null,
+          "notes": "$3-$6/SF allowance OR rolled into MEP sub scope. Verify scope split with subs at quote time."
+        },
+        {
+          "csi_section": "02 82 00",
+          "description": "Hazardous-materials abatement allowance (asbestos, lead, PCBs) — pending ASU EHS survey",
+          "quantity": null,
+          "unit": "LS",
+          "unit_cost": null,
+          "total_cost": null,
+          "notes": "$0 if EHS survey clears; $10K-$25K allowance if survey is positive OR not available. See 07-risk-register.md R-03. May also be funded from the $25K cash/contingency allowance."
+        },
+        {
+          "csi_section": "02 82 13",
+          "description": "Pre-abatement air quality survey + post-abatement clearance testing (independent agency)",
+          "quantity": null,
+          "unit": "LS",
+          "unit_cost": null,
+          "total_cost": null,
+          "notes": "Only if hazmat abatement is triggered. ~$2,000-$5,000."
+        }
+      ]
+    },
+
+    {
+      "csi_division": "04",
+      "title": "Masonry",
+      "self_perform": false,
+      "expected_pct_of_subtotal": "1-3%",
+      "total": null,
+      "notes": "Specialty trade; thin HUB representation per 05-hsp-plan.md § C (target 25% HUB share with documented GFE).",
+      "cost_lines": [
+        {
+          "csi_section": "04 01 20",
+          "description": "Existing brick wall restoration — clean (remove paint/coatings if applicable), tuckpoint failed joints, apply clear sealer",
+          "quantity": null,
+          "unit": "SF",
+          "unit_cost": null,
+          "total_cost": null,
+          "notes": "$18-$35/SF range. Confirm against drawings whether brick is exposed existing (most likely) or new veneer (unusual). Mock-up required per 06-quality-control-plan.md § 3."
+        }
+      ]
+    },
+
+    {
+      "csi_division": "06",
+      "title": "Carpentry / Finish Carpentry / Theater Millwork",
+      "self_perform": false,
+      "expected_pct_of_subtotal": "8-14%",
+      "total": null,
+      "notes": "Theater-grade millwork is specialty; HUB representation thinner per 05-hsp-plan.md § C (target 25% HUB share with documented GFE).",
+      "cost_lines": [
+        {
+          "csi_section": "06 10 00",
+          "description": "Rough carpentry — wall blocking for owner-furnished items (mirrors, costume rack mounts, ADA grab bars, CBORD reader backing)",
+          "quantity": null,
+          "unit": "SF",
+          "unit_cost": null,
+          "total_cost": null,
+          "notes": "Small allowance ~50-150 SF of 2x or PT plywood blocking. If drawings call out per-mount EA, convert before pricing."
+        },
+        {
+          "csi_section": "06 20 13",
+          "description": "Finish carpentry — door trim, base trim, wall accent trim (paint-grade MDF or wood)",
+          "quantity": null,
+          "unit": "LF",
+          "unit_cost": null,
+          "total_cost": null,
+          "notes": "$12-$22/LF for paint-grade installed."
+        },
+        {
+          "csi_section": "06 41 00",
+          "description": "Architectural millwork — makeup vanities, counters, mirror surrounds with LED-lit mirror frames (theater-grade), costume storage shelving",
+          "quantity": null,
+          "unit": "LF",
+          "unit_cost": null,
+          "total_cost": null,
+          "notes": "$400-$700/LF for theater-grade installed with LED mirror lighting. LONG LEAD 10-14 wk per 05-schedule-narrative.md § 4. Submit Week 1 of NTP."
+        }
+      ]
+    },
+
+    {
+      "csi_division": "08",
+      "title": "Openings — Doors, Frames, Hardware",
+      "self_perform": false,
+      "expected_pct_of_subtotal": "4-7%",
+      "total": null,
+      "notes": "Material-only buy via distributor (potentially HUB-certified distributor); self-install OR small install sub. Sargent specified by name.",
+      "cost_lines": [
+        {
+          "csi_section": "08 11 13",
+          "description": "Hollow metal frame, with electric-strike mortise prep for CBORD-controlled doors",
+          "quantity": null,
+          "unit": "EA",
+          "unit_cost": null,
+          "total_cost": null,
+          "notes": "4-8 EA at dressing-room entries. $950/EA seed; lead time 8-10 wk per 05-schedule-narrative.md § 4."
+        },
+        {
+          "csi_section": "08 14 16",
+          "description": "Solid-core wood door",
+          "quantity": null,
+          "unit": "EA",
+          "unit_cost": null,
+          "total_cost": null,
+          "notes": "4-8 EA paired with HM frames. $575/EA seed."
+        },
+        {
+          "csi_section": "08 71 00",
+          "description": "Sargent cylindrical lockset (specified by name) — ANSI Grade 1, US26D",
+          "quantity": null,
+          "unit": "EA",
+          "unit_cost": null,
+          "total_cost": null,
+          "notes": "$500-$700/EA for institutional Sargent. Confirm series (7/10/11-Line) against hardware schedule. LONG LEAD 8-14 wk per 05-schedule-narrative.md § 4. Submit Week 1."
+        },
+        {
+          "csi_section": "08 71 00",
+          "description": "Door hardware accessories — closers, kick plates, silencers, thresholds, stops (per ADA + TTUS standard set)",
+          "quantity": null,
+          "unit": "EA",
+          "unit_cost": null,
+          "total_cost": null,
+          "notes": "$250-$450/EA set. ADA-compliant reach and force settings."
+        },
+        {
+          "csi_section": "08 71 13",
+          "description": "Door hardware prep for CBORD — electric strike mortise (HM frame already prepped above), electric hinge if specified, low-voltage conduit + ring & string + 120V or PoE pathway to plenum (electric strike + reader DEVICES are OWNER-FURNISHED)",
+          "quantity": null,
+          "unit": "EA",
+          "unit_cost": null,
+          "total_cost": null,
+          "notes": "$350-$650/EA prep labor + materials. Devices are owner-furnished per 04-scope-of-work.md § A. Coordinate with CBORD admin per R-06."
+        }
+      ]
+    },
+
+    {
+      "csi_division": "09",
+      "title": "Finishes — Framing, GWB, ACT, Flooring, Base, Paint",
+      "self_perform": false,
+      "expected_pct_of_subtotal": "14-22%",
+      "total": null,
+      "notes": "Multiple sub trades; each sub gets a separate sub-quote per 05-hsp-plan.md § C.",
+      "cost_lines": [
+        {
+          "csi_section": "09 22 16",
+          "description": "Metal-stud framing for new partitions + furring at existing brick",
+          "quantity": null,
+          "unit": "SF",
+          "unit_cost": null,
+          "total_cost": null,
+          "notes": "$6.40/SF seed. SF = partition LF × height for new partitions + LF × height for brick furring."
+        },
+        {
+          "csi_section": "09 29 00",
+          "description": "5/8\" Type-X GWB on framing (moisture-resistant in wet zones); both faces of partitions",
+          "quantity": null,
+          "unit": "SF",
+          "unit_cost": null,
+          "total_cost": null,
+          "notes": "$2.85/SF seed. SF = 2 × partition LF × height (both faces) + 1 × brick-furring LF × height (single face)."
+        },
+        {
+          "csi_section": "09 51 13",
+          "description": "Acoustical ceiling tile — 2x4 (or 2x2) lay-in grid + tile",
+          "quantity": null,
+          "unit": "SF",
+          "unit_cost": null,
+          "total_cost": null,
+          "notes": "$5.10/SF seed. ~2,000 SF estimated dry-zone ceiling; verify against RCP."
+        },
+        {
+          "csi_section": "09 65 00",
+          "description": "Sheet vinyl flooring with heat-welded seams — theater-friendly, slip-resistant",
+          "quantity": null,
+          "unit": "SF",
+          "unit_cost": null,
+          "total_cost": null,
+          "notes": "$8-$12/SF allowance (no cost-DB hit). Lead time 4-6 wk per 05-schedule-narrative.md § 4."
+        },
+        {
+          "csi_section": "09 65 19",
+          "description": "LVT (luxury vinyl tile) in adjacent circulation / vestibule",
+          "quantity": null,
+          "unit": "SF",
+          "unit_cost": null,
+          "total_cost": null,
+          "notes": "$6.40/SF seed. Quantity 0 unless drawings show non-dressing-room areas in scope."
+        },
+        {
+          "csi_section": "09 30 13",
+          "description": "Ceramic / porcelain tile in wet zones (shower stalls + walls) — ONLY IF showers in scope",
+          "quantity": null,
+          "unit": "SF",
+          "unit_cost": null,
+          "total_cost": null,
+          "notes": "Floor tile $18-$30/SF + wall tile $14-$22/SF. Confirm against drawings."
+        },
+        {
+          "csi_section": "09 30 16",
+          "description": "Waterproofing membrane under wet-zone tile (Schluter Kerdi or similar)",
+          "quantity": null,
+          "unit": "SF",
+          "unit_cost": null,
+          "total_cost": null,
+          "notes": "$4-$7/SF. Only if wet zones present."
+        },
+        {
+          "csi_section": "09 65 13",
+          "description": "Resilient base — 4\" rubber, integral or cove",
+          "quantity": null,
+          "unit": "LF",
+          "unit_cost": null,
+          "total_cost": null,
+          "notes": "$3.25/LF seed. Perimeter ~250-350 LF for a 2,500 SF multi-room suite."
+        },
+        {
+          "csi_section": "09 91 23",
+          "description": "Interior painting — walls + ceilings (GWB) + door frames; 2-coat institutional low-VOC latex",
+          "quantity": null,
+          "unit": "SF",
+          "unit_cost": null,
+          "total_cost": null,
+          "notes": "$1.65/SF seed. SF = wall LF × ceiling height + soffit/ceiling SF (GWB) + door-frame allowance. After-hours premium possible for occupied-building VOC management. Target 100% HUB sub per 05-hsp-plan.md § C."
+        }
+      ]
+    },
+
+    {
+      "csi_division": "10",
+      "title": "Specialties",
+      "self_perform": false,
+      "expected_pct_of_subtotal": "1-3%",
+      "total": null,
+      "notes": "Material-only buy via HUB distributor where available.",
+      "cost_lines": [
+        {
+          "csi_section": "10 14 00",
+          "description": "Room signage — ADA-compliant raised characters + Braille",
+          "quantity": null,
+          "unit": "EA",
+          "unit_cost": null,
+          "total_cost": null,
+          "notes": "4-8 EA. $95/EA seed. Per ASU/TTUS wayfinding standard."
+        },
+        {
+          "csi_section": "10 28 00",
+          "description": "Toilet accessories — grab bars, paper holders, ADA mirrors, soap dispensers (if private toilets in scope)",
+          "quantity": null,
+          "unit": "EA",
+          "unit_cost": null,
+          "total_cost": null,
+          "notes": "0-4 sets. $850/EA seed."
+        },
+        {
+          "csi_section": "10 44 00",
+          "description": "Fire extinguishers + recessed cabinets (1 per 75 ft travel distance per code)",
+          "quantity": null,
+          "unit": "EA",
+          "unit_cost": null,
+          "total_cost": null,
+          "notes": "2-3 EA. $350-$650/EA installed."
+        },
+        {
+          "csi_section": "10 51 00",
+          "description": "Lockers / costume storage",
+          "quantity": 0,
+          "unit": "EA",
+          "unit_cost": 0,
+          "total_cost": 0,
+          "notes": "OWNER-FURNISHED per RFCSP if listed under 'furniture'. DO NOT PRICE. Coordinate install access only."
+        }
+      ]
+    },
+
+    {
+      "csi_division": "21",
+      "title": "Fire Suppression",
+      "self_perform": false,
+      "expected_pct_of_subtotal": "0% (OWNER-FURNISHED)",
+      "total": 0,
+      "notes": "OWNER-FURNISHED per RFCSP narrative. Sprinkler-head relocation, FP main mods, FP shutdown all by owner's FP contractor. Coordination only — included in Div 01 GCs. See 04-scope-of-work.md § A. Confirm in writing with Samuel via outreach/02-email-samuel-guevara-owner-furnished.md.",
+      "cost_lines": [
+        {
+          "csi_section": "21 13 00",
+          "description": "Sprinkler-head relocation + FP main modifications",
+          "quantity": 0,
+          "unit": "LS",
+          "unit_cost": 0,
+          "total_cost": 0,
+          "notes": "OWNER-FURNISHED. Carry zero. Coordination access only via Div 01."
+        }
+      ]
+    },
+
+    {
+      "csi_division": "22",
+      "title": "Plumbing",
+      "self_perform": false,
+      "expected_pct_of_subtotal": "8-12%",
+      "total": null,
+      "notes": "Full system replacement per RFCSP. Target 50% HUB share per 05-hsp-plan.md § C.",
+      "cost_lines": [
+        {
+          "csi_section": "22 40 00",
+          "description": "Plumbing fixture — ADA wall-hung lavatory with sensor or lever faucet (full rough-in + set)",
+          "quantity": null,
+          "unit": "EA",
+          "unit_cost": null,
+          "total_cost": null,
+          "notes": "2-4 EA. $1,850/EA seed."
+        },
+        {
+          "csi_section": "22 40 00",
+          "description": "Plumbing fixture — ADA water closet (floor- or wall-mounted; if private toilets in scope)",
+          "quantity": null,
+          "unit": "EA",
+          "unit_cost": null,
+          "total_cost": null,
+          "notes": "0-4 EA. Confirm against fixture schedule."
+        },
+        {
+          "csi_section": "22 47 00",
+          "description": "ADA shower stall (60x36 transfer or roll-in with seat) + thermostatic mixing valve — IF showers in scope",
+          "quantity": null,
+          "unit": "EA",
+          "unit_cost": null,
+          "total_cost": null,
+          "notes": "0-4 EA. $4,500-$7,500/EA installed."
+        },
+        {
+          "csi_section": "22 11 00",
+          "description": "Domestic water piping — supply, waste, vent rough-in (per fixture allowance)",
+          "quantity": null,
+          "unit": "EA",
+          "unit_cost": null,
+          "total_cost": null,
+          "notes": "$525/EA seed; matches fixture count. Coordinate with existing risers."
+        },
+        {
+          "csi_section": "22 30 00",
+          "description": "Water heater (if existing dressing-room HW is dedicated and at end of life)",
+          "quantity": null,
+          "unit": "EA",
+          "unit_cost": null,
+          "total_cost": null,
+          "notes": "Allowance only; confirm against existing conditions or drawings."
+        }
+      ]
+    },
+
+    {
+      "csi_division": "23",
+      "title": "HVAC",
+      "self_perform": false,
+      "expected_pct_of_subtotal": "14-22%",
+      "total": null,
+      "notes": "Full system replacement per RFCSP. Specialty trade with thinner HUB representation; target 25% HUB share with documented GFE per 05-hsp-plan.md § C.",
+      "cost_lines": [
+        {
+          "csi_section": "23 00 00",
+          "description": "HVAC system replacement — air handler / VAV terminal + ductwork + diffusers/grilles + DDC controls integrated with ASU BMS",
+          "quantity": null,
+          "unit": "SF",
+          "unit_cost": null,
+          "total_cost": null,
+          "notes": "$30-$45/SF for full-replacement complete in active building. ~2,500 SF served. Equipment LONG LEAD 8-12 wk per 05-schedule-narrative.md § 4."
+        },
+        {
+          "csi_section": "23 34 00",
+          "description": "Dressing-room exhaust (hair/makeup chemical vapors) — dedicated exhaust fan + ductwork to roof",
+          "quantity": null,
+          "unit": "EA",
+          "unit_cost": null,
+          "total_cost": null,
+          "notes": "$1,500-$3,500/EA installed. Higher ACH than standard back-of-house."
+        },
+        {
+          "csi_section": "23 05 93",
+          "description": "Test, adjust, balance (TAB) report — independent agency",
+          "quantity": null,
+          "unit": "LS",
+          "unit_cost": null,
+          "total_cost": null,
+          "notes": "$3,500-$8,500 for this size of system. Per UGSC Art. 7."
+        },
+        {
+          "csi_section": "23 09 00",
+          "description": "HVAC controls commissioning + integration with ASU BMS",
+          "quantity": null,
+          "unit": "LS",
+          "unit_cost": null,
+          "total_cost": null,
+          "notes": "Coordinate with ASU BMS team."
+        }
+      ]
+    },
+
+    {
+      "csi_division": "26",
+      "title": "Electrical",
+      "self_perform": false,
+      "expected_pct_of_subtotal": "14-22%",
+      "total": null,
+      "notes": "Full system replacement + theater-grade lighting per RFCSP. Target 50% HUB share per 05-hsp-plan.md § C.",
+      "cost_lines": [
+        {
+          "csi_section": "26 05 00",
+          "description": "Branch wiring + devices — receptacles, switches, GFCI in wet zones, dedicated 20A at makeup stations; includes pathway for owner-furnished CBORD readers + AV equipment power",
+          "quantity": null,
+          "unit": "SF",
+          "unit_cost": null,
+          "total_cost": null,
+          "notes": "$8.40/SF seed across ~2,500 SF."
+        },
+        {
+          "csi_section": "26 51 00",
+          "description": "Theater-grade dimmable LED lighting + makeup-mirror task lighting (may be in Div 06 millwork) + egress/emergency lighting",
+          "quantity": null,
+          "unit": "EA",
+          "unit_cost": null,
+          "total_cost": null,
+          "notes": "$350-$650/EA dimmable LED for theater-grade. ~25 fixtures from RCP + makeup-mirror surrounds. LONG LEAD 6-8 wk per 05-schedule-narrative.md § 4."
+        },
+        {
+          "csi_section": "26 09 00",
+          "description": "Lighting controls — occupancy + manual override + dimming",
+          "quantity": null,
+          "unit": "LS",
+          "unit_cost": null,
+          "total_cost": null,
+          "notes": "$1,500-$3,500/room. Per ASU/TTUS standard."
+        },
+        {
+          "csi_section": "26 24 16",
+          "description": "Sub-panel for dressing-room loads (if existing panel insufficient)",
+          "quantity": null,
+          "unit": "EA",
+          "unit_cost": null,
+          "total_cost": null,
+          "notes": "0-1 EA. $5,500-$8,500/EA institutional 200A. Seed DB $2,400 is residential — under-sized."
+        }
+      ]
+    },
+
+    {
+      "csi_division": "27",
+      "title": "Communications / Low-Voltage",
+      "self_perform": false,
+      "expected_pct_of_subtotal": "1-2%",
+      "total": null,
+      "notes": "PATHWAY ONLY — cable and termination are OWNER-FURNISHED per RFCSP. Target 50% HUB share per 05-hsp-plan.md § C.",
+      "cost_lines": [
+        {
+          "csi_section": "27 05 00",
+          "description": "Low-voltage pathway — plenum-rated conduit + J-boxes + ring & string + faceplate-ready opening (for owner-furnished data + AV + CBORD cable)",
+          "quantity": null,
+          "unit": "EA",
+          "unit_cost": null,
+          "total_cost": null,
+          "notes": "$125-$250/EA outlet. CABLE + TERMINATION + JACKS are owner-furnished. DO NOT PRICE."
+        },
+        {
+          "csi_section": "27 15 00",
+          "description": "Data cable, terminations, faceplates, jacks, testing",
+          "quantity": 0,
+          "unit": "EA",
+          "unit_cost": 0,
+          "total_cost": 0,
+          "notes": "OWNER-FURNISHED per RFCSP. DO NOT PRICE. ASU's cabling vendor handles."
+        }
+      ]
+    },
+
+    {
+      "csi_division": "28",
+      "title": "Electronic Safety + Security + Fire Alarm",
+      "self_perform": false,
+      "expected_pct_of_subtotal": "1-2%",
+      "total": null,
+      "notes": "FA relocation by GC; CBORD devices by owner. Coordinate shutdowns with ASU EHS via UGSC Art. 8.",
+      "cost_lines": [
+        {
+          "csi_section": "28 46 00",
+          "description": "Fire-alarm device relocation (strobe, smoke detector) — incidental to ceiling demo + new ceiling install",
+          "quantity": null,
+          "unit": "EA",
+          "unit_cost": null,
+          "total_cost": null,
+          "notes": "4-10 EA. $350-$650/EA installed. Coordinate shutdown windows with ASU EHS (2-week lead time per UGSC Art. 8)."
+        },
+        {
+          "csi_section": "28 13 00",
+          "description": "CBORD access-control readers, controllers, electric strikes",
+          "quantity": 0,
+          "unit": "EA",
+          "unit_cost": 0,
+          "total_cost": 0,
+          "notes": "OWNER-FURNISHED per RFCSP. DO NOT PRICE devices. Door prep + low-voltage pathway IS in our scope under Div 08 + Div 27."
+        }
+      ]
+    }
+  ],
+
+  "rollup": {
+    "direct_cost_subtotal": {
+      "value": null,
+      "formula": "SUM(divisions[*].total)",
+      "expected_range_at_2500_sf": "$320,000 - $440,000 (for the 'Mid reno' scenario per price-references.md § E)"
+    },
+    "contingency": {
+      "value": null,
+      "formula": "direct_cost_subtotal × 0.08"
+    },
+    "subtotal_with_contingency": {
+      "value": null,
+      "formula": "direct_cost_subtotal + contingency"
+    },
+    "overhead": {
+      "value": null,
+      "formula": "subtotal_with_contingency × 0.10"
+    },
+    "profit": {
+      "value": null,
+      "formula": "subtotal_with_contingency × 0.06"
+    },
+    "bid_subtotal": {
+      "value": null,
+      "formula": "subtotal_with_contingency + overhead + profit"
+    },
+    "bond_and_insurance_load": {
+      "value": null,
+      "formula": "bid_subtotal × 0.025"
+    },
+    "base_proposal_price": {
+      "value": null,
+      "formula": "bid_subtotal + bond_and_insurance_load",
+      "destination": "Attachment A § 2a",
+      "expected_range": "$425,000 - $560,000 envelope per price-references.md § A; midpoint ~$485K matches $500K published budget"
+    },
+    "cash_contingency_allowance": {
+      "value": 25000.00,
+      "formula": "fixed per Attachment A",
+      "destination": "Attachment A § 2b (SEPARATE line, NOT marked up, NOT in base)"
+    },
+    "total_proposal": {
+      "value": null,
+      "formula": "base_proposal_price + cash_contingency_allowance",
+      "destination": "Attachment A § 2c"
+    }
+  },
+
+  "unit_prices": {
+    "note": "Per Attachment A unit-price grid (VERIFY against actual PDF). Formula: each unit price = sub_bare_cost × (1.10 sub OH/profit) × (1.08 contingency) × (1.10 GC OH) × (1.06 GC profit) × (1.025 bond+insurance) ≈ sub_bare_cost × 1.357 effective markup. Bid AT FULL RETAIL — these set the change-order ceiling.",
+    "destination": "Attachment A § 2d unit-price grid",
+    "lines": [
+      {
+        "description": "Additional/deduct dressing-room SF (full reno including finishes + MEP)",
+        "unit": "SF",
+        "add_unit_price": null,
+        "deduct_unit_price": null,
+        "formula": "see note above"
+      },
+      {
+        "description": "Additional door + HM frame + Sargent cylindrical lockset + CBORD prep",
+        "unit": "EA",
+        "add_unit_price": null,
+        "deduct_unit_price": null
+      },
+      {
+        "description": "Additional 20A receptacle (dedicated circuit + device)",
+        "unit": "EA",
+        "add_unit_price": null,
+        "deduct_unit_price": null
+      },
+      {
+        "description": "Additional dimmable LED fixture (theater-grade)",
+        "unit": "EA",
+        "add_unit_price": null,
+        "deduct_unit_price": null
+      },
+      {
+        "description": "Additional ADA lavatory + plumbing rough-in",
+        "unit": "EA",
+        "add_unit_price": null,
+        "deduct_unit_price": null
+      },
+      {
+        "description": "Additional ADA water closet + plumbing rough-in",
+        "unit": "EA",
+        "add_unit_price": null,
+        "deduct_unit_price": null
+      },
+      {
+        "description": "Additional makeup-mirror surround with LED frame (millwork)",
+        "unit": "EA",
+        "add_unit_price": null,
+        "deduct_unit_price": null
+      },
+      {
+        "description": "Additional SF of acoustical ceiling tile (grid + tile)",
+        "unit": "SF",
+        "add_unit_price": null,
+        "deduct_unit_price": null
+      },
+      {
+        "description": "Additional SF of sheet vinyl flooring (heat-welded)",
+        "unit": "SF",
+        "add_unit_price": null,
+        "deduct_unit_price": null
+      },
+      {
+        "description": "Additional SF of paint (2 coats institutional)",
+        "unit": "SF",
+        "add_unit_price": null,
+        "deduct_unit_price": null
+      },
+      {
+        "description": "Hazmat abatement (VCT + mastic per SF if found)",
+        "unit": "SF",
+        "add_unit_price": null,
+        "deduct_unit_price": "n/a — abatement is presence-triggered, no deduct"
+      }
+    ]
+  }
+}

@@ -9,6 +9,37 @@
 
 ---
 
+## PROPOSAL STATUS
+
+**`DRAFT — pending drawings + sub quotes + signatures`**
+
+A complete review-ready proposal package has been drafted in `proposal/` (13 files) with companion outreach drafts in `outreach/` (7 files) and a CSI-grouped pricing scaffold at `price-sheet-skeleton.json`. Everything that does NOT depend on drawings, sub quotes, or firm-internal data is drafted to a defensible state. Every place that needs firm-internal data carries a `[USER TO FILL]` marker.
+
+### Remaining gates to lock before submission
+
+| # | Gate | Owner | Target close date | Status |
+|---|---|---|---|---|
+| 1 | **Drawings + full project manual** received from ASU FP&C; takeoff quantities filled in `takeoff-template.json` and `price-sheet-skeleton.json`; sub quotes solicited and received | Bid-prep lead + Estimator | 2026-05-27 drawings; 2026-05-29 sub quotes | 🔴 Blocked on drawings |
+| 2 | **HUB outreach window closes 5 business days before HSP due** (2026-06-01 for a 2026-06-08 HSP) — ≥3 HUB subs solicited per trade, ad placement in ≥2 publications, GFE binder in flight | HUB compliance lead | **2026-06-01** | 🟡 Outreach drafts ready in `outreach/05-email-hub-subs-template.md`; send today |
+| 3 | **Owner-furnished demarcation confirmed in writing** by Samuel Guevara (R-02) — so sub-quotes go out with clean scope | Bid-prep lead | 2026-05-25 | 🟡 Email drafted in `outreach/02-email-samuel-guevara-owner-furnished.md`; send today |
+
+Also tracking from `07-risk-register.md` § E (the bid-level go/no-go gate):
+
+- R-01 — pre-response meeting eligibility (CRITICAL; could be a no-go gate)
+- R-07 — bonding capacity (resolve via bonding agent today via `outreach/03-email-bonding-agent.md`)
+- R-08 — Carr EFA production calendar (resolve via Samuel)
+- R-11 — UGSC Art. 5 insurance limits within carrier capacity (resolve via `outreach/04-email-insurance-broker.md`)
+
+### Top 5 [USER TO FILL] items needed by Monday morning
+
+1. **Signing officer + bid-prep lead identity.** Name, title, phone, email for the officer who will sign Attachment A in blue ink and the bid-prep lead who fronts all outreach. Drives signature blocks across `proposal/01-executive-summary.md`, all 7 outreach drafts, and the Attachment A fill guide.
+2. **Bonding agent + insurance broker contact info.** Email + phone + firm names. Unblocks `outreach/03-email-bonding-agent.md` and `outreach/04-email-insurance-broker.md` — both should go out today. R-07 + R-11 close on the responses.
+3. **3–5 past-performance project references with current owner contacts.** Drives `proposal/04-past-performance.md`. Prioritize TTUS or other TX higher-ed renovation, performing-arts/theater work, occupied-building MEP-replacement renovations. Owner contacts must be verified current (within 7 days of submission).
+4. **PM + Superintendent + Safety lead identification** for the 2026-07-01 → 2026-11-02 construction window, with résumés and OSHA 30 / OSHA 10 current training dates. Drives `proposal/03-project-team.md` and `proposal/07-safety-plan.md`. Also: most-recent 3-year EMR letter from broker.
+5. **Firm's TX HUB certification status** (Yes + cert # OR No) — affects HSP Section 1 Block B and the cover letter's "why us" paragraph. Plus the firm's exact legal name as it appears on the TX Comptroller's Taxable Entity Search and W-9 (used to validate consistency across Attachment A, bid bond, ACORDs, CIQ, HB 1295, and the HSP form).
+
+---
+
 ## Headline numbers
 
 | Item | Value | Source |
@@ -85,7 +116,7 @@
 
 ```
 bids/angelo-state-carr-efa-26-007/
-├─ README.md                          ← you are here
+├─ README.md                          ← you are here (includes PROPOSAL STATUS)
 ├─ 01-overview.md
 ├─ 02-bid-prep-checklist.md
 ├─ 03-missing-documents.md
@@ -98,7 +129,30 @@ bids/angelo-state-carr-efa-26-007/
 ├─ price-references.md
 ├─ contacts.md
 ├─ timeline.md
-└─ prevailing-wages.md
+├─ prevailing-wages.md
+├─ price-sheet-skeleton.json          ← CSI-grouped pricing scaffold (post-takeoff fill-in)
+├─ proposal/                          ← 13-file review-ready proposal-draft package
+│  ├─ 00-readme.md                       Submission overview + signing/sealing/delivery
+│  ├─ 01-executive-summary.md            Cover letter / 1-page exec summary
+│  ├─ 02-technical-approach.md           3–5 page phased work plan + owner-furnished demarcation
+│  ├─ 03-project-team.md                 Org chart + key personnel template
+│  ├─ 04-past-performance.md             Template for 3–5 similar projects
+│  ├─ 05-schedule-narrative.md           Backwards-planned from 11/2; 13-day LD float strategy
+│  ├─ 06-quality-control-plan.md         3-phase QC + submittal log + close-out
+│  ├─ 07-safety-plan.md                  OSHA 1926 + 8 site-specific hazards
+│  ├─ 08-attachment-A-fill-guide.md      Section-by-section fill guide
+│  ├─ 09-attachment-D-hsp-form-guide.md  HSP form fill guide
+│  ├─ 10-price-proposal.md               Base bid stack + unit prices (formulas)
+│  ├─ 11-submission-checklist.md         Hard checklist + 2-person QC pass
+│  └─ 12-bid-bond-letter-template.md     Letter template to bonding agent
+├─ outreach/                          ← 7 ready-to-send email drafts
+│  ├─ 01-email-samuel-guevara-eligibility.md       Confirm eligibility post pre-response miss
+│  ├─ 02-email-samuel-guevara-owner-furnished.md   Written demarcation request
+│  ├─ 03-email-bonding-agent.md                    Reserve $485K envelope; TTUS bond form
+│  ├─ 04-email-insurance-broker.md                 UGSC Art. 5 cert by 7/1 NTP
+│  ├─ 05-email-hub-subs-template.md                Per-trade HUB sub outreach (customize per send)
+│  ├─ 06-email-asu-procurement-clarifications.md   28-question Q&A list
+│  └─ 07-call-script-samuel-guevara.md             Phone backup script for Email #01
 ```
 
 `local/` — if you create a sibling `bids/angelo-state-carr-efa-26-007/local/` folder for sub-quote PDFs, bonding-agent paperwork, scratch spreadsheets, hub-outreach logs, or anything else that shouldn't be committed, the workspace `.gitignore` rule `bids/*/local/` keeps it out of git.
