@@ -1,11 +1,14 @@
-# Prevailing wages — Tom Green County, TX (Carr EFA, ASU)
+# Prevailing wages — Tom Green County, TX (Carr EFA, ASU) — confirmed 2026-05-23
 
-> Source: `inbox/opportunities/attachments/2026-05-21/ESBD_516718_1778880917414_Attachment F.1 - Tom Green County Prevailing Wage 2023 (TTUS).pdf`
+> Sources:
+> - `inbox/opportunities/attachments/2026-05-21/ESBD_516718_1778880917414_Attachment F.1 - Tom Green County Prevailing Wage 2023 (TTUS).pdf` (the actual WD attached to the RFCSP)
+> - **Project Manual Section 00 73 43 (Wage Rate Requirements - Texas)** at page 65 — *confirms* Tex. Gov't Code Ch. 2258 prevailing wage compliance is required.
+> - **Project Manual Section 00 73 46 (Wage Determination Schedule)** at the front of the project manual — this is the project-specific schedule that references the attached WD.
 >
 > Construction type: **Building** (per Attachment F.1)
 > Location: Tom Green County, TX (Angelo State University — San Angelo)
-> Issue date: **July 2023** (use with escalation per § C below — rates are 2.5 years stale as of bid date)
-> Authority: TTUS-adopted prevailing wage determination per Tex. Gov't Code Ch. 2258
+> Issue date: **July 2023** — *2026-05-23 verification:* Project Manual Sec 00 73 46 confirms the attached Tom Green County wage determination is the operative WD for this project. No newer 2025 or 2026 WD has been issued by TTUS. Continue to apply with escalation per § C below — rates are ~3 years stale as of bid date.
+> Authority: TTUS-adopted prevailing wage determination per Tex. Gov't Code Ch. 2258, reinforced by Project Manual Sec 00 73 43.
 
 ---
 

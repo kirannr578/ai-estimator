@@ -28,6 +28,10 @@ config/client_quote.local.json
 # under bids/<opportunity>/ are still committed.
 bids/*/local/
 
+# Inbox of raw solicitation source PDFs/DOCX/etc. Per-bid source-files-manifest.md
+# files under bids/<opportunity>/ list what was downloaded and where it lives.
+inbox/
+
 # IDE
 .idea/
 .vscode/

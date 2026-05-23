@@ -1,8 +1,8 @@
-# Price proposal — Carr EFA Dressing Room Renovation
+# Price proposal — Carr EFA Dressing Room Renovation (2026-05-23 refresh)
 
 > Documents the price-build for the bid: subtotal stack, contingency/OH/profit overlay, the separately-carried $25K cash/contingency allowance, the unit-price grid (formulas only — values come from final takeoff), and the line-item breakdown by CSI division.
 >
-> **All numbers are formulas, not values, until the final takeoff lands.** Once `../takeoff-template.json` is filled with quantities from the actual drawings and sub-quotes arrive (target: 2026-05-29 per `../timeline.md`), the formulas below resolve to dollar values which transfer to Attachment A.
+> **Refresh basis (2026-05-23):** Project area verified at **3,115 SF** per drawing sheet AF100 (vs. earlier prep-doc assumption of ~2,500 SF — 25% larger). Contingency dropped from 8% to 7% reflecting drawing + PM in hand. Owner-furnished demarcation tightened: lockers are CONTRACTOR scope (PM Sec 10 51 13), Division 21 Fire Suppression IS owner-furnished (PM TOC marks Div 21 "NOT USED"). Working bid envelope refined from $425K–$560K mid $485K to **$465K–$575K mid $520K** per `../price-references.md` § A.
 
 ---
 
@@ -10,14 +10,15 @@
 
 | Parameter | Value | Notes |
 |---|---|---|
-| Region multiplier | 1.0 | Tom Green County / San Angelo typically clears at 0.88–0.93 of national; using 1.0 as a conservative ceiling until RSMeans City Cost Index lookup confirms. Tom Green County prevailing wage is the labor floor per `../prevailing-wages.md`. |
-| Contingency | 8% | Higher than the TAMU sibling bid's 7% because (a) Carr EFA is older with higher existing-conditions risk, (b) the broad owner-furnished demarcation introduces coordination risk, (c) no site walk yet, (d) no hazmat survey in hand. Bump to 12% if drawings prove thin or site walk reveals surprises. |
+| Region multiplier | 1.0 | Tom Green County / San Angelo typically clears at 0.88–0.93 of national; using 1.0 as a conservative ceiling until RSMeans City Cost Index lookup confirms. Tom Green County prevailing wage is the labor floor per `../prevailing-wages.md` (confirmed operative WD per PM Sec 00 73 46). |
+| Contingency | 7% | Reduced from 8% now that drawings + PM are in hand. Could drop to 6% post-site walk; bump to 10% if Section 00 31 00 hazmat survey (currently missing from PM) reveals issues. |
 | Overhead | 10% | Standard TX state institutional rate |
-| Profit | 6% | Mid-range for TX state institutional work; drop to 5% if pricing competitiveness is the differentiator, raise to 7% if a strong past-performance / HSP narrative gives margin headroom |
+| Profit | 6% | Mid-range for TX state institutional work; drop to 5% if pricing competitiveness is the differentiator vs. the 5 confirmed competitor firms (TPI Construction, Lee Lewis Construction, Crockett Facilities Services, San Angelo–based GCs), raise to 7% if a strong past-performance / HSP narrative gives margin headroom |
 | Cash/contingency allowance | $25,000.00 | Per Attachment A — SEPARATE line; NOT rolled into base; NOT marked up |
 | Bid bond cost | 1.0–1.5% of bid | Included in markup or carried separately per bonding-agent quote (`outreach/03-email-bonding-agent.md`) |
 | P&P bond cost | 1.0–1.5% of bid | Included in markup |
 | Insurance load | ~1.0% of bid | Standard TX broker quote per UGSC Art. 5 |
+| **Project area** | **3,115 SF total** | Verified per AF100; back-of-house 1,047 SF (heavy reno @ $350–$420/SF) + circulation/entry 2,068 SF (light reno @ $50–$95/SF) per `../price-references.md` § A |
 
 ---
 
@@ -26,7 +27,7 @@
 ```
 Direct cost subtotal             = SUM(line items in C below)               [from takeoff]
 
-Contingency                      = Direct cost × 8%                         [computed]
+Contingency                      = Direct cost × 7%                         [computed]
 
 Subtotal with contingency        = Direct cost + Contingency                [sum]
 
@@ -49,7 +50,9 @@ TOTAL PROPOSAL                   = BASE PROPOSAL PRICE + $25,000            [→
 ────────────────────────────────────────────────────────────────────────────
 ```
 
-**Working envelope (target):** **$425K – $560K** per `../price-references.md` § A. Midpoint **~$485K** matches the $500K published budget. **The base proposal alone should land in $400K–$535K (midpoint ~$460K)** with the $25K allowance brought separately to the $425K–$560K all-in.
+**Working envelope (refined 2026-05-23):** **$465K – $575K** per `../price-references.md` § A using verified 3,115 SF and split-zone $/SF. Midpoint **~$520K** is ~$35K above the implied $500K published budget — this reflects the 25%-larger-than-assumed area but is still well within typical TTUS contingency-aware budget ranges. **Base proposal alone should land in $440K–$550K (midpoint ~$495K)** with the $25K allowance brought separately to the $465K–$575K all-in.
+
+**Bid-positioning advice** (per `../price-references.md` § B refresh): Submit at **mid-low to mid** (~$485K–$505K base) to be competitive against TPI / Lee Lewis / Crockett (who likely target $475K–$515K), but not below $470K base — anything below that signals scope misread on the 3,115 SF.
 
 ---
 
@@ -66,7 +69,8 @@ Each row pulls from `../takeoff-template.json` once quantities are filled. Formu
 | 08 | Openings (doors, HM frames, Sargent hardware, CBORD prep) | `[USER TO FILL]` | 4–7% | div 08 |
 | 09 | Finishes (framing, GWB, ACT, flooring, base, paint) | `[USER TO FILL]` | 14–22% | div 09 |
 | 10 | Specialties (signage, toilet accessories, fire extinguishers) | `[USER TO FILL]` | 1–3% | div 10 |
-| 21 | Fire Suppression | **$0** | 0% | OWNER-FURNISHED — DO NOT PRICE |
+| 21 | Fire Suppression | **$0** | 0% | OWNER-FURNISHED — PM TOC marks Div 21 "NOT USED" — DO NOT PRICE |
+| 10 51 13 | Metal Lockers | `[USER TO FILL]` | 1–2% | CONTRACTOR scope per PM Sec 10 51 13 (corrected from earlier prep-doc assumption that this was owner-furnished) |
 | 22 | Plumbing (fixtures + rough-in + showers if applicable) | `[USER TO FILL]` | 8–12% | div 22 |
 | 23 | HVAC (full system replacement + exhaust + TAB + controls) | `[USER TO FILL]` | 14–22% | div 23 |
 | 26 | Electrical (full replacement + theater-grade lighting + controls + sub-panel if needed) | `[USER TO FILL]` | 14–22% | div 26 |

@@ -1,69 +1,120 @@
 # Contacts — Carr EFA Dressing Room Renovation (Sol 26-007)
 
-> Sources: RFCSP + Attachment A (per `exports/calibration_v3/estimate.json` `bid_packages[3]` and `bid_packages[4]`). Phone numbers and titles to be confirmed from the ASU directory at `https://www.angelo.edu/directory/` and the TTUS procurement portal.
+> Sources: RFCSP + Attachment A + Addendum #1 pre-response meeting presentation (slide 5 "Project Team") + sign-in sheet from 2026-05-20 (Addendum #1 last page). 2026-05-23 refresh after full docs in hand.
 
 ---
 
-## A. Verified contacts (from the documents in hand)
+## A. ASU procurement + facilities POCs (verified from project team slide + sign-in sheet)
 
-### Samuel Guevara — RFCSP point of contact
-- **Role:** ASU Facilities Planning & Construction (project manager for Carr EFA Dressing Room Renovation)
-- **Email:** Samuel.Guevara@angelo.edu (from RFCSP cover, per v3 extract `bid_packages[4].contact`)
-- **Phone:** [USER TO FILL — pull from ASU directory: https://www.angelo.edu/directory/]
-- **Address:** Angelo State University, Facilities Planning & Construction, ASU Station #10924, San Angelo, TX 76909
-- **Communication priority:** Primary — first point of contact for all RFCSP questions, RFIs pre-proposal, site walk requests, missed-pre-response-meeting confirmation
+### Hannah Bignall — **PRIMARY day-to-day procurement POC** (NEW — added 2026-05-23)
+- **Role:** Assistant Director of Contracted Services, Angelo State University Facilities Services
+- **Email:** **hannah.bignall@angelo.edu**
+- **Phone:** **325-942-2380**
+- **Address:** Angelo State University, Facilities Planning & Construction, 1635 Vanderventer, San Angelo, TX 76909
+- **Communication priority:** **PRIMARY** for procurement-track questions (eligibility confirmations, addenda acknowledgment, HSP delivery, submission delivery, proposal-package questions). Hannah co-signed the pre-response meeting sign-in sheet on 2026-05-20.
 
-### Tracie Howell — Director of Facilities Planning and Construction
-- **Role:** ASU FP&C Director (executes the Attachment A "Form of Proposal" on behalf of ASU)
-- **Email:** [USER TO FILL — request from Samuel]
+### Samuel Guevara — **Project Manager / Facilities POC** (kept as secondary)
+- **Role:** Associate Director, ASU Facilities Planning & Construction (project-manager-of-record for Carr EFA Dressing Room Renovation)
+- **Email:** samuel.guevara@angelo.edu (PER Addendum #1 slide 2 + project email box `fpcmail@angelo.edu` for HSP delivery)
+- **Phone:** **325-942-2380** (shared FP&C number)
+- **Address:** Same as Hannah
+- **Communication priority:** Secondary on procurement; PRIMARY on site walks, RFIs, scope clarifications, CBORD coordination, construction-phase coordination.
+
+### Tracie Howell — Director of Facilities Services
+- **Role:** Director, ASU Facilities Services (per Addendum #1 slide 5)
+- **Email:** [USER TO FILL — request from Hannah]
+- **Phone:** [USER TO FILL — likely 325-942-2380 main desk]
+- **Communication priority:** Escalation only — call if Hannah and Samuel are both unresponsive after 3 attempts each.
+
+### Matt Marshall — Construction Project Coordinator (NEW — added 2026-05-23)
+- **Role:** Construction Project Coordinator, ASU FP&C (per Addendum #1 slide 5)
+- **Email:** [USER TO FILL — request from Hannah]
 - **Phone:** [USER TO FILL]
-- **Address:** Same as Samuel
-- **Communication priority:** Secondary — escalation contact if Samuel is unresponsive; signs the executed CSA on award
+- **Communication priority:** Construction-phase coordination (likely the post-award day-to-day owner-rep at the job site).
+
+### Krista Allison — ASU Facilities Management
+- **Role:** Facilities Management staff (signed in at the pre-response meeting on 2026-05-20)
+- **Communication priority:** Internal — no direct contact need unless coordination requires.
+
+### ASU procurement / FP&C shared inbox — `fpcmail@angelo.edu`
+- **Role:** Per Addendum #1 slide 19, HSP delivery can be made electronically to `fpcmail@angelo.edu`. May also be the addenda-distribution and Q&A inbox.
 
 ---
 
-## B. Contacts to identify by tomorrow
+## A1. Design team (verified from drawings cover G-000 + Project Manual Section 00 01 07 Seals Page)
 
-### A/E firm (designer of record)
-- **Role:** Architect / engineer who produced the drawings; responds to RFIs jointly with the owner
-- **Identity:** [USER TO FILL — request from Samuel; likely listed in the RFCSP body § Project Team that the v3 extract did not pull]
-- **Communication priority:** High — site walk coordination, drawing clarifications
+### PBK Architects, Inc. — **Architect of Record** (NEW — verified 2026-05-23)
+- **Texas Registered Firm:** BR-1608
+- **Registered Architect:** Clifford Whittingstall, R.A. #18585
+- **Interim notification stamp on drawings:** Jessica Brehm, Architectural Reg. #20575
+- **Address:** 601 NW Loop 410, Suite No. 400, San Antonio, TX 78216
+- **Phone:** 210-829-0123
+- **PBK Project No.:** 250402
+- **Communication priority:** High — site walk coordination, RFIs on architectural scope, finish/door/hardware clarifications. Route requests through Hannah Bignall first; do not directly contact PBK on pre-proposal questions unless Hannah authorizes.
+
+### LEAF Engineers — **MEP + Technology Engineer of Record** (NEW — verified 2026-05-23)
+- **Same address as PBK:** 601 NW Loop 410, Suite 400, San Antonio, TX 78216
+- **Phone:** 210-829-0123 (also a separate office at 601 NW Loop 410 Suite 460 — `LEAFengineers.com`)
+- **LEAF Project No.:** 250402 (matches PBK)
+- **Communication priority:** High — MEP RFIs, technology rough-in coordination, lighting/electrical clarifications. Same routing-via-Hannah rule.
+- **Notable items they updated in addenda:** vanity light fixtures in rooms 109/110, TV power receptacle in Room 108 (Makeup Room), 8" can lights in corridor, emergency lights added, fixture "D1"/"D2" emergency option, fixture "A" manufacturer change per owner request.
+
+### Lundy & Franke Engineering — **Structural Engineer of Record** (NEW — verified 2026-05-23)
+- **Address:** 549 Heimer, San Antonio, TX 78232
+- **Phone:** 210-979-7900
+- **Communication priority:** Low — interior dressing-room reno does not appear to have structural scope; only relevant if demo uncovers something structural.
+
+---
+
+## B. Contacts to identify (still open)
 
 ### ASU HUB Coordinator (or TTUS HUB Operations contact)
-- **Role:** Receives HSP submission, fields HUB-related questions
-- **Identity:** [USER TO FILL — TTUS HUB Operations is centralized at TTU main campus in Lubbock; ASU may have a dedicated HUB POC. Request from Samuel.]
-- **Communication priority:** High — HSP delivery address confirmation, project-specific HUB goal, post-award PAR reporting
-
-### ASU Procurement Officer
-- **Role:** Receives proposal package (may differ from project manager); responsible for procurement compliance
-- **Identity:** [USER TO FILL — typically listed in RFCSP § Submission Instructions]
-- **Communication priority:** High — proposal delivery confirmation, addenda issuance
+- **Role:** Receives HSP submission (Addendum #1 says e-mail OK to fpcmail@angelo.edu); fields HUB-related questions
+- **Identity:** [USER TO FILL — TTUS HUB Operations is centralized at TTU main campus in Lubbock; ASU may have a dedicated HUB POC. Request from Hannah.]
+- **Communication priority:** High — HSP delivery, project-specific HUB goal, post-award PAR reporting
 
 ### CBORD System Administrator (ASU IT)
-- **Role:** Coordinates CBORD access-control device rough-in standards (conduit, back-box, power)
+- **Role:** Coordinates CBORD access-control device rough-in standards
 - **Identity:** [USER TO FILL — request from Samuel; ASU IT main desk: angelo.edu/IT]
 - **Communication priority:** Medium (pre-award) / High (post-award) — coordination call within first week of construction
 
 ### ASU EHS contact
-- **Role:** Existing hazardous-materials survey access; shutdown coordination for fire alarm, sprinkler, electrical work post-award
-- **Identity:** [USER TO FILL — request from Samuel]
+- **Role:** Section 00 31 00 "Available Project Information" hazmat survey access; shutdown coordination post-award
+- **Identity:** [USER TO FILL — request from Hannah / Samuel]
 - **Communication priority:** Medium (pre-award request for hazmat survey) / High (post-award)
 
 ---
 
-## C. Suggested outreach drafts
+## B1. Known competitor firms from the pre-response meeting sign-in sheet (2026-05-20)
 
-### Draft #1 — Samuel Guevara, today/first thing tomorrow
+> These are the firms that attended the pre-response meeting. The first 4 are likely direct GC competitors; the last 2 are likely subs (who may bid all the GCs):
 
-> Subject: Carr EFA Dressing Room Renovation (Sol 26-007) — Bidder Inquiry
+| Firm | Attendee | Phone | Email | Likely role |
+|---|---|---|---|---|
+| **Ardent United, LLC** | Rusty Cottar (CDO) | 817-320-9854 | rusty@ardent-united.com | **GC competitor** |
+| **JAJ Property Services** | Michael A. Prince | 325-703-1340 | (not on sheet) | **GC competitor** (or facilities mgr) |
+| **Onyx Solutions** | Louis Deluna | 325-245-7995 | louis@onyxsolutions.us | **GC competitor** (or specialty) |
+| **Collier Const.** | Dustin Taylor | 325-271-1370 | dustin@collier... (truncated) | **GC competitor** |
+| **Advanced Electrical Solutions** | Preston Scher (owner) | 325-617-8077 | preston@advancedelectricalsolutions.us | Electrical sub (may bid all GCs) |
+| **Ener-Tel** | Ryan Mathews (sales) | 325-658-8375 | ryan.mathews@ener-tel.com | AV/telecom sub (may bid all GCs) |
+
+Note: sign-in sheet says "PAGE 1 OF 2" — there may be additional attendees on a second sheet we don't yet have. Request from Hannah Bignall.
+
+---
+
+## C. Suggested outreach drafts (UPDATED 2026-05-23 — primary POC is now Hannah Bignall)
+
+### Draft #1 — Hannah Bignall (PRIMARY), cc Samuel Guevara — today/first thing tomorrow
+
+> To: hannah.bignall@angelo.edu
+> Cc: samuel.guevara@angelo.edu, fpcmail@angelo.edu
+> Subject: Carr EFA Dressing Room Renovation (Sol 26-007) — Bidder Inquiry: Site Walk + Section 00 31 00
 >
-> Hi Samuel,
+> Hi Hannah,
 >
-> [Firm name] is preparing a proposal in response to Solicitation 26-007 for the Carr EFA Dressing Room Renovation. We have the RFCSP package and Attachments A through F.1 in hand and are starting bid preparation.
+> [Firm name] is preparing a proposal in response to Solicitation 26-007 for the Carr EFA Dressing Room Renovation. We have the full document package in hand — the original RFCSP + Attachments A–F.1, plus the base drawing set (38 sheets, 2026-03-27), Drawings Addenda 1 and 2 (2026-04-15 and 2026-05-07), Addendum #1 (the pre-response meeting deck + sign-in sheet), and the 796-page Project Manual. Thank you for posting the full package to the ESBD.
 >
-> A few questions to confirm we are on the right track before we sink more estimator hours:
->
-> 1. **Pre-response meeting on 5/20/2026.** We were unable to attend. Was the pre-response conference mandatory for proposers, or was attendance highly recommended? Are firms that did not attend still eligible to submit a responsive proposal? If possible, would you be able to share the sign-in sheet, meeting minutes, and any Q&A from the meeting?
+> ~~1. Pre-response meeting eligibility — RESOLVED, the RFCSP § 00050 II language is clear that the meeting was not mandatory.~~ (Confirmed by reading the original RFCSP.)
 >
 > 2. **Site walk.** Given the existing-conditions risk in an older performing-arts building, would it be possible to arrange a site walk of the dressing-room area(s) in scope before the 6/5 proposal deadline? We can mobilize on short notice.
 >
@@ -84,9 +135,11 @@
 > [USER TO FILL: phone]
 > [Firm name]
 
-### Draft #2 — Voicemail / call script if Samuel doesn't respond to email within 24 hours
+### Draft #2 — Voicemail / call script if Hannah doesn't respond to email within 24 hours
 
-> "Hi Samuel, this is [name] from [firm]. I'm reaching out about Carr EFA Dressing Room Renovation, Solicitation 26-007. We're preparing a proposal and need to confirm a few items before we go further — most importantly whether the May 20 pre-response meeting was mandatory and whether we can still submit. I sent an email a day ago; happy to walk through everything by phone whenever works. My number is [phone]. Thank you."
+> "Hi Hannah, this is [name] from [firm]. I'm calling about Carr EFA Dressing Room Renovation, Solicitation 26-007. We have the full document package and are preparing a proposal. Two questions: one, we'd like to schedule a brief site walk this week — we're aware the pre-response meeting wasn't mandatory, and we already have the addendum deck, but we'd like to physically see the rooms before finalizing our number. Two, we'd like to request Section 00 31 00 — Available Project Information — the hazmat survey referenced in the demo spec section. If you could call back at [phone] or email back at [email], we'd really appreciate it. Thank you."
+
+> Backup voicemail for Samuel Guevara (same content, leave as cc).
 
 ### Draft #3 — HUB outreach packet (per `05-hsp-plan.md` § D)
 

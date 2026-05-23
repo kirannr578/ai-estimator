@@ -1,35 +1,47 @@
-# Technical proposal narrative — Carr EFA Dressing Room Renovation
+# Technical proposal narrative — Carr EFA Dressing Room Renovation (2026-05-23 refresh)
 
-> Target length: 3–5 pages bound. The page-count limit is set by the RFCSP body; if it caps shorter than this, compress Sections 4 and 5 first (those are the most expendable) and preserve Sections 1, 2, 3, 6. `[USER TO FILL: confirm page-count limit on RFCSP re-read; default to 10 pages until confirmed.]`
+> Target length: 3–5 pages bound. Page-count cap per RFCSP Section L not yet verified on the body re-read; default 10 pages until confirmed.
+> Evaluation criteria per Addendum #1 slide 17: **Cost 45 / Firm + Team Qualifications 25 / Schedule Commitment 20 / RFCSP Compliance 10 = 100**. This narrative is the principal vehicle to score on the 25 + 20 + 10 = 55 non-cost points.
 
 ---
 
 ## 1. Project understanding
 
-The Carr Education and Fine Arts Building Dressing Room Renovation requires the complete demolition and replacement of all interior finishes and primary mechanical, plumbing, and electrical systems within the dressing-room footprint, together with the installation of new IT infrastructure pathway and full code-driven ADA compliance under 28 CFR 35.151 (alterations of a primary function area in a performing-arts venue). Specifically:
+The Carr Education and Fine Arts Building Dressing Room Renovation is a **3,115-SF interior renovation** to 10 rooms in the Carr EFA Building at 2602 Dena Dr, San Angelo, TX. Source documents: the 38-sheet base drawing set dated 2026-03-27 (PBK Architects, LEAF Engineers, Lundy & Franke Engineering, PBK Project No. 250402), as modified by Drawings Addendum 1 (2026-04-15) and Drawings Addendum 2 (2026-05-07), together with the 796-page Project Manual (Issue for Construction 2026-03-27) and Addendum #1 (Pre-Response Meeting deck and sign-in sheet, 2026-05-20).
 
-- **Demolition:** all interior wall and ceiling finishes, flooring, casework, existing HVAC ductwork and equipment serving the dressing rooms, plumbing fixtures and rough-in within the renovation footprint, electrical branch wiring and devices, lighting, and incidental fire-alarm devices in the affected ceilings.
-- **New construction:** full HVAC system (air handler / VAV terminals, ductwork, diffusers, controls, dedicated dressing-room exhaust for hair/makeup chemical control), plumbing (ADA lavatories, water closets if scope includes private toilets, possible shower stalls in wet zones, supply/waste/vent rough-in), electrical (branch wiring, devices including dedicated 20A circuits at each makeup station, GFCI at all wet locations, theater-grade dimmable LED lighting, lighting controls, egress and emergency lighting, sub-panel if existing service is insufficient), low-voltage pathway (conduit + boxes + ring & string for the owner-furnished AV/data/CBORD cabling), and door hardware including the specified Sargent cylindrical locksets with CBORD-ready door prep (electric strike mortise + low-voltage conduit and ring & string to plenum + 120V or PoE pathway at each access-controlled door).
-- **Finishes:** light-gauge metal-stud framing and Type-X gypsum board at new or modified partitions, restoration of any exposed brick wall finishes (clean, repoint, seal), acoustical ceiling tile, sheet vinyl or LVT flooring with heat-welded seams in dressing rooms and adjacent circulation, ceramic tile in any wet zones, resilient base, 2-coat institutional low-VOC paint, makeup vanities and mirror surrounds (theater-grade with LED-lit mirror frames), costume storage shelving where designated, and ADA-compliant room signage.
-- **Code compliance:** full ADA alterations-standard pass on door clear width, hardware reach range, accessible route, mirror heights, lavatory rim and knee clearance, accessible signage, and (if applicable) accessible shower stalls.
+The scope splits into two distinct zones:
 
-`[USER TO FILL: insert one paragraph after drawings arrive that restates the dressing-room SF count, the room-by-room layout, and any noteworthy scope items per the actual finish/door/equipment schedule. Until drawings arrive, our pricing assumes ~2,500 SF of dressing-room footprint per the RFCSP scope description; see Assumptions & Clarifications, page 5.]`
+**Back-of-house dressing suite (1,047 SF):** Full reno of Green Room 107 (222 SF), Makeup Room 108 (434 SF), Women's Dressing 109 (135 SF), Men's Dressing 110 (136 SF), Women's RR 1R9 (159 SF), and Men's RR 1R10 (160 SF). New porcelain floor tile (T1) throughout, blue accent wall tile (T2) and ridged white wall tile (T3) in restrooms, 2"x2" shower mosaic tile (T4, added per Drawings Addendum 2) inside two ADA shower receptors, new vanity countertops with theater-grade LED-lit mirror surrounds at three makeup stations (24"x72" mirrors per Drawings Addendum 1), HPB hardwood base in Green Room, new acoustical ceilings throughout, full MEP replacement, ADA-compliant toilet partitions (phenolic-core), metal lockers per Project Manual Section 10 51 13, and full Sargent door hardware package per Section 08 71 00.
 
-## 2. Owner-furnished scope demarcation
+**Circulation + entry (2,068 SF):** Selective renovation of Corridor 101 (641 SF), Front Entry 106 (1,098 SF), plus minor MEP-only scope at Mechanical Room 104 (61 SF) and Elevator 105 (68 SF). Existing wallpaper retained where called out on AF100; new carpet tile (CPT1) in entry; salvage and re-use of existing 2x4 corridor light fixtures in Makeup Room 108 per Drawings Addendum 2; new 8" can lights and emergency lighting added in corridor per Drawings Addendum 2.
 
-The RFCSP narrative identifies five owner-furnished scopes outside the GC contract:
+**Owner-furnished scope** (confirmed by Project Manual Division 21 being marked "NOT USED" + RFCSP narrative): fire suppression system, AV/technology equipment, network/data cabling and terminations, FF&E (makeup chairs, costume racks), and CBORD access-control devices (readers, controllers, electric strikes). Contractor scope includes the pathway and door preparation that makes those owner systems functional.
 
-| # | Owner-furnished item | Our scope | Their scope |
+**Code compliance:** full ADA alterations-standard pass per Project Manual Section 01 35 16 (Alteration Project Procedures) covering door clear widths, hardware reach ranges, accessible routes, mirror heights, lavatory rim and knee clearance, accessible signage per Section 10 14 00, and two ADA shower stalls per Section 22 40 00 (added per Drawings Addendum 2 with mosaic tile spec 09 30 00.T4).
+
+## 2. Owner-furnished scope demarcation (confirmed against Project Manual TOC)
+
+The RFCSP narrative + Project Manual TOC identify these owner-furnished scopes outside the GC contract:
+
+| # | Owner-furnished item | Confirmation | Our scope | Their scope |
+|---|---|---|---|---|
+| 1 | Fire suppression system | **Confirmed** — PM TOC marks Div 21 "NOT USED" | Coordinate access to existing FP system; protect during demo | All FP work (sprinkler relocation, mains, branches, shutdown, hydrostatic testing) |
+| 2 | Technology / AV equipment | RFCSP narrative + Addendum #1 slide 4 | Power + pathway (conduit, J-boxes, ring & string) per PM Sec 27 00 00 + 27 05 00 | All AV equipment supply, install, programming, commissioning |
+| 3 | Network / data cabling and termination | **Default assumption** (PM Sec 27 10 00 Structured Cabling System is in the manual; clarification request open with Hannah Bignall) | Pathway only (plenum-rated conduit + J-box + ring/string) | All cable pulls, terminations, faceplates, jacks, labeling, testing |
+| 4 | Equipment install (post-construction equipment) | RFCSP narrative | Provide finished spaces; coordinate sequence | Receiving, storing, installing, commissioning, warranty of owner equipment |
+| 5 | Furniture / FF&E (makeup chairs, costume racks) | RFCSP narrative | Wall blocking per PM Sec 06 10 00; protection of finishes during owner install | FF&E supply and install |
+| 6 | CBORD access-control devices (readers, controllers, electric strikes) | RFCSP narrative + Addendum #1 slide 4 | Door hardware prep per PM Sec 08 71 00, low-voltage conduit + ring/string per Sec 27 05 00, 120V or PoE pathway per Sec 26 05 34 | CBORD reader/controller/electric strike supply, install, programming, commissioning |
+
+**Items NOT owner-furnished (i.e., in contractor scope, contrary to earlier prep-doc assumption):**
+
+| # | Item | PM section | Note |
 |---|---|---|---|
-| 1 | Fire suppression system | Coordination only — provide access to existing FP system; protect during demo; do NOT relocate sprinkler heads; do NOT modify FP main | All sprinkler-head relocation, FP main and branch modifications, FP shutdown coordination, hydrostatic testing |
-| 2 | Technology systems (AV, classroom AV, performer comm) | Power + pathway (conduit, J-boxes, ring & string) only; coordinate cutover with ASU IT | All AV equipment supply, install, programming, and commissioning |
-| 3 | Network / data cabling and termination | Pathway only (plenum-rated conduit + J-box + ring & string from device to nearest accessible plenum) | All Cat 6/6A cable pulls, terminations, faceplates, jacks, labeling, and testing |
-| 4 | Equipment install (any equipment that goes IN the room post-construction) | Provide finished spaces ready for owner-furnished install; coordinate sequence so owner install follows our punch closure | Receiving, storing, installing, commissioning, and warranty of owner equipment |
-| 5 | Furniture / FF&E (makeup chairs, costume racks, lockers if applicable) | Wall blocking where owner needs to mount heavy items; protection of finishes during owner FF&E install | All FF&E supply and install |
-| 6 | CBORD access-control devices (readers, controllers, electric strikes themselves) | Door hardware prep (electric strike mortise in HM frame, electric hinge where required), low-voltage conduit + ring & string to plenum, 120V or PoE pathway at reader | All CBORD reader/controller/electric strike supply, install, programming, and commissioning |
-| 7 | Sargent cylindrical mechanical locksets | **In our scope** — supply, install, and keying per the CBORD admin's keying schedule | (n/a — this IS our scope) |
+| 7 | Sargent cylindrical mechanical locksets | PM Sec 08 71 00 | Contractor supply + install + keying per CBORD admin's master-key schedule |
+| 8 | **Metal lockers** | PM Sec 10 51 13 | Confirmed contractor scope (earlier prep-doc assumption was wrong) |
+| 9 | Mirrors (including dressing-room vanity mirrors per Drawings Addendum 1) | PM Sec 08 83 00 | Contractor supply + install |
+| 10 | Salvage and re-use of existing 2x4 corridor light fixtures in Makeup Room 108 | Drawings Addendum 2 | Contractor careful-demo + interim storage + reinstall |
 
-This demarcation is the canonical baseline for sub-quote scoping. Every subcontract issued under this contract carries the demarcation table verbatim in its scope-of-work exhibit. We will request written confirmation from ASU FP&C of any ambiguity before final pricing is locked. Our `[USER TO FILL: named coordination lead]` is the single owner-vendor coordination POC for the duration of construction.
+This demarcation is the canonical baseline for sub-quote scoping. Every subcontract issued under this contract carries the demarcation table verbatim in its scope-of-work exhibit. The single open clarification — Section 27 10 00 Structured Cabling System scope — has been raised in writing with Hannah Bignall in our 2026-05-23 eligibility/clarification email; pricing assumes pathway-only with a unit-price alternate for full pull + terminate if clarified otherwise. Our [USER TO FILL: named coordination lead] is the single owner-vendor coordination POC for the duration of construction.
 
 ## 3. Approach and phased work plan
 
@@ -127,17 +139,19 @@ Detailed schedule narrative is in `05-schedule-narrative.md` and a CPM Gantt cha
 
 ## 7. Assumptions and clarifications
 
-This proposal is priced against the RFCSP narrative and attachments listed on Attachment A, supplemented by reasonable assumptions for items not yet detailed in drawings:
+This proposal is priced against the RFCSP, the 38-sheet drawing set dated 2026-03-27 with Addenda 1–2, the 796-page Project Manual (Issue for Construction 2026-03-27), and Addendum #1 (Pre-Response Meeting deck dated 2026-05-20), supplemented by these clarifying assumptions:
 
-1. **Dressing-room footprint assumed ~2,500 SF** (range 2,000–3,000 SF) per the RFCSP scope description; final price subject to drawing-set verification on issuance.
-2. **No hazardous-materials abatement budgeted in base price** pending ASU EHS hazmat survey. If abatement is required, it may be funded from the $25,000 Cash/Contingency Allowance (Attachment A) or as a change order under UGSC Article 4 (Differing Site Conditions).
-3. **Existing structure remains** — no structural modifications; renovation is interior-only.
-4. **Owner-furnished items as listed in the RFCSP** — fire suppression, AV/IT systems, data cabling, FF&E, and CBORD access-control devices are not in our base price.
-5. **Builder's Risk insurance** assumed owner-carried per TTUS pattern; if GC-carried, will be added by change order at award. UGSC Art. 5 limits for GL, Auto, WC, and Umbrella are within our existing carrier-confirmed limits.
+1. **Project area 3,115 SF total**, comprised of ten rooms per drawing sheet AF100: Corridor 101 (641 SF), Mechanical 104 (61 SF), Elevator 105 (68 SF), Front Entry 106 (1,098 SF), Green Room 107 (222 SF), Makeup Room 108 (434 SF), Women's Dressing 109 (135 SF), Men's Dressing 110 (136 SF), Women's RR 1R9 (159 SF), Men's RR 1R10 (160 SF). Scope density varies materially between the back-of-house dressing suite (1,047 SF heavy reno) and the circulation/entry zone (2,068 SF light reno) and is priced separately on those two sub-totals.
+2. **No hazardous-materials abatement budgeted in base price.** Project Manual Section 00 31 00 "Available Project Information" (which would normally include the hazmat survey) was not provided in the issued documents; clarification request open with Hannah Bignall. PM contains Sections 02 82 13 (Asbestos Abatement) and 02 83 16 (Lead Remediation) as *contingent* sections — they apply only if hazmat is encountered. If abatement is required, it may be funded from the $25,000 Cash/Contingency Allowance (Attachment A) or as a change order under UGSC Article 4 (Differing Site Conditions).
+3. **Existing structure remains** — no structural modifications; renovation is interior-only. Sheet S100 confirms no structural sheets in the issued set.
+4. **Owner-furnished items per the demarcation table in Section 2 above** are not in our base price. Open clarification: PM Sec 27 10 00 Structured Cabling System scope (pathway-only vs. full pull + terminate); pricing assumes pathway-only with a unit-price alternate.
+5. **Builder's Risk insurance** assumed owner-carried per TTUS pattern (UGSC Article 5); if GC-carried, will be added by change order at award. UGSC Art. 5 limits for GL, Auto, WC, and Umbrella are within our existing carrier-confirmed limits.
 6. **Substantial completion 2026-11-02** is treated as a fixed calendar date with the LD clock starting on that date regardless of NTP timing. We have built 13 days of internal float; we reserve the right to request a no-cost time extension via the UGSC Article 9 change-order procedure if NTP is delayed beyond 2026-07-01.
-7. **Prevailing wage** priced against Tom Green County determination dated July 2023 (Attachment F.1) with a +12% labor cost escalation factor reflecting 2023–2026 Texas construction wage inflation. If TTUS issues an updated WD applicable to this project between submission and NTP, we will conform to the higher rate at no change to the contract sum (subject to the escalation factor in our bid); if the updated rate exceeds the escalation factor by more than 5%, we reserve the right to request a change order for the differential.
+7. **Prevailing wage** priced against Tom Green County determination dated July 2023 (Attachment F.1, confirmed operative by Project Manual Section 00 73 46) with a +12% labor cost escalation factor reflecting 2023–2026 Texas construction wage inflation. If TTUS issues an updated WD applicable to this project between submission and NTP, we will conform to the higher rate at no change to the contract sum (subject to the escalation factor in our bid).
 8. **Cash/contingency allowance** of $25,000 per Attachment A is carried as a separate line item, not rolled into the base price, not marked up. Allowance consumption is by change-order procedure per the CSA.
-9. **Pre-response meeting attendance** — we did not attend the 2026-05-20 pre-response meeting and have requested confirmation from Samuel Guevara that non-attendance does not affect our eligibility to submit a responsive proposal. `[USER TO FILL after confirmation received: cite the email or written confirmation from Samuel.]`
-10. **A/E firm identity** — `[USER TO FILL after confirmation received.]`
+9. **Eligibility resolved.** The 2026-05-20 pre-response meeting was non-mandatory per Addendum #1 (cover memo and sign-in sheet show attendance was advisory, not a prerequisite to submit a proposal). R-01 in our risk register is RESOLVED; no formal eligibility waiver is required from ASU Procurement.
+10. **A/E team:** PBK Architects (architect of record, PBK Project No. 250402); LEAF Engineers (MEP); Lundy & Franke Engineering (structural — though no structural sheets in the issued set, confirming interior-only scope). Day-to-day procurement POC: Hannah Bignall (`hannah.bignall@angelo.edu`, 325-942-2380). PM/Facilities POC: Samuel Guevara. Construction Coordinator: Matt Marshall.
+11. **Contract document discrepancy.** Project Manual references "Job Order Contract" in places (typical PBK office boilerplate), while the RFCSP body and Attachment B.2 use TTUS's Construction Services Agreement (CSA). We have priced and proposed against the CSA per the RFCSP body; written clarification has been requested from Hannah Bignall.
+12. **Project Manual Section 01 35 16 (Alteration Project Procedures)** governs all alteration-specific procedures including ADA upgrade requirements, salvage protocols, dust control during occupied-building work, and matching of existing finishes; our base price reflects compliance with this section.
 
-Any clarification of the foregoing assumptions discovered between proposal submission and award will be confirmed in writing with Samuel Guevara prior to the executed CSA.
+Any clarification of the foregoing assumptions discovered between proposal submission and award will be confirmed in writing with Hannah Bignall (cc Samuel Guevara) prior to the executed CSA.

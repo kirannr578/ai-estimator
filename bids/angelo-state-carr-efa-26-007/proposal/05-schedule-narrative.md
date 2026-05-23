@@ -1,6 +1,8 @@
-# Schedule narrative — Carr EFA Dressing Room Renovation
+# Schedule narrative — Carr EFA Dressing Room Renovation (2026-05-23 refresh)
 
 > Companion document to the CPM Gantt exhibit (separate; submitted as a printed exhibit with the proposal). This narrative explains the critical path, long-lead items, EHS shutdown windows, owner-furnished handoffs, and float strategy that the Gantt represents in bar-chart form.
+>
+> **Refresh basis (2026-05-23):** Critical-path long-lead items revalidated against the 796-page Project Manual TOC and the 38-sheet drawing set. New long-leads surfaced from the PM (porcelain tile T1/T2/T3 + mosaic T4, metal lockers, phenolic toilet partitions). Construction window per Addendum #1 deck slide 6 confirms ~120-day target.
 
 ---
 
@@ -65,14 +67,16 @@ Substantial completion 10/20 internal target → 11/2 contract date with 13 days
 
 | Item | Lead time | Order by | Land by | Risk if slipped |
 |---|---|---|---|---|
-| **Theater-grade millwork** (makeup vanities + LED-lit mirror surrounds + costume storage) | 10–14 weeks | Week 1 (7/8) | Week 12 (9/22) | Phase 5 cannot start; LD-trigger risk |
-| **Sargent cylindrical locksets** (specified by name) | 8–14 weeks | Week 1 (7/8) | Week 12 (9/22) | Phase 5 finish/hardware install delayed; can substitute Sargent-compatible cylinder series via submittal |
-| **Theater-grade dimmable LED light fixtures** | 6–8 weeks | Week 1 (7/8) | Week 10 (9/8) | Phase 6 MEP trim delayed |
-| **HM frames** (specified series + finish) | 8–10 weeks | Week 1 (7/8) | Week 11 (9/15) | Phase 5 door install delayed |
-| **HVAC equipment** (specified RTU/AHU + dampers) | 8–12 weeks | Week 1 (7/8) | Week 10 (9/8) | Phase 6 HVAC trim delayed; commissioning delayed |
-| **Sheet vinyl with heat-welded seams** (theater-friendly specific product) | 4–6 weeks | Week 4 (7/28) | Week 10 (9/8) | Phase 5 flooring delayed |
-| **Specialty millwork — costume storage** | 8–10 weeks | Week 1 (7/8) | Week 11 (9/15) | Phase 5 millwork install delayed |
-| **CBORD electric strikes** (owner-furnished but we accept delivery) | n/a (owner-supplied) | Owner orders | Per owner schedule | Phase 6 cannot finish door install until strikes are on site |
+| **Theater-grade millwork** (makeup vanities + LED-lit 24"x72" mirror surrounds per Drawings Addendum 1, costume storage) — PM Sec 06 41 16 + 08 83 00 | 10–14 weeks | Week 1 (7/8) | Week 12 (9/22) | Phase 5 cannot start; LD-trigger risk |
+| **Sargent door hardware** — PM Sec 08 71 00 (specified series) | 8–14 weeks | Week 1 (7/8) | Week 12 (9/22) | Phase 5 finish/hardware install delayed; substitute Sargent-compatible cylinder via submittal if needed |
+| **Theater-grade dimmable LED light fixtures + replacement of corridor fixtures relocated to Makeup Room 108 per Drawings Addendum 2** — PM Sec 26 51 00 | 6–8 weeks | Week 1 (7/8) | Week 10 (9/8) | Phase 6 MEP trim delayed |
+| **HM frames + doors** — PM Sec 08 11 13 + 08 14 16 | 8–10 weeks | Week 1 (7/8) | Week 11 (9/15) | Phase 5 door install delayed |
+| **HVAC equipment** (specified AHU/VAV + dampers per LEAF Engineers MEP sheets M001–M501) — PM Sec 23 (full division) | 8–12 weeks | Week 1 (7/8) | Week 10 (9/8) | Phase 6 HVAC trim delayed; commissioning delayed |
+| **Porcelain floor + wall tile (T1 + T2 + T3 + T4 mosaic added per Drawings Addendum 2)** — PM Sec 09 30 00 | 6–8 weeks | Week 2 (7/14) | Week 11 (9/15) | Phase 5 flooring delayed |
+| **Metal lockers** (contractor scope per PM Sec 10 51 13, contrary to earlier prep assumption) | 8–10 weeks | Week 1 (7/8) | Week 12 (9/22) | Phase 5 specialty install delayed |
+| **Phenolic-core toilet partitions** (ADA-compliant, restrooms 1R9 + 1R10) — PM Sec 10 21 13.19 | 6–8 weeks | Week 2 (7/14) | Week 11 (9/15) | Phase 6 specialties delayed |
+| **Shower receptors + valves** (two ADA shower receptors confirmed per Drawings Addendum 2) — PM Sec 22 40 00 | 6–8 weeks | Week 2 (7/14) | Week 11 (9/15) | Phase 6 plumbing fixture set delayed |
+| **CBORD electric strikes + readers** (owner-furnished, we accept delivery) | n/a (owner-supplied) | Owner orders | Per owner schedule | Phase 6 cannot finish door install until strikes on site |
 
 **Submittal turnaround target:** 14 calendar days from sub to A/E approval. If A/E response slips past 14 days, we escalate via Samuel Guevara.
 

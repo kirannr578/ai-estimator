@@ -1,14 +1,34 @@
-# 08 — Contract-terms flags (UGSC + Sample CSA review)
+# 08 — Contract-terms flags (UGSC + Sample CSA + Project Manual supplementary conditions)
 
 > Sources:
 > - Attachment C — 2010 TFC Uniform General Conditions as supplemented by TTUS, edited 09.07.2023 (`inbox/.../ESBD_516718_..._Attachment C - ...UGSC...pdf`)
 > - Attachment B.2 — Sample Construction Services Agreement (`inbox/.../ESBD_516718_..._Attachment B.2 - Sample Construction Services Agreement.pdf`)
+> - **NEW 2026-05-23: Project Manual Section 00 70 00 (Conditions of the Contract), 00 73 00 (Supplementary Conditions), 00 73 43 (Wage Rate Requirements TX), 00 73 46 (Wage Determination Schedule)** in `inbox/.../26-007 Carr EFA Dressing Room Renovation Project Manual.pdf` pages 35-66
+> - Project Manual Div 01 General Requirements (Sec 01 10 00 through 01 91 13) pages 67-218
 >
-> The v3 extraction at `exports/calibration_v3/estimate.json` `bid_packages[7]` (CSA) and `bid_packages[10]` (UGSC) captured high-level summaries; the line-by-line clause analysis below requires reading the actual PDFs cover-to-cover before the proposal goes in. This document captures the **clauses worth highlighting** for negotiation leverage post-award and the **clauses that materially affect price** that must be priced into the bid.
+> 2026-05-23 refresh: Project Manual conditions read; major flags below now include the JOC/CSA discrepancy and Sec 01 35 16 Alteration Project Procedures.
 
 ---
 
-## A. Top 3 contract-terms flags (the ones that matter most for pricing this bid)
+## A. Top contract-terms flags (the ones that matter most for pricing this bid)
+
+### Flag #0 — JOC vs CSA contract-form discrepancy in Project Manual ⚠️ NEW 2026-05-23
+
+**Why it matters:** Project Manual Section **01 10 00 § 1.5** reads *"Project will be constructed under a Job Order Contract"* but the procurement is via **RFCSP under Tex. Gov't Code Ch. 2269** (which authorizes Construction Services Agreement via competitive sealed proposals). These are two completely different procurement vehicles — a JOC is a master-contract IDIQ-style vehicle and a CSA is a discrete-project lump-sum-or-GMP vehicle. The Sample CSA at Attachment B.2 is the actual contract form (consistent with the procurement vehicle); the 01 10 00 reference is almost certainly a PBK template-boilerplate scrivener's error (PBK does a lot of K-12 JOC work).
+
+**Action:**
+- **Flag to Hannah Bignall in the eligibility email** (`outreach/01-email-hannah-bignall-eligibility.md` § 3) — request written confirmation that post-award contract form will be the Sample CSA, NOT a JOC.
+- If by some chance ASU intends to procure via JOC, the entire bid form, bond requirements, payment terms, and change order mechanism are different — we need to know before submission.
+- Note in proposal Assumptions & Clarifications: "Proposal is based on Sample CSA at Attachment B.2 as the post-award contract form."
+
+### Flag #0.5 — Project Manual Section 01 35 16 Alteration Project Procedures ⚠️ NEW 2026-05-23
+
+**Why it matters:** Sec 01 35 16 is the dedicated alteration-project procedures section. It controls how we handle: (a) protection of existing-to-remain construction, (b) noise/dust windows, (c) coordination with active building, (d) cutting and patching procedures, (e) hazardous-material-encounter protocols (cross-references 01 35 43.13 + 02 82 00/02 83 00/02 87 13). Compliance is a labor + GC overhead premium of 5-8% on the trades that work in occupied zones.
+
+**Action:**
+- Price 5-8% premium-time labor allowance into demo + MEP trade scope.
+- Include 01 35 16 + 01 35 43.13 procedures in the subcontractor scope packages.
+- Include the IAQ procedures of Sec 01 35 46 — HVAC filtration upgrades during demo, no high-VOC finishes during occupied hours.
 
 ### Flag #1 — Insurance article (UGSC Art. 5) carries unusually strict additional-insured and timing requirements
 
@@ -195,3 +215,38 @@ When the executed CSA arrives at award, compare against the sample for any unfav
 - [ ] Reasonable RFI response time commitment (5 business days)
 
 > Realism check: TTUS standard CSA is heavily owner-favorable and rarely negotiated on a sub-$1M renovation. The leverage to negotiate is essentially zero pre-award and small post-award. Focus the negotiation energy on the differing-site-conditions clause + LD cap + insurance timing — those three are the real money items.
+
+---
+
+## E. Supplementary conditions and other Project Manual contract-shaping sections (NEW 2026-05-23)
+
+These Project Manual sections layer on top of the 2010 TFC UGSC (Attachment C). Read and cross-reference at the line items below:
+
+| Project Manual section | Title | Why it matters for this bid |
+|---|---|---|
+| **00 70 00** | Conditions of the Contract | Likely references back to TFC UGSC + TTUS edits — should be consistent with Attachment C; verify on re-read |
+| **00 73 00** | Supplementary Conditions | This is where TTUS adds project-specific edits. Read for: insurance carve-outs, additional bond requirements, additional indemnity clauses, owner-furnished scope clarifications |
+| **00 73 43** | Wage Rate Requirements (Texas) | Reinforces Tex. Gov't Code Ch. 2258 prevailing wage compliance per `prevailing-wages.md` |
+| **00 73 46** | Wage Determination Schedule | The actual WD attached — should be **Tom Green County 2023 WD per Attachment F.1** unless a newer WD is published. Cross-reference per `prevailing-wages.md` |
+| **01 21 00** | Allowances | Establishes the $25K cash/contingency allowance protocol; how it draws down + reporting |
+| **01 22 00** | Unit Prices | Likely empty/template-only for this scope; verify whether any unit prices are required on the proposal form |
+| **01 23 00** | Alternates | Likely empty/template-only for this scope; verify whether any alternates are required on Attachment A § Alternates |
+| **01 25 13** | Product Substitution Procedures | Process for getting "or equal" approval pre-bid or post-award |
+| **01 29 00 / 01 29 73** | Payment Procedures / Schedule of Values | SOV structure that must accompany pay app #1 |
+| **01 31 00 + 01 31 13** | Project Management + Coordination + Admin Reqs | Submittal + RFI + change order procedures layered on top of UGSC |
+| **01 32 00 + 01 32 33** | Construction Progress Documentation + Photographic Documentation | Owner expects CPM schedule + photographic documentation cadence |
+| **01 33 00** | Submittal Procedures | The shop drawing / sample / O&M submission process |
+| **01 35 16** | **Alteration Project Procedures** | See Flag #0.5 above |
+| **01 35 43.13** | **Environmental Procedures for Hazardous Materials** | Triggers if abatement scope materializes; cross-references Div 02 contingent sections |
+| **01 35 46** | **Indoor Air Quality Procedures** | IAQ submittal + HVAC filtration + occupied-hours VOC restrictions |
+| **01 40 00 + 01 42 00** | Quality Requirements + References | Standards references (ASTM, ANSI, NFPA) |
+| **01 45 23** | Testing and Inspecting Services | Owner-paid material testing is typical TTUS — verify |
+| **01 50 00 + 01 56 00 + 01 57 13 + 01 57 15** | Temporary Facilities + Barriers + Erosion Control + Integrated Pest Management | Temp facilities scope + protections |
+| **01 60 00 + 01 61 16** | Product Requirements + VOC Restrictions | Material standards + VOC compliance |
+| **01 73 00 + 01 73 29** | Execution + Cutting and Patching | Workmanship requirements |
+| **01 74 19** | Construction Waste Management and Disposal | Waste diversion targets (typical 75% diversion) |
+| **01 77 00** | Closeout Procedures + Closeout Forms A/B/C (subcontractor lien releases, hazmat affidavits, warranty) | Closeout deliverables stack on top of UGSC |
+| **01 78 23 + 01 78 39** | O&M Data + Project Record Documents | Closeout deliverables for owner |
+| **01 91 13** | General Commissioning Requirements | Cx authority (owner-furnished) plus contractor support obligations |
+
+**Net assessment after Project Manual review:** No material departures from the Attachment C TTUS-edited UGSC that we already analyzed. The Supplementary Conditions (Sec 00 73 00) need a careful read but in TTUS pattern they typically just reiterate the UGSC + clarify owner-furnished scope. **The biggest impact items are Sec 01 35 16 Alteration Project Procedures + the contingent Div 02 hazmat sections** — both already priced into the takeoff template via the demo premium + $15K hazmat allowance.

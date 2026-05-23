@@ -8,44 +8,55 @@
 
 ## A. Top-tier risks (score ≥ 12)
 
-### R-01 — Missed pre-response meeting (2026-05-20) may have been mandatory
+### R-01 — Missed pre-response meeting (2026-05-20) eligibility ✅ **RESOLVED 2026-05-23**
 
-- **Impact:** 5 — If the pre-response meeting was mandatory and the RFCSP treats attendance as a condition of proposing, our bid is non-responsive on its face.
-- **Likelihood:** 2 — TTUS pre-response conferences are typically "highly recommended" rather than "required." But some are mandatory, particularly when the agency wants every bidder to have seen the site and asked the same questions.
-- **Score:** 10 (treating as top-tier given the binary outcome)
+- **Resolution:** **RESOLVED — meeting was NOT mandatory.** Confirmed by direct read of the original RFCSP at Section 00050 ("Information to Proposers") § II "PRE-RESPONSE MEETING INFORMATION": *"A pre-proposal meeting will be conducted 2:00 PM CST, Wednesday, May 20, 2026, Facilities Planning and Construction Conference Room 120A, 1635 Vanderventer, San Angelo, TX 76909. The Pre-Response Meeting will recapture the RFCSP requirements and information, outline project requirements. Following the meeting FPC will briefly conduct a site visit if necessary."* The word **"mandatory" does not appear** in the RFCSP in relation to the pre-response meeting. The only "mandatory" reference in either the RFCSP or the project manual is to the post-award **pre-construction meeting** in Section 01 31 00 — "The successful Contractor shall attend a mandatory pre-construction meeting…" which is a separate, post-award event.
+- **Original Impact:** 5; **Original Likelihood:** 2; **Score:** 10 — now **CLOSED**.
+- **Sign-in sheet observations** (from the rendered last page of Addendum #1; sheet says "PAGE 1 OF 2" so there may be a page 2 we don't yet have):
+  - **6 outside firms attended** the pre-response meeting on 2026-05-20:
+    1. **Ardent United, LLC** — Rusty Cottar (CDO) — rusty@ardent-united.com — 817-320-9854
+    2. **JAJ Property Services** — Michael A. Prince — 325-703-1340
+    3. **Onyx Solutions** — Louis Deluna — louis@onyxsolutions.us — 325-245-7995
+    4. **Advanced Electrical Solutions** — Preston Scher (owner) — preston@advancedelectricalsolutions.us — 325-617-8077
+    5. **Ener-Tel** — Ryan Mathews (sales) — ryan.mathews@ener-tel.com — 325-658-8375
+    6. **Collier Const.** — Dustin Taylor — 325-271-1370
+  - Plus 1 internal ASU attendee: Krista Allison (ASU Facilities Management)
+  - Plus 2 ASU procurement staff on the form: Samuel Guevara + Hannah Bignall (signed SG / HB respectively)
+  - Of the 6 attendees, **Ardent United, JAJ Property Services, Onyx Solutions, and Collier Const. are the likely direct GC competitors**; Advanced Electrical Solutions and Ener-Tel are likely subs (electrical and AV/telecom respectively) — they may be shopping themselves to whichever GC wins.
+  - **No site walk happened at the meeting** per the agenda — slide 7 just shows "PROJECT LOCATION" as a header; the RFCSP says "FPC will briefly conduct a site visit if necessary." We must specifically request our own site walk (see Priority 1A in `03-missing-documents.md`).
+- **What we didn't get from the meeting:**
+  - Slide deck shows agenda items: Project Information, Project Schedule, Proposal Requirements, Evaluation Criteria, Key Reminders & Questions. No Q&A transcript is appended to Addendum #1 — meaning either no substantive Q&A was raised on 5/20 OR the Q&A is captured separately (request from Hannah Bignall whether a Q&A document was issued or is forthcoming).
+  - The "Page 1 of 2" on the sign-in sheet suggests a second sign-in page may exist with additional attendees. Request from Hannah.
+- **Owner:** Bid-prep lead (now informational only)
+- **Status:** ✅ CLOSED — non-issue; bid proceeds without disqualification risk on this dimension. Surface the competitor list (above) to the user; consider whether to phone any of the 4 likely GC competitors as a market-intelligence check.
+
+### R-02 — Owner-furnished scope mis-priced (we double-bid or under-bid) — **PARTIALLY RESOLVED 2026-05-23**
+
+- **Impact:** 5 (unchanged).
+- **Likelihood:** 2 (was 3) — Now have full project manual + drawings + addenda which give us the canonical demarcation: **Division 21 (Fire Suppression) is "NOT USED" in the project manual TOC** — confirms FP is fully outside contractor scope. **Division 14 (Conveying) is "NOT USED"**. Lockers are in Division 10 51 13 — Metal Lockers (A-discipline), so **lockers ARE in our scope** (correct earlier guidance). HUB Subcontracting Plan is required even with zero HUB participation expected.
+- **Score:** 10 (down from 15)
 - **Mitigation:**
-  - **TODAY:** email Samuel Guevara: "Was the 5/20 pre-response conference mandatory for proposers? If not, can a firm that did not attend still submit a responsive proposal? Could you share the sign-in sheet, recording, and Q&A from the meeting?"
-  - Follow up by phone within 24 hours if no email response
-  - If mandatory: surface to user immediately. Options are (a) withdraw from this bid, (b) request waiver in writing from Samuel + Tracie Howell (rare but possible for a TTUS member institution if there wasn't a quorum at the original meeting), (c) hope for an addendum extending the deadline + adding a make-up meeting (also rare)
-- **Owner:** `[USER TO FILL: bid-prep lead]`
-- **Status:** Open — confirmation pending
+  - The contractor-vs-owner table in `04-scope-of-work.md` § A remains canonical; updated per project-manual-confirmed scope.
+  - Brief every sub on the demarcation at quote time — "do NOT include sprinkler work; AV/data cabling pulls + terminations; CBORD reader/controller/strike devices; furniture/FF&E (but DO include the metal-locker package per Div 10 51 13)"
+  - Project manual confirms Div 22 Plumbing, Div 23 HVAC, Div 26 Electrical, Div 27 Communications (pathway only — cable owner-furnished), Div 28 Electronic Safety/Security are in our scope.
+  - **NEW DISCREPANCY TO FLAG:** Project Manual Section 01 10 00 § 1.5 says "Project will be constructed under a **Job Order Contract (JOC)**." This contradicts the RFCSP which calls for a **Construction Services Agreement (CSA) procured via RFCSP under Tex. Gov't Code Ch. 2269**. This is almost certainly a PBK template-boilerplate scrivener's error (PBK does a lot of K-12 JOC work). Flag this clarification to Hannah Bignall — does not change scope but worth noting for risk-on-contract-form post-award.
+  - In the proposal's Assumptions & Clarifications, restate the demarcation explicitly and note the JOC-vs-CSA discrepancy.
+- **Owner:** Estimator
+- **Status:** PARTIALLY RESOLVED — written confirmation from Hannah Bignall still desirable but the project manual + drawings now give us a defensible scope boundary.
 
-### R-02 — Owner-furnished scope mis-priced (we double-bid or under-bid)
+### R-03 — Existing-conditions surprises (hazmat + 1960s/1970s-era MEP) — **STILL OPEN, ELEVATED**
 
-- **Impact:** 5 — The RFCSP lists technology, cabling, equipment install, furniture, AND fire suppression as owner-furnished. If we accidentally price any of these (e.g. include sprinkler-head relocation in our MEP sub's price), we're padded by 5–10% over competitors. If we accidentally exclude something we should have priced (e.g. CBORD rough-in pathway), we're under-bid and we eat the cost.
-- **Likelihood:** 3 — Compounded by the fact that the owner-vs-contractor demarcation is in the RFCSP narrative only — the cleanest version of "where our scope ends and theirs starts" is in the drawings + spec book which we don't have yet.
-- **Score:** 15
-- **Mitigation:**
-  - The contractor-vs-owner table in `04-scope-of-work.md` § A is the canonical demarcation; reconfirm in writing with Samuel before final sub-quotes go out
-  - Brief every sub on the demarcation at quote time — "do NOT include sprinkler work, AV cabling, equipment install, furniture, or FF&E in your number"
-  - When the drawings + specs arrive, do a dedicated read-through with the demarcation table open
-  - In the proposal's Assumptions & Clarifications, restate the demarcation explicitly so any ambiguity is resolved at award rather than mid-construction
-- **Owner:** `[USER TO FILL: estimator]`
-- **Status:** Open — pending drawings + written confirmation from Samuel
-
-### R-03 — Existing-conditions surprises (hazmat + 1960s/1970s-era MEP)
-
-- **Impact:** 4 — Carr EFA is likely a 1960s–1970s building. Each of asbestos VCT/mastic/pipe insulation, galvanized water supply, cast-iron DWV with corroded transitions, undersized electrical service, and surprise plenum obstructions is a five-figure scope adder if present and not bid.
-- **Likelihood:** 4 — TX higher-ed EFA buildings of that era almost always have at least one of these surprises.
-- **Score:** 16
-- **Mitigation:**
-  - Push hard for a site walk via Samuel
-  - Request ASU EHS hazmat survey for Carr EFA
-  - When drawings arrive, look for existing-conditions notes + demo plans line-by-line
-  - Carry an Existing-Conditions / Hazmat allowance of $10K–$25K in the base price (plus a unit-price line for additional abatement if RFCSP requests unit prices)
-  - In the proposal's Assumptions & Clarifications, explicit assumption: "no hazmat abatement budgeted in base pending ASU EHS survey; abatement to be handled via the $25K cash/contingency allowance or change order"
-- **Owner:** `[USER TO FILL: estimator]`
-- **Status:** Open — pending site walk + EHS survey
+- **Impact:** 4 (unchanged).
+- **Likelihood:** 4 (unchanged) — and now confirmed by manual: **Project manual carries Div 02 sections 02 82 00 (Asbestos), 02 83 00 (Lead Hazard Control), and 02 87 13 (PCB Remediation)** as contingent / standby specifications, even though Attachment A also requires a notarized **Affidavit of Non-Asbestos, Lead, and PCB Use** (Sec 00 40 14). The presence of both says PBK and ASU expect the building to be clean BUT have spec sections ready to cover any encounter. Section 00 31 00 (Available Project Information) is referenced in 02 41 00 § 1.3.A as containing "existing building survey conducted by Owner; information about known hazardous materials" — **so ASU does have a hazmat survey we need to read.**
+- **Score:** 16 (unchanged)
+- **Mitigation (revised):**
+  - **#1A in `03-missing-documents.md`:** Push hard for a site walk via Hannah Bignall (now primary) + Samuel Guevara — this week. Bring Estimator + Superintendent + Hazmat-aware sub.
+  - **#1B in `03-missing-documents.md`:** Request Section 00 31 00 hazmat survey content from Hannah Bignall — confirm it accompanies the project manual or is issued separately.
+  - When drawings arrive, look for existing-conditions notes + demo plans line-by-line **— ✅ Done. Demo plan is on AD-401 (1st Level Enlarged Demolition Plans).** Per Drawings Addendum 2, existing 2x4 corridor light fixtures are to be SALVAGED and re-used in the Makeup Room space — this is the only "owner reuse" callout we see; rest of demo is full strip.
+  - Carry an Existing-Conditions / Hazmat allowance of $10K–$25K in the base price unless and until 00 31 00 hazmat survey returns clean.
+  - In the proposal's Assumptions & Clarifications, explicit assumption: "no hazmat abatement budgeted in base pending receipt of Section 00 31 00 Available Project Information from ASU FP&C; abatement to be handled via the $25K cash/contingency allowance OR via change order under UGSC Art. 4 (differing site conditions) OR via the contingent Div 02 sections 02 82 00 / 02 83 00 / 02 87 13 if triggered."
+- **Owner:** Estimator
+- **Status:** Open — pending site walk + Section 00 31 00 hazmat survey from Hannah Bignall.
 
 ### R-04 — HSP good-faith-effort documentation gap
 
@@ -196,14 +207,16 @@
 
 ## E. Bid-level (not document-level) blockers — for the user's go/no-go gate
 
-The user asked to flag any blockers beyond the obvious missing-drawings. These are the bid-level blockers that should be resolved before the user sinks more estimator hours into this bid:
+The user asked to flag any blockers beyond the obvious missing-drawings. These are the bid-level blockers that should be resolved before the user sinks more estimator hours into this bid (2026-05-23 refresh):
 
-1. **R-01 (missed pre-response meeting was mandatory?)** — could be a hard go/no-go gate. Resolve in the first email + call to Samuel.
-2. **R-02 (owner-furnished scope demarcation in writing)** — pricing this bid responsibly without a written owner-vs-GC scope demarcation is hard. Recommend the user request this in writing as part of the Samuel call.
-3. **R-03 (hazmat survey + site walk)** — Carr EFA is old; without a site walk + hazmat survey, the existing-conditions allowance has to be generous which makes us less competitive.
+1. ~~**R-01 (missed pre-response meeting was mandatory?)**~~ — ✅ RESOLVED: meeting was NOT mandatory. Bid proceeds.
+2. **R-02 (owner-furnished scope demarcation)** — ✅ PARTIALLY RESOLVED via project manual TOC + drawings. Written confirmation from Hannah Bignall still nice-to-have but not blocking.
+3. **R-03 (hazmat survey + site walk)** — STILL OPEN, ELEVATED. The contingent Div 02 hazmat sections in the project manual make this even more important. Section 00 31 00 must be requested; site walk this week.
 4. **R-07 (bonding capacity)** — should be confirmed with bonding agent today.
-5. **R-08 (production calendar)** — confirm with Samuel; if Carr EFA is heavily booked during the 7/1–11/2 window, the schedule becomes much tighter and the bid carries more after-hours premium.
-6. **R-13 (prevailing wage escalation)** — confirm whether TTUS has a 2025/2026 prevailing wage update for Tom Green County before locking labor cost basis.
+5. **R-08 (production calendar)** — confirm with Hannah/Samuel; pre-response meeting slide 11 says "Currently none at this time" for university closures, which is encouraging but covers calendar conflicts only — does NOT speak to active Carr EFA performances/rehearsals.
+6. **R-13 (prevailing wage escalation)** — Project Manual Sec 00 73 43 + 00 73 46 still reference the Tom Green County WD; Attachment F.1 (July 2023) is still the operative WD per the project manual. Apply escalation per `prevailing-wages.md`.
 7. **HSP outreach must start TODAY** to be defensible at submission — this is a process-blocker, not a document-blocker.
+8. **NEW — Addendum #1, Drawings Add 1, and Drawings Add 2 acknowledgment** — must check the right boxes on Attachment A § Acknowledgment of Addenda. Update `proposal/08-attachment-A-fill-guide.md`.
+9. **NEW — JOC vs CSA discrepancy in Project Manual § 01 10 00.1.5** — flag to Hannah Bignall as a clarification; does not block bid but should be cleaned up at execution.
 
-**Internal go/no-go.** Make a deliberate go/no-go decision after R-01 / R-02 / R-03 / R-07 / R-08 are resolved (target: end of day 2026-05-25). If any come back negative, walk away early rather than burning estimator hours on a bid that can't be won responsibly.
+**Internal go/no-go.** R-01 is closed. Make a deliberate go/no-go decision after R-03 / R-07 / R-08 are resolved (target: end of day 2026-05-26). If any come back negative, walk away early rather than burning estimator hours on a bid that can't be won responsibly. Now that we have full docs + competitor list (R-01 sign-in sheet), the bid is materially more bid-able than it was on 2026-05-22.
