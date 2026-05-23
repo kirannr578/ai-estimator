@@ -4,7 +4,31 @@
 **Agency:** U.S. Fish & Wildlife Service, Division of Engineering (Construction A/E Team 1, Falls Church VA)
 **Project:** Shop & 2-Stall Garage Building Rehabilitation — Asset #10006277
 **Location:** San Marcos Aquatic Resources Center, 500 East McCarty Lane, San Marcos, TX 78666-1024 (Hays County)
-**Status:** **DRAFT / READY FOR QUANTITIES + SITE VISIT** — full RFP, SOW, bid schedule, and Davis-Bacon WD in hand. Bid-schedule line items are mapped and structured; final pricing waits on (a) the May 27 or 28 site visit, and (b) sub quotes for the four items with no cost-DB hit.
+**Status:** **DRAFT — pending SAM.gov verification + site visit + sub quotes + signatures.** Full RFP, SOW, bid schedule, and Davis-Bacon WD in hand; bid-schedule line items mapped and structured; proposal-side scaffolding (forms guides, narrative skeletons, templates, outreach drafts) under `proposal/` + `outreach/`. Final pricing waits on (a) the May 27 or 28 site visit, and (b) sub quotes for the four items with no cost-DB hit. Final sign-off waits on the firm's SAM.gov verification + bonding agent issuance + authorized signatures.
+
+---
+
+## 🚦 PROPOSAL STATUS — review gates
+
+A senior estimator reviewing Monday morning should confirm each of these is on-track or take corrective action. All gates must be ✅ before the proposal can be submitted on **2026-06-22, 5:00 PM EDT**.
+
+| # | Gate | Date | Owner | Status |
+|---:|---|---|---|---|
+| 1 | **SAM.gov registration verified active** (NAICS 236220 + small at $45M + Reps & Certs within 12-mo cycle + CAGE active + EFT current + TIN matches IRS) — see `outreach/08-internal-sam-gov-verification-checklist.md`. **Gates everything; non-current SAM = non-conforming bid per FAR 52.204-7 + RFP L.1.0.** | EOD Mon 2026-05-24 | Contracts admin / Entity Administrator | ☐ Pending |
+| 2 | **Site visit attended** — measurements lock CLIN 0007 roof SF (~50% of bid), CLIN 0006 gutter LF, CLIN 0002 fixture count, CLIN 0008 heater count; risk premium can stay at LPTA-thin 3–5% only with site-visit measurements. See `outreach/03-email-katherine-bockrath-site-visit-rsvp.md` + `proposal/09-site-visit-attendance-memo.md`. | Wed 2026-05-27 OR Thu 2026-05-28 (8 AM – 4 PM CDT) | PM + estimator | ☐ Pending |
+| 3 | **4 sub quotes returned** — CLINs 0001 (overhead doors), 0005 (gas-line cap), 0006 (gutters), 0008 (unit-heater removal) — see `outreach/05-`, `06-`, `07-`. Target ≥ 2 vendors per CLIN. | Fri 2026-06-05 EOD | PM | ☐ Pending |
+| 4 | **CO RFI responses received** — 7 questions consolidated in `proposal/11-rfi-cover-letter.md`; sent via `outreach/01-` + `02-`. CO responses issued as SF 30 amendments on SAM.gov. | Before Mon 2026-06-08, 5:00 PM EDT (RFI cutoff) | PM (sends 6/1); CO (responds by 6/8) | ☐ Pending |
+| 5 | **Bonding commitment + bid bond issued** — bondability letter on T-Circular-570 surety letterhead per `proposal/06-bondability-letter-template.md`; bid bond SF 24 at ~$34K penal amount per `proposal/07-bid-bond-form-template.md`. See `outreach/04-email-bonding-agent.md`. | Wed 2026-06-17 EOD | Bonding agent (order Mon 5/24; surety turnaround 3–5 business days) | ☐ Pending |
+
+**Submission method (verified against RFP):** EMAIL (NOT sealed envelope by courier). This is a FAR Part 15 negotiated RFP, not a Part 14 IFB. Two PDFs (Volume I Price + Volume II Technical) attached to one email; subject line `Proposal Submission-140FC126R0017`; sent to `john_ferrall@fws.gov` AND `john_ferrall@ios.doi.gov` (RFP p.3 vs L.1.2 give different addresses — see RFI #1); copy to `Tracy_Gamble@fws.gov`. Wet-ink original of bid bond may need to follow electronically-submitted scan by mail unless surety issues an e-bond. See `proposal/10-submission-checklist.md` for the full submission day mechanics.
+
+**LPTA-thin price-floor recommendation:** Carry the existing **$150K–$170K bid envelope** from `06-evaluation-strategy.md` § C ($160K mid-target, 5–7% net profit). Reconfirm or refine after site-visit measurements and sub quotes land. Direct-cost midpoint per `05-bid-schedule-mapping.md` § A is $58,720; after ~35% markup (GCs + bonds + insurance + contingency + OH + profit per `06-evaluation-strategy.md` § C), the indicative bid is in the $130K–$175K range, consistent with the recommended target.
+
+**Single biggest gate blocking submission:** **Gate #1 — SAM.gov verification.** Without an active SAM registration, the bid is non-responsive on its face per FAR 52.204-7 + RFP L.1.0, regardless of pricing or any other factor. SAM updates take 3–10 business days; latest acceptable fix-start is 2026-06-12, but earlier is much safer. All other gates have workarounds (raise contingency, ask CO for site-visit accommodation, escalate to backup surety, etc.); this one does not.
+
+**Proposal package:** see `proposal/00-readme.md` for the volume-by-volume table of contents and the file-level guide. Outreach drafts: see `outreach/`. Pricing scaffold: see `price-sheet-skeleton.json`.
+
+---
 
 ---
 
@@ -82,8 +106,9 @@
 
 ```
 bids/usfws-san-marcos-140FC126R0017/
-├─ README.md                          ← you are here
-├─ 01-overview.md
+├─ README.md                          ← you are here (PROPOSAL STATUS at top)
+│
+├─ 01-overview.md                     ── prep workspace (existing, untouched)
 ├─ 02-bid-prep-checklist.md
 ├─ 03-missing-documents.md
 ├─ 04-scope-of-work.md
@@ -95,7 +120,33 @@ bids/usfws-san-marcos-140FC126R0017/
 ├─ price-references.md
 ├─ contacts.md
 ├─ timeline.md
-└─ prevailing-wages.md
+├─ prevailing-wages.md
+│
+├─ price-sheet-skeleton.json          ── pricing scaffold (8 CLINs in published order; markup rollup; allocation example)
+│
+├─ proposal/                          ── proposal-side package (DRAFT)
+│  ├─ 00-readme.md                       package overview + 5 gates
+│  ├─ 01-volume-I-price-proposal.md     SF 1442 + Schedule of Prices assembly
+│  ├─ 02-volume-II-technical-acceptability.md  MINIMAL Pass/Fail narrative
+│  ├─ 03-volume-III-past-performance.md 2 prior-project template
+│  ├─ 04-SF-1442-fill-guide.md          blocks 14–20C
+│  ├─ 05-reps-and-certs-pull-guide.md   12-step SAM pull
+│  ├─ 06-bondability-letter-template.md surety letter (T-Circular-570)
+│  ├─ 07-bid-bond-form-template.md      SF 24 mechanics + penal calc
+│  ├─ 08-dba-compliance-acknowledgment.md WD TX20260254 + WH-347 commit
+│  ├─ 09-site-visit-attendance-memo.md  5/27 or 5/28 capture template
+│  ├─ 10-submission-checklist.md        6/22 hard checklist + email body
+│  └─ 11-rfi-cover-letter.md            7 consolidated RFI questions
+│
+└─ outreach/                          ── ready-to-send email drafts
+   ├─ 01-email-tracy-gamble-rfi-consolidated.md
+   ├─ 02-email-drew-ferrall-rfi-cc.md  dual-address strategy doc
+   ├─ 03-email-katherine-bockrath-site-visit-rsvp.md
+   ├─ 04-email-bonding-agent.md
+   ├─ 05-email-sub-quote-overhead-doors.md      CLIN 0001
+   ├─ 06-email-sub-quote-gas-line.md            CLINs 0005 + 0008
+   ├─ 07-email-sub-quote-gutters.md             CLIN 0006
+   └─ 08-internal-sam-gov-verification-checklist.md  Gate #1 — Mon 5/24
 ```
 
-`local/` — if you create a sibling `bids/usfws-san-marcos-140FC126R0017/local/` folder for sub-quote PDFs, bonding paperwork, site-visit photos, or scratch sheets, it is gitignored via the workspace `.gitignore` rule `bids/*/local/`.
+`local/` — if you create a sibling `bids/usfws-san-marcos-140FC126R0017/local/` folder for sub-quote PDFs, bonding paperwork, site-visit photos, signed forms, or scratch sheets, it is gitignored via the workspace `.gitignore` rule `bids/*/local/`.
