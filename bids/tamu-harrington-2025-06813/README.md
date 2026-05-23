@@ -8,6 +8,43 @@
 
 ---
 
+## PROPOSAL STATUS
+
+> **`DRAFT — BLOCKED ON eBUILDER ACCESS + ELIGIBILITY CONFIRMATION`**
+>
+> Proposal-draft scaffold lives in `proposal/`. Ready-to-send outreach lives in `outreach/`. The proposal cannot move out of DRAFT state until the three-row go/no-go gate below closes green.
+
+### Go / no-go gate (sequential — each row blocks the next)
+
+| # | Gate | Trigger | Deadline | If miss |
+|---|---|---|---|---|
+| 1 | **Eligibility confirmed** post-missed 5/14 pre-proposal meeting | Joelle Shidemantle (SSC PM) confirms in writing that a non-attending firm can still submit a responsive proposal | **EOD Mon 2026-05-24** | If pre-proposal meeting was mandatory and there is no late-arriver accommodation: **walk away** |
+| 2 | **e-Builder CSP package downloaded + scanned** | Full CSP package pulled from e-Builder portal: drawings sheet count > 0, specs enumerated, pricing form + HSP form + sample CSA + TAMU SGC identified | **EOD Tue 2026-05-26** (within 24 hrs of G1 close) | If portal still gated by Wed 5/27, escalate to TAMU System OFPC; if no path by Thu 5/28, **walk away** |
+| 3 | **Internal go/no-go meeting** | PM + estimator + safety lead review now-known scope (esp. lab-utility extent), schedule, and HSP feasibility; deliver decision | **EOD Tue 2026-05-26** | If no-go: archive folder under `local/`, notify Joelle as a no-bid courtesy |
+
+**If any of the three gates slip, the bid is not viable and we walk.**
+
+### Single most important action Monday 8 AM
+
+Send `outreach/01-email-joelle-shidemantle-eligibility.md` (to BOTH spellings of her address). This single email is the gating action for the whole bid. See `proposal/00-readme.md` § 2 for the full BIG MISSING ITEMS list.
+
+### Proposal-package contents (under `proposal/`)
+
+`00-readme.md` · `01-executive-summary.md` · `02-technical-approach.md` · `03-project-team.md` · `04-past-performance.md` · `05-schedule-narrative.md` · `06-quality-control-plan.md` · `07-safety-plan.md` · `08-csp-proposal-form-fill-guide.md` · `09-hsp-form-fill-guide.md` · `10-price-proposal.md` · `11-submission-checklist.md` · `12-bid-bond-letter-template.md`
+
+### Outreach-package contents (under `outreach/`)
+
+`01-email-joelle-shidemantle-eligibility.md` (🔴 PRIMARY — send Mon 8 AM) · `02-email-joelle-shidemantle-csp-access.md` (follow-up) · `03-email-fred-patterson-drawings.md` · `04-email-patty-winkler-hub.md` · `05-email-bonding-agent.md` · `06-email-insurance-broker.md` · `07-call-script-joelle-shidemantle.md` (phone-backup) · `08-q-and-a-submission.md` (hold until G2)
+
+### What's draftable now vs blocked
+
+- **Draftable now** — narrative sections (Executive Summary template, Technical Approach skeleton + lab-specific considerations, Project Team template, Past Performance template, Schedule narrative with assumed substantial-completion, QC plan, Safety plan, Submission checklist, Bid-bond letter template); all 8 outreach emails; price-sheet skeleton (CSI-grouped, quantity=null).
+- **Blocked on G1 eligibility** — every estimator hour beyond what's already in the prep workspace. Until eligibility confirms, do not sink more time.
+- **Blocked on G2 CSP package** — real takeoff quantities; actual TAMU CSP Proposal Form layout; actual TAMU SGC insurance limits and LD rates; actual TAMU HSP form; addenda; pricing form line items.
+- **Blocked on lab-utility scope clarification** — final price envelope (varies 2× between finishes-only and wet-lab tier).
+
+---
+
 ## Headline numbers
 
 | Item | Value | Source |
@@ -81,10 +118,34 @@ bids/tamu-harrington-2025-06813/
 ├─ 05-hsp-plan.md
 ├─ 06-evaluation-strategy.md
 ├─ 07-risk-register.md
-├─ takeoff-template.json
+├─ takeoff-template.json              ← line-item takeoff skeleton (per row of scope)
+├─ price-sheet-skeleton.json          ← CSI-grouped pricing-form skeleton (per row of CSP pricing form)
 ├─ price-references.md
 ├─ contacts.md
-└─ timeline.md
+├─ timeline.md
+├─ proposal/                          ← proposal-draft package (13 markdown files)
+│  ├─ 00-readme.md
+│  ├─ 01-executive-summary.md
+│  ├─ 02-technical-approach.md
+│  ├─ 03-project-team.md
+│  ├─ 04-past-performance.md
+│  ├─ 05-schedule-narrative.md
+│  ├─ 06-quality-control-plan.md
+│  ├─ 07-safety-plan.md
+│  ├─ 08-csp-proposal-form-fill-guide.md
+│  ├─ 09-hsp-form-fill-guide.md
+│  ├─ 10-price-proposal.md
+│  ├─ 11-submission-checklist.md
+│  └─ 12-bid-bond-letter-template.md
+└─ outreach/                          ← ready-to-send outreach drafts (8 files)
+   ├─ 01-email-joelle-shidemantle-eligibility.md   ← 🔴 PRIMARY — send Mon 8 AM
+   ├─ 02-email-joelle-shidemantle-csp-access.md
+   ├─ 03-email-fred-patterson-drawings.md
+   ├─ 04-email-patty-winkler-hub.md
+   ├─ 05-email-bonding-agent.md
+   ├─ 06-email-insurance-broker.md
+   ├─ 07-call-script-joelle-shidemantle.md
+   └─ 08-q-and-a-submission.md
 ```
 
 `local/` — if you create a sibling `bids/tamu-harrington-2025-06813/local/` folder for sub-quote PDFs, bonding-agent paperwork, scratch spreadsheets, or anything else that shouldn't be committed, it is gitignored via the workspace `.gitignore` rule `bids/*/local/`.
