@@ -7,24 +7,27 @@
 
 ## A. Project understanding
 
-The Harrington Education Center Lab 303 Renovation is a **single-room renovation of an active educational laboratory space** in Bldg 0435 on TAMU's College Station campus. The Notice describes the project simply as "303 Science Education Classroom/Lab Renovation"; the full scope detail lives in the architectural and MEP drawing sets behind the e-Builder Public Landing portal `[PENDING e-BUILDER ACCESS]`.
+The Harrington Education Center Lab 303 Renovation is a **single-room renovation of an active educational laboratory space** at **540 Ross Street, Harrington Tower (Bldg #0435)** on TAMU's College Station campus. The project is designed by **Patterson Architects** (PA Project No. 2605, Bryan, TX) with MEP by **River MEP, LLC** (Navasota, TX). Drawings are **Issued for Construction, dated 5/7/2026** — 10 sheets total (A0.1, A0.2 TAS, A0.3 TAS, A2.1 Floor Plans, A2.2 Ceiling Plan & Details, MEP1.0 MEP Specifications, M1.1 Mechanical Plan, E1.1 Electrical Demo, E1.2 Electrical Plans, P1.1 Plumbing Plans).
 
-Our project understanding, pending portal access:
+Our project understanding, post-portal-pull (2026-05-23):
 
-1. **Interior-only scope** — no structural modifications, no envelope work, no roof. Slab and overhead structure stay.
-2. **Single room** — Lab 303 only. The Notice scopes work to that room number. We will not assume corridor or adjacent-room work without confirmation.
-3. **Active-occupancy condition** — Harrington Education Center is an operating academic / office tower. Adjacent rooms continue normal use during construction. Dust containment, vibration management, after-hours scheduling for noisy or odor-generating work, and EHS-coordinated shutdown windows are required.
-4. **Lab utility coordination** — the room's program (classroom vs lab vs hybrid) drives 25–40% of cost variance. Lab utilities (DI water, lab gas, vacuum, compressed air, fume hood exhaust, eye-wash + safety shower) are **scope items pending MEP drawing confirmation**. We have priced a reasonable mid-tier "science classroom-lab" baseline and listed lab-utility specifics as `[PENDING e-BUILDER ACCESS]` clarifications.
-5. **Owner-furnished items** — typical TAMU lab work assumes the owner furnishes major lab equipment (fume hoods, balances, instruments, lab refrigerators); the GC roughs in utilities only. Low-voltage cabling and terminations are typically furnished and installed by TAMU Technology Services; the GC provides pathway only.
+1. **Interior-only scope** — no structural modifications, no envelope work, no roof. Slab and overhead structure stay. Spec Divisions 03 (Concrete), 04 (Masonry), 05 (Metals), 31 (Earthwork), 32 (Exterior), 33 (Utilities) all explicitly **NOT USED**.
+2. **Single room** — Lab 303 only. Drawings cover only Lab 303 in Harrington Tower.
+3. **Active-occupancy condition** — Harrington Tower is an operating academic tower. Spec Section 01 41 00 "General Requirements for Renovation Work" (5 pp) governs renovation procedures; Section 01 50 00 (9 pp) governs temporary facilities. Adjacent rooms continue normal use during construction. Dust containment, vibration management, after-hours scheduling for noisy or odor-generating work, and SSC/TAMU-coordinated shutdown windows are required.
+4. **No fume hood / no lab equipment in GC scope** — Spec Division 11 "Equipment" is **NOT USED**. The "lab" portion of the program is a teaching classroom-lab with lab sinks (per P1.1) but not a wet/heavy chemistry lab. This **rules out the high-tier price envelope** and substantially derisks the schedule (no 12–16 week fume hood lead time on the critical path).
+5. **No new doors or hardware** — Spec Division 08 "Doors and Windows" is **NOT USED**. Existing classroom door, frame, and hardware remain.
+6. **No casework spec in project manual; casework appears to be a deferred design or H2I sub-bid (Sub-06 file, posted 5/13 on the portal, currently blocked at our end by network policy — re-share requested via outreach 01).** Division 06 in the project manual is limited to 06 10 00 Rough Carpentry (5 pp). A casework allowance is carried in the price; refined upon H2I file retrieval.
+7. **Asbestos handling is procedurally scoped** in Spec Section 02 26 23 (15 pp). We assume a clearance certificate is in place or that asbestos abatement, if encountered, proceeds per that procedure. A modest asbestos abatement allowance ($3K–$10K) is carried in the base bid.
+8. **Owner-furnished items** — TAMU Technology Services furnishes and installs all low-voltage cabling, terminations, jacks, patch panels, and active gear. GC scope ends at the pathway (conduit, J-box, ring-and-string). AV equipment is OFOI per the typical TAMU pattern.
 
 ## B. Phased work plan (60–90 calendar days, single-shift baseline)
 
 ### Phase 0 — Pre-construction (NTP through Day 14)
 
-- Notice to Proceed + contract execution
-- Pre-construction meeting with SSC PM (Joelle Shidemantle), A/E (Patterson Architects), TAMU EHS, TAMU Facilities Services, TAMU Technology Services
-- TAMU EHS clearance / hazardous-materials survey review for Bldg 0435 Lab 303 (`[PENDING e-BUILDER ACCESS: confirm whether a survey is in the bid package or whether it is performed pre-NTP]`)
-- Submittal package: casework shop drawings, lab fixture cut sheets, lighting cut sheets, low-voltage pathway routing, paint colors against TAMU finish standard, MEP shop drawings
+- Notice to Proceed + contract execution (per SSC UGSC Section 00 72 00)
+- Pre-construction meeting with SSC PM (Joelle Shidemantle, `Joelle.Shidemantle@sscserv.com`, (979) 286-3497), A/E (Fred Patterson, Patterson Architects), MEP (George, River MEP LLC), TAMU EHS, TAMU Facilities, TAMU Technology Services
+- TAMU EHS clearance review for Bldg 0435 Lab 303 per Spec Section 02 26 23 Asbestos Assessment procedure
+- Submittal package per Spec Section 01 33 00 (3 pp) and 01 34 00 (9 pp Shop Drawings, Product Data and Samples): casework shop drawings (per H2I or alternate sub), lab fixture cut sheets, lighting cut sheets, low-voltage pathway routing, paint colors against TAMU finish standard, MEP shop drawings
 - Long-lead order placement (see § E)
 - Site logistics plan: dumpster placement (TAMU-approved location, coordinated with Joelle), loading-dock route, walk-off matting, dust-containment perimeter
 - Site signage and life-safety walk
@@ -42,37 +45,36 @@ Our project understanding, pending portal access:
 
 - Metal-stud framing for any new or furred partitions (if scope)
 - Electrical rough-in: branch wiring for lab benches (dedicated 20A circuits, GFCI within 6' of any sink), classroom lighting controls (occupancy + daylight + dimming where applicable), low-voltage pathway (conduit, J-boxes, ring-and-string for TAMU Tech Services cable pull)
-- Plumbing rough-in: lab fixture supply + waste piping, eye-wash + safety shower rough-in, `[PENDING e-BUILDER ACCESS: DI water tap, lab gas, acid waste piping if specified]`
-- HVAC modifications: diffuser/grille relocation per new RCP, VAV box retrim, `[PENDING e-BUILDER ACCESS: fume hood exhaust modifications, lab makeup-air balance if specified]`
-- Fire suppression: sprinkler head relocation per new ceiling layout (NICET-certified sub; EHS shutdown windows)
+- Plumbing rough-in per P1.1: lab fixture supply + waste piping, eye-wash + safety shower rough-in (if shown on P1.1)
+- HVAC modifications per M1.1 + MEP1.0: diffuser/grille relocation per new RCP (A2.2), VAV box retrim. **No fume hood scope** — Spec Division 11 NOT USED.
+- Fire suppression: sprinkler head relocation per new ceiling layout. **No Div 21 spec or FP sheets in the package** — proceed via (a) deferred submittal proposed in this Technical Proposal, or (b) coordination with the existing TAMU building sprinkler vendor on T&M (NICET-certified) with EHS-coordinated shutdown windows.
 - Inspections: in-wall electrical inspection, plumbing rough-in inspection, fire suppression hydrostatic test, framing inspection
 
 ### Phase 3 — Finishes (Day 40–70)
 
-- Drywall hang + finish (level 4 typical for paint-grade)
-- Acoustical ceiling grid + tile install (full 2x4 lay-in replacement)
-- Painting (2-coat institutional latex, low-VOC; epoxy in any washdown lab zone per finish schedule)
-- Flooring install: LVT in classroom zone, chemical-resistant sheet vinyl with heat-welded seams in any wet-lab zone (per finish plan)
+- Drywall hang + finish (level 4 typical for paint-grade) per Spec 09 22 00
+- Acoustical ceiling grid + tile install per Spec 09 51 00 (full 2x4 lay-in replacement, per A2.2)
+- Painting per Spec 09 91 00 (2-coat institutional latex, low-VOC)
+- Resilient flooring install per Spec 09 65 00 (single spec — type per A2.1 finish plan)
 - Resilient base
-- Lab-grade casework install (after cabinetry shop-fab is complete; lead time per § E)
-- Lab work tops (phenolic or epoxy) installed on casework
-- Plumbing fixture set (lab sinks, faucets, eye-wash + safety shower)
-- Electrical trim (devices, plates, light fixtures, controls programming)
+- Lab casework install (per A2.1/A2.2 details + H2I Sub-06 specifics once retrieved)
+- Plumbing fixture set per P1.1 (lab sinks, faucets, eye-wash + safety shower if shown)
+- Electrical trim per E1.2 (devices, plates, light fixtures, controls programming)
 - Low-voltage pathway termination; TAMU Tech Services cable pull and termination
-- Door + frame + hardware install (if in scope)
-- Specialties: room signage (ADA-compliant), marker board, tackable wall panels, fire extinguishers, eyewash/shower signage
+- **No new doors / hardware** — Division 08 NOT USED; existing door stays
+- Specialties per Spec 10 14 00: room signage (ADA-compliant per A0.2/A0.3 TAS sheets)
 
 ### Phase 4 — Closeout (Day 65–90)
 
-- Test, Adjust, Balance (TAB) report for HVAC
+- Test, Adjust, Balance (TAB) report for HVAC per MEP1.0
 - Fire alarm + sprinkler reconnect, full system test, EHS sign-off
-- Punch list walk with A/E, SSC PM, TAMU Facilities
-- Punch list completion
-- Final cleaning (lab-grade — no construction residue on bench tops or in fume-hood interiors)
-- O&M manuals, attic stock, training (lab fixture maintenance, lighting controls)
+- Punch list walk with A/E, SSC PM, TAMU Facilities per SSC UGSC Article 12
+- Punch list completion per Spec Section 01 77 00 Closeout Procedures
+- Final cleaning (lab-grade — no construction residue on bench tops)
+- O&M manuals, attic stock, training per Spec Section 01 78 23 (Operation and Maintenance Data, 4 pp) + Section 01 78 20 (Facilities Management Data, 11 pp)
 - As-built drawings
 - TAMU EHS final clearance
-- Substantial Completion, Certificate of Occupancy (if required), final payment + retainage release per TAMU SGC
+- Substantial Completion + **30-day fixed Final Completion window** (per CSP §00 42 13); final payment + retainage release per SSC UGSC Article 10 + 12
 
 ## C. Lab-specific considerations (the pain-points worth pricing for)
 
@@ -89,43 +91,45 @@ This is the differentiator. Most GCs treat single-room labs like classroom finis
 
 ## D. Coordination with the academic calendar
 
-The Notice lists Project Start and Project Finish as "TBD." The CSP package likely publishes a more specific period of performance. We assume one of the two typical TAMU windows:
+The CSP package leaves Project Start and Substantial Completion as "TBD" — proposers select their own Substantial Completion duration in CSP Part 1 (Section 00 42 13), and this is scored at 10% of the evaluation per CSP §00 21 00 ¶11.2. Final Completion is fixed at 30 calendar days after Substantial Completion.
 
-- **Summer-to-fall window:** NTP early-to-mid June, substantial completion before late-August (start of fall semester). 60-day duration achievable for a finishes-and-light-MEP scope; tight for heavy-lab scope.
-- **Fall-to-spring window:** NTP late October, substantial completion mid-January (start of spring semester). 75–90 day duration comfortable.
+Our proposed duration: **70 calendar days from NTP to Substantial Completion**, plus 30 calendar days to Final Completion (100 calendar days total). See `05-schedule-narrative.md` for the trade-sequenced Gantt with EHS-shutdown windows and casework lead time built in.
 
-Until the CSP package confirms `[PENDING e-BUILDER ACCESS]`, we have planned against a **70-calendar-day substantial-completion target** with built-in float for EHS-shutdown windows and lab-utility coordination. See `05-schedule-narrative.md` for the trade-sequenced Gantt.
+Most likely academic-calendar windows:
 
-If the CSP package fixes a substantial-completion date that does not allow the duration we have planned, we will reduce duration via second-shift / after-hours acceleration; the cost impact is reflected in unit-price line "shift premium" `[PENDING e-BUILDER ACCESS: confirm unit-price line items]`.
+- **Summer-to-fall window:** NTP early-to-mid June, Substantial Completion ~late-August (start of fall semester) — 70-day commitment fits comfortably.
+- **Fall-to-spring window:** NTP late October, Substantial Completion ~mid-January (start of spring semester) — 70-day commitment fits with built-in holiday float.
 
 ## E. Long-lead items + procurement plan
 
 | Item | Typical lead time | Order placement target | Risk if missed |
 |---|---|---|---|
-| Lab-grade casework (plastic-laminate base + wall cabs) | 8–10 weeks fabricated, 10–12 weeks with custom configuration | Day 5 post-NTP | Schedule slip on Phase 3 finishes |
-| Phenolic / epoxy resin work tops | 8–10 weeks | Day 5 post-NTP | Same |
-| Fume hood (if in scope) | 12–16 weeks | Day 1 post-NTP — critical-path item | Major schedule risk; potentially knocks 4–6 weeks off the float |
+| Lab casework (per A2.1/A2.2 + H2I Sub-06 specifics) | 8–10 weeks fabricated; 10–12 weeks with custom configuration | Day 5 post-NTP | Schedule slip on Phase 3 finishes |
+| Lab work tops (resin / chemical-resistant) | 8–10 weeks | Day 5 post-NTP | Same |
 | Lab fixtures (faucets, gooseneck spouts, eye-wash + safety shower) | 6–8 weeks | Day 10 post-NTP | Manageable; carry stock alternates |
-| Specialty doors (lab-rated, if specified) | 8–12 weeks | Day 5 post-NTP | Schedule slip |
-| Lab gas regulator + outlet trim | 4–6 weeks | Day 10 post-NTP | Manageable |
-| LED lighting fixtures + controls | 4–6 weeks | Day 5 post-NTP | Manageable |
-| Sprinkler heads (recessed, white-cover) | 2–4 weeks | Day 15 post-NTP | Minor |
+| LED lighting fixtures + controls per E1.2 | 4–6 weeks | Day 5 post-NTP | Manageable |
+| Sprinkler heads (recessed, white-cover) — coordinated with existing TAMU sprinkler vendor | 2–4 weeks | Day 15 post-NTP | Minor |
+| HVAC diffusers / grilles + VAV retrim per M1.1 | 4–6 weeks | Day 5 post-NTP | Manageable |
 
-If the CSP package or addenda push our NTP later than mid-June, the fume-hood and casework lead times become the binding schedule constraint. We will surface this in the pre-construction meeting with Joelle.
+**No fume hood on critical path** — Division 11 NOT USED in spec → eliminates the historical biggest single-room lab schedule risk. The binding lead-time constraint is now casework (8–12 weeks), which sets the **earliest Substantial Completion at ~70 days** for a clean NTP-to-finishes sequence.
 
 ## F. Assumptions + clarifications
 
-We submit this proposal subject to the following assumptions. If any prove false at the pre-construction meeting or during construction, the resulting scope adjustment will be handled per the change-order procedure in the TAMU SGC `[PENDING e-BUILDER ACCESS: confirm change-order article reference]`.
+We submit this proposal subject to the following assumptions. If any prove false at the pre-construction meeting or during construction, the resulting scope adjustment will be handled per the change-order procedure in SSC UGSC Article 11 (Changes).
 
-1. **Room area** assumed to be approximately 1,200 SF (typical for a TAMU office-tower lab; could be 800–1,500 SF). Bid will be reconfirmed against measured drawing area on G2 close.
-2. **No structural modifications.** Slab, structural beams, columns, and exterior walls unchanged.
-3. **No envelope work.** Windows, exterior doors, roof, exterior insulation unchanged.
-4. **No hazardous-materials abatement budgeted in the base bid** pending TAMU EHS clearance survey for Bldg 0435 Lab 303. If lead, asbestos, or PCB-containing materials are identified by EHS, abatement is added per unit-price line or change order.
-5. **Lab utility scope** assumed to include lab sinks, eye-wash + safety shower, and standard lab-bench electrical only. DI water tap, lab gas, vacuum, acid waste, and fume hood are **not in the base bid** until the MEP drawings confirm scope `[PENDING e-BUILDER ACCESS]`. These items are carried on the unit-price form and added by change order if confirmed.
-6. **Working-hours envelope** assumed to be 7 AM – 5 PM weekdays for routine work; after-hours (5 PM – 11 PM weekdays, Saturday and Sunday) for any noisy or odor-generating tasks. After-hours premium labor is reflected in the base bid.
-7. **EHS shutdown windows** assumed to be available within 2 weeks of request, in 4-hour blocks, with 2-week notice.
-8. **TAMU Technology Services** furnishes and installs all low-voltage cabling, jacks, terminations, patch panels, and active gear. GC scope ends at the pathway.
-9. **Substantial completion** targeted at 70 calendar days from NTP; final completion + closeout at 100 calendar days. Subject to CSP package adjustment.
-10. **Owner-furnished items** assumed to include all major lab equipment (fume hood interiors, instruments, scopes, balances), AV equipment (projectors, displays, ceiling speakers, microphone arrays), and any architectural signage beyond ADA room ID.
-11. **Patterson Architects RFI turnaround** assumed at 5 business days. Slower turnaround will be flagged via the change-order procedure.
-12. **No after-bid value-engineering deductions are offered with this proposal.** Any post-award scope refinements are addressed in our separate cover memo (not the priced base bid).
+1. **Room area** measured from drawing A2.1 (`[USER TO FILL: actual SF after Bluebeam measure]`); price scaled accordingly.
+2. **No structural modifications** — confirmed by spec (Divs 03–05 NOT USED).
+3. **No envelope work** — confirmed by spec (Divs 31–33 NOT USED).
+4. **Asbestos handling per Spec Section 02 26 23**, with a modest abatement allowance ($3K–$10K) in the base bid. If the room is fully cleared by TAMU EHS prior to NTP, the allowance returns to the owner via change order.
+5. **Lab utility scope** per drawings (P1.1 plumbing, M1.1 mechanical, MEP1.0 specifications). **No fume hood** — Div 11 NOT USED. DI water / lab gas / acid waste / vacuum only if shown on P1.1 (carried per the takeoff).
+6. **No new doors or hardware** — Division 08 NOT USED; existing door + frame + hardware remain.
+7. **Casework scope** per A2.1/A2.2 details and the H2I Sub-06 file (currently pending re-share from Joelle); carried as a $20K–$60K allowance in the base bid pending H2I retrieval.
+8. **Fire suppression** handled either as deferred-submittal (a) or via the existing TAMU building sprinkler vendor on T&M (b); modest allowance ($1K–$5K) in the base bid.
+9. **Working-hours envelope** assumed to be 7 AM – 5 PM weekdays for routine work; after-hours (5 PM – 11 PM weekdays, Saturday and Sunday) for any noisy or odor-generating tasks. After-hours premium labor reflected in the base bid.
+10. **EHS shutdown windows** assumed to be available within 2 weeks of request, in 4-hour blocks, with 2-week notice.
+11. **TAMU Technology Services** furnishes and installs all low-voltage cabling, jacks, terminations, patch panels, and active gear. GC scope ends at the pathway.
+12. **Substantial Completion** targeted at **70 calendar days from NTP**; Final Completion + closeout at **100 calendar days** (30-day fixed window per CSP §00 42 13).
+13. **Owner-furnished items** assumed to include all lab instruments, balances, AV (projector, display, ceiling speakers, microphone arrays).
+14. **Patterson Architects + River MEP RFI turnaround** assumed at 5 business days. Slower turnaround will be flagged.
+15. **Proposal valid 90 calendar days** post-submittal per CSP §00 42 13.
+16. **No bid bond required** (CSP §00 42 13 does not call for one). Performance + Payment bonds will be furnished at award per Spec Sections 00 61 13 + 00 61 14.

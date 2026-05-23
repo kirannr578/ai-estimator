@@ -1,16 +1,24 @@
 # Contacts — TAMU Harrington Lab 303 (Sol 2025-06813)
 
-> All names, emails, and phone numbers below are **verbatim from the Notice of Project PDF** (`inbox/opportunities/attachments/2026-05-21/ESBD_514190_..._2025-06813_Notice of Project-CS_26.05.08.pdf`) unless otherwise noted.
+> Sources, in order of authority:
+> 1. **CSP package downloaded from the e-Builder portal on 2026-05-23** — Section 00 21 00 "Instructions for CSP", paragraph 3.0 (`inbox/opportunities/attachments/2026-05-21/tamu-csp/Harrington_Lab303_Specifications.pdf`)
+> 2. **ESBD posting** at `https://www.txsmartbuy.gov/esbd/SSC-2025-06813` (refresh dated 2026-05-14)
+> 3. **Notice of Project PDF** (`inbox/opportunities/attachments/2026-05-21/ESBD_514190_..._2025-06813_Notice of Project-CS_26.05.08.pdf` and the portal copy at `inbox/opportunities/attachments/2026-05-21/tamu-csp/Notice_of_Project_2026-05-08.pdf`)
+>
+> Where the CSP package contradicts the ESBD or the Notice, **the CSP package wins** — the CSP package is the legally-binding solicitation.
 
 ---
 
-## A. Project POCs (from the Notice)
+## A. Project POCs (authoritative — from CSP Section 00 21 00 ¶3.0)
 
 | Role | Name | Email | Phone | What to ask |
 |---|---|---|---|---|
-| **SSC Project Manager** (owner of the CSP package) | Joelle Shidemantle | `Joelle.Shidementle@sscserv.com` ⚠️ note the email-as-published is `Shidementle` (vowel transposed). Try both `Joelle.Shidemantle@sscserv.com` and `Joelle.Shidementle@sscserv.com`; confirm working address on first reply. | (979) 286-3497 | CSP package access, pre-proposal meeting record (we missed 5/14), site walk request, schedule expectations, working-hours envelope, EHS coordination process |
-| **A/E (Project Design)** | Fred Patterson, Patterson Architects | `fred@patarch.com` | (979) 229-7790 | Drawing set, existing-conditions information, room dimensions, MEP scope clarifications, lab utility program |
-| **HUB Operations (TAMU)** | Patty Winkler | `p-winkler@tamu.edu` | (979) 845-4556 | HSP form template, project-specific HUB goal (vs statewide 21.1%), GFE expectations, PAR reporting form |
+| **SSC Project Manager** (owner of the CSP package, proposal-process questions) | Joelle Shidemantle | `Joelle.Shidemantle@sscserv.com` ✅ **spelling CONFIRMED from CSP package** — the Notice-as-published had a typo (`Shidementle`), but Joelle's actual address per the CSP cover instructions is `Joelle.Shidemantle@sscserv.com` (one `m`, two `e`s). The 2026-05-14 ESBD refresh fixed the typo. | (979) 286-3497 | CSP package access, pre-proposal meeting record (we missed 5/14), site walk request, schedule expectations, working-hours envelope, EHS coordination process |
+| **TAMU Procurement (solicitation officer)** | Cherise Toler | `ctoler@tamu.edu` | (979) 845-5887 | **TAMU-side parallel path** if Joelle / SSC channel is non-responsive. Cherise is the official TAMU-system procurement contact for the solicitation per ESBD; she can route eligibility, addenda, and procedural questions to the appropriate TAMU office. Use as escalation, not first-touch — Joelle remains the primary. |
+| **A/E (Project Design — Architecture)** | Fred Patterson, Patterson Architects | `fred@patarch.com` | (979) 229-7790 | Drawing set, existing-conditions information, room dimensions, MEP scope clarifications, lab utility program. Office at 701 South Texas Avenue, Bryan, TX 77803, (979) 775-6036. |
+| **A/E (Project Design — MEP engineer)** | George, River MEP LLC | `george@rivermep.com` | (979) 217-1810 | MEP-specific scope questions (lab gas, DI, plumbing rough, electrical sub-panel, mechanical retrim). Office at 14252 CR 318, Navasota, TX. Discovered on drawings A0.1 / MEP1.0 in the portal CSP package. |
+| **TAMU HUB Operations (per CSP package — supersedes Notice)** | Brittany Crawley | `BrittanyFew@tamu.edu` | (979) 845-9010 | Subcontracting plan form (TX State Subcontracting Plan, Rev. 5/26 — uses VetHUB framework, not the older HUB Subcontracting Plan), GFE expectations, PAR reporting form. **CSP package authoritative — the Notice's listing of Patty Winkler is superseded; route HUB questions to Brittany.** |
+| **TAMU HUB Operations (Notice — non-authoritative; per superseded Notice text)** | Patty Winkler | `p-winkler@tamu.edu` | (979) 845-4556 | Kept here for historical record only; the CSP-package contact (Brittany Crawley) supersedes. May still be a valid TAMU HUB-Ops generalist — if Brittany doesn't respond, Patty is a credible second-touch on the TAMU HUB side. |
 
 ## B. Supplemental POCs (not on the Notice — pull / verify as needed)
 
@@ -28,7 +36,9 @@
 
 ## C. Outreach plan — who to email first and when
 
-### Day 1 (today, 2026-05-22) — three priority emails
+> **2026-05-23 update:** Portal access succeeded — the CSP package is in hand. The original "Day 1" template emails below are kept for reference but are largely superseded by what we now know. The live outreach drafts in `outreach/` reflect the post-portal state. The primary remaining ask of Joelle is now **eligibility confirmation post-missed 5/14 pre-proposal meeting + a request for the pre-proposal meeting record**. Cc Cherise Toler at TAMU Procurement (`ctoler@tamu.edu`) on the formal eligibility email so that the TAMU-side procurement record reflects our outreach.
+
+### Day 1 (originally 2026-05-22; portal-revised plan in `outreach/`) — three priority emails
 
 **1. To: Joelle Shidemantle, SSC PM**
 - Subject: `RE: SSC 2025-06813 — Harrington Education Center Lab 303 Renovation — CSP package access + pre-proposal meeting record`

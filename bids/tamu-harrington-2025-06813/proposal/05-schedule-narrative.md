@@ -1,8 +1,8 @@
 # 05 — Schedule narrative + critical path
 
 > **Page target:** 1 page narrative + 1 separate Gantt exhibit.
-> **Baseline duration:** 70 calendar days substantial completion, 100 calendar days final completion + closeout. Subject to CSP-package adjustment.
-> **Critical-path items:** lab-grade casework lead time (8–12 weeks); fume hood lead time (12–16 weeks, if in scope); EHS shutdown-window availability.
+> **Baseline duration:** 70 calendar days Substantial Completion + 30 calendar days fixed window to Final Completion (per CSP §00 42 13) = **100 calendar days total**. Bidder-chosen, scored at **10% of evaluation** per CSP §00 21 00 ¶11.2.
+> **Critical-path items:** lab casework lead time (8–12 weeks). **NO fume hood** — Division 11 NOT USED in spec, so the 12–16-week fume-hood lead-time risk is OFF THE TABLE. EHS shutdown-window availability is a secondary constraint.
 
 ---
 
@@ -19,7 +19,7 @@
 | **Substantial completion target** | NTP + **70 calendar days** = ~2026-10-09 if NTP 2026-08-01 |
 | Final completion + closeout | NTP + 100 calendar days = ~2026-11-08 |
 
-`[PENDING e-BUILDER ACCESS: confirm if CSP package publishes a fixed substantial-completion date. The Notice gives a "Construction Period" range only; the CSP "Instructions to Proposers" typically pins a target. If the target is tied to an academic calendar window (e.g. "ready for spring 2027 semester" → late January 2027), our 70-day baseline has ample float; if the target is earlier than ~Oct 2026, we will need to compress via second-shift labor — reflected in unit-price line "shift premium."]`
+**CSP confirmed (post-portal-pull 2026-05-23):** there is NO fixed Substantial Completion date in the CSP package. The proposer **chooses** the duration in CSP §00 42 13 (Substantial Completion calendar days from NTP). Final Completion is **fixed at 30 calendar days after Substantial Completion**. This is the **10%-weighted "Construction Time"** criterion. Shorter is better (more points) but only if defensible by a real Gantt; padded short durations get penalized in evaluation if Patterson + River MEP flag the proposal as not credible.
 
 ---
 
@@ -43,15 +43,13 @@
 
 ## C. Critical path
 
-The critical path runs through three sequential constraints:
+The critical path runs through two sequential constraints (fume-hood eliminated by spec):
 
-1. **Lab-grade casework fabrication.** 8–12 weeks from approved shop drawings → delivered to site. Casework shop drawings must be submitted by Day 7 post-NTP, approved by Day 14, fabricated by Day 70, installed by Day 75. **This is the binding constraint for substantial completion** on most lab-room renos.
+1. **Lab casework fabrication.** 8–12 weeks from approved shop drawings → delivered to site. Casework shop drawings must be submitted by Day 7 post-NTP, approved by Day 14, fabricated by Day 70, installed by Day 75. **This is the binding constraint** for our 70-day Substantial Completion commitment. H2I Sub-06 specifics (pending re-share from Joelle) confirm whether (a) a single specified casework manufacturer is committed (binding to their lead time) or (b) competitive subs are allowed (~2 weeks of additional shopping float).
 
-2. **Fume hood (if in scope).** 12–16 weeks from approved cut sheet → delivered to site. Order placement Day 1 post-NTP (assumes approved cut sheets), delivered by Day 90, installed by Day 95. `[PENDING e-BUILDER ACCESS: confirm whether fume hood is in scope]`. **If fume hood is in scope, this becomes the new critical path** and substantial completion moves to ~Day 100. We will flag this immediately on G2 close.
+2. **EHS shutdown-window availability.** 2-week notice + 4-hour blocks for fire alarm, sprinkler, and shared-utility cutovers. EHS coordination starts at preconstruction; shutdown windows are scheduled by Day 14 for Phase 1 demo work. Asbestos handling per Spec 02 26 23 is procedural (no abatement scope unless EHS finds material in the room) — modest float is built in for hazmat-survey review.
 
-3. **EHS shutdown-window availability.** 2-week notice + 4-hour blocks for fire alarm, sprinkler, and shared-utility cutovers. EHS coordination starts at preconstruction; shutdown windows are scheduled by Day 14 for Phase 1 demo work.
-
-Float: ~5 calendar days between Day 70 substantial completion and Day 100 final completion. This float absorbs punch-list completion + any minor closeout slips. If the fume-hood critical path is in play, this float shrinks; we will rebaseline at preconstruction.
+Float: 30 calendar days between Day 70 Substantial Completion and Day 100 Final Completion — this is the CSP-fixed window per §00 42 13 and is used for punch list, TAB, EHS final clearance, O&M closeout, and minor finishes touch-up.
 
 ---
 
@@ -61,14 +59,14 @@ Cross-reference `02-technical-approach.md` § E. Summary:
 
 | Long-lead item | Lead time | Order target (days post-NTP) |
 |---|---|---|
-| Lab-grade casework | 8–12 weeks | Day 5 |
-| Phenolic / epoxy resin work tops | 8–10 weeks | Day 5 |
-| Fume hood (if scope) | 12–16 weeks | Day 1 |
+| Lab casework (per A2.1/A2.2 + H2I Sub-06) | 8–12 weeks | Day 5 |
+| Lab work tops (chem-resistant) | 8–10 weeks | Day 5 |
+| ~~Fume hood~~ | — | **NOT IN SCOPE — Div 11 NOT USED** |
 | Lab fixtures (faucets, gooseneck, eye-wash, safety shower) | 6–8 weeks | Day 10 |
-| Specialty doors (if scope) | 8–12 weeks | Day 5 |
-| Lab gas regulators + outlet trim (if scope) | 4–6 weeks | Day 10 |
-| LED lighting + controls | 4–6 weeks | Day 5 |
-| Recessed sprinkler heads | 2–4 weeks | Day 15 |
+| ~~Specialty doors~~ | — | **NOT IN SCOPE — Div 08 NOT USED** |
+| LED lighting + controls per E1.2 | 4–6 weeks | Day 5 |
+| HVAC diffusers / grilles + VAV retrim per M1.1 | 4–6 weeks | Day 5 |
+| Recessed sprinkler heads (coord. with existing TAMU sprinkler vendor) | 2–4 weeks | Day 15 |
 
 ---
 
@@ -76,12 +74,14 @@ Cross-reference `02-technical-approach.md` § E. Summary:
 
 | Dependency | Owner | Risk if late |
 |---|---|---|
-| TAMU EHS hazardous-materials clearance for Lab 303 | TAMU EHS | Phase 1 demo slip; ~5–10 calendar days |
+| TAMU EHS hazardous-materials clearance for Lab 303 (per Spec 02 26 23) | TAMU EHS | Phase 1 demo slip; ~5–10 calendar days |
 | EHS shutdown approval for fire alarm + sprinkler | TAMU EHS | Phase 2 + Phase 4 slip; ~3–5 calendar days each event |
 | Patterson Architects RFI turnaround (assumed 5 business days) | Patterson | Cumulative ~5–10 calendar days |
+| River MEP LLC (George) RFI turnaround (assumed 5 business days) | River MEP | Cumulative ~5–10 calendar days |
 | TAMU Technology Services cable pull window | TAMU TS | Phase 3 finishes hold; ~3–7 calendar days |
-| Patterson submittal review turnaround (assumed 10 business days) | Patterson | Phase 0 to Phase 2 hold |
+| Patterson + River MEP submittal review (assumed 10 business days) | A/E | Phase 0 to Phase 2 hold |
 | Lab equipment owner-furnished delivery (if OFCI) | TAMU | Phase 3 hold pending equipment receipt |
+| H2I Sub-06 file (currently re-share pending from Joelle) | SSC PM | Day 5 casework order target slips |
 
 ---
 
@@ -89,12 +89,13 @@ Cross-reference `02-technical-approach.md` § E. Summary:
 
 | Risk | Schedule impact | Mitigation in this schedule |
 |---|---|---|
-| R-03 — hidden lab utilities | +5–15 calendar days if fume hood or DI water added post-bid | Float in Phase 3; unit-price for shift premium if compression needed |
-| R-06 — thin drawing package, RFI churn | +5–10 calendar days cumulative | 5-day RFI cadence assumption; PM staffing buffer in GCs |
+| R-03 — hidden lab utilities | +5–15 calendar days if DI water / lab gas added post-bid (fume hood not in scope) | Float in Phase 3 |
+| R-06 — thin drawing package, RFI churn | +5–10 calendar days cumulative | 5-day RFI cadence; PM staffing buffer; River MEP + Patterson both available |
 | R-07 — after-hours work premium | Schedule impact neutral (work happens off-hours); cost impact only | Already priced |
-| R-08 — existing-conditions surprises | +5–15 calendar days | Hazmat allowance + float in Phase 1 |
-| R-11 — substantial-completion slip | LDs from `[PENDING e-BUILDER ACCESS: TAMU SGC LD rate]` | Conservative 70-day baseline; float in Phase 4 |
-| R-12 — Patterson / SSC RFI slow | +5–10 calendar days | Establish 5-day cadence at kickoff; escalate to Joelle on slip |
+| R-08 — existing-conditions surprises (asbestos finding) | +5–15 calendar days | Asbestos handling per Spec 02 26 23; modest allowance + float in Phase 1 |
+| R-11 — Substantial Completion slip | Per SSC UGSC Article 9 (Time of Performance) liquidated damages | Defensible 70-day baseline; 30-day fixed Final Completion window absorbs minor slips |
+| R-12 — A/E RFI slow | +5–10 calendar days | Establish 5-day cadence at kickoff; escalate to Joelle + Cherise Toler on slip |
+| R-NEW — H2I Sub-06 missing | +2 weeks on casework order if not re-shared in next 7 days | Outreach to Joelle (see `../outreach/01-...md`) requesting Zscaler-blocked file |
 
 ---
 

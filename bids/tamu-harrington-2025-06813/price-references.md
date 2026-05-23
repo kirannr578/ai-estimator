@@ -2,21 +2,30 @@
 
 > All ranges are **publicly-available industry benchmark summaries** (not internal firm data, which the user has not provided). Cite when used.
 >
+> **Refined 2026-05-23 from portal-pulled CSP package.** Key scope facts that tighten the price envelope:
+>
+> - **No fume hood** — Division 11 NOT USED in the project manual. The "real wet-lab" tier is essentially off the table; expect the working price to sit in **low or mid tier**.
+> - **No new doors / hardware** — Division 08 NOT USED. The "doors/hardware" $/SF check-sum row is zero.
+> - **No casework spec** — Division 06 only carries Rough Carpentry. The H2I Sub-06 file (pending re-download) implies a lab-casework allowance only; not a full lab-casework buildout under our contract.
+> - **No fire-suppression Div 21 spec or FP sheets** — handle as deferred-submittal or T&M with the building's existing sprinkler vendor. Trims the FP line item.
+> - **Asbestos handling is procedurally scoped** in Section 02 26 23 — carry $3K–$10K abatement allowance.
+> - **Substantial Completion is bidder-chosen** (10% of evaluation weight per CSP §00 21 00 ¶11.2) → a tight schedule pressure premium is worth pricing.
+>
 > Locality: the seed cost DB is national-average; for Brazos County / College Station, expect ~0.93–0.96× the national average per the RSMeans City Cost Index lookup for ZIP 77843 (historically central TX clears slightly below national).
 >
-> Currency / vintage: all numbers are 2024–2026 vintage construction dollars unless noted. Apply your standard escalation adjustment if pricing this in 2027+.
+> Currency / vintage: all numbers are 2024–2026 vintage construction dollars unless noted. Brazos County prevailing wages per CSP Section 00 73 50 — pull the actual rates when populating the labor side.
 
 ---
 
 ## A. Headline $/SF range — institutional classroom / lab renovation
 
-For a **single-room educational lab/classroom modernization** with the scope described in `04-scope-of-work.md` (interior demo, finishes replacement, MEP modifications, lab utility coordination, no structural mods, no envelope work):
+For a **single-room educational lab/classroom modernization** with the scope described in `04-scope-of-work.md` (interior demo, finishes replacement, MEP modifications, lab utility coordination per drawings, no fume hood, no new doors/casework spec, no FP/Div 21 spec, no structural mods, no envelope work):
 
-| Tier | $/SF range | What you get | Typical use |
+| Tier | $/SF range | What you get | Applicable to Lab 303? |
 |---|---|---|---|
-| Low ("classroom-only" reno) | **$95 – $140 / SF** | Finishes refresh, lighting retrofit, minimal MEP modifications, no real lab utilities | "Modernize a teaching classroom that used to be a lab" |
-| Mid ("light science classroom-lab") | **$140 – $210 / SF** | Above + lab sinks, eye-wash, LVT or sheet vinyl, lab-grade casework, light HVAC rework, electrical for benches | The most likely working assumption for Lab 303 based on Notice language |
-| High ("real wet/heavy lab" reno) | **$210 – $310 / SF** | Above + fume hood, DI water, lab gas, acid waste, dedicated lab sub-panel, dedicated exhaust, full chemical-resistant finishes | If the room is a chemistry / biology wet lab |
+| Low ("classroom-only" reno) | **$95 – $140 / SF** | Finishes refresh, lighting retrofit, minimal MEP modifications, no real lab utilities | **Possibly** — if A2.1 finish plan + P1.1 fixture count are minimal |
+| Mid ("light science classroom-lab") | **$140 – $210 / SF** | Above + lab sinks, eye-wash, LVT or sheet vinyl, lab-grade casework allowance, light HVAC rework, electrical for benches | **Most likely** — given P1.1 + casework allowance + spec scope |
+| High ("real wet/heavy lab" reno) | **$210 – $310 / SF** | Above + fume hood, DI water, lab gas, acid waste, dedicated lab sub-panel, dedicated exhaust, full chemical-resistant finishes | **Off the table** — Division 11 NOT USED in spec → no fume hood; project manual's MEP scope (P1.1, M1.1) does not reach this tier |
 
 Sources for the ranges:
 - RSMeans **Building Construction Costs** (annual; commercial / institutional sections — "Educational facility renovation, light" / "Laboratory facility renovation")
@@ -29,18 +38,17 @@ Sources for the ranges:
 
 ---
 
-## B. Implied total range for Lab 303 (1,200 SF working assumption)
+## B. Implied total range for Lab 303 (1,200 SF working assumption — refine after A2.1 measurement)
 
-Plug-in math:
+Plug-in math (high-tier removed — confirmed off the table by spec Division 11 NOT USED):
 
 | Tier | $/SF | × 1,200 SF | Implied total |
 |---|---|---|---|
 | Low | $95 | × 1,200 | **$114,000** |
 | Mid (low end) | $140 | × 1,200 | **$168,000** |
 | Mid (high end) | $210 | × 1,200 | **$252,000** |
-| High | $310 | × 1,200 | **$372,000** |
 
-**Working headline:** **`$170K – $250K` is the most likely total contract value** for Lab 303 if it's a "light science classroom-lab" per the working assumption (mid tier).
+**Refined working headline:** **`$140K – $230K` is the most likely total contract value** for Lab 303 — tightened from the prior $170K–$250K range by ruling out the high-tier "wet/heavy lab" envelope based on the CSP-confirmed scope. Mid-tier remains the central case.
 
 Sensitivity:
 
@@ -50,7 +58,7 @@ Sensitivity:
 | 1,200 SF (working assumption) | $210,000 |
 | 1,500 SF (full-sized lab) | $262,500 |
 
-**Honest uncertainty statement:** without (a) room SF from the drawings and (b) lab-utility scope confirmation from the MEP set, the bid envelope is uncertain to ~2× (from ~$115K low-end-light to ~$310K high-end-wet-lab). The CSP package drops that uncertainty band to ~$50K either side once we know SF and utilities.
+**Refined uncertainty statement:** with the CSP package in hand, the bid envelope is now uncertain to ~1.5× rather than 2×. The remaining drivers are (a) **actual room area from A2.1** (could push total down 30% if 800 SF, or up 25% if 1,500 SF), (b) **resilient flooring type per A2.1 finish plan** (LVT cheaper than sheet vinyl), (c) **casework scope per A2.1/A2.2 + H2I Sub-06 file** ($20K–$60K allowance band), and (d) **MEP fixture count from P1.1 / E1.2 / M1.1**. Once the user does a 2-hour drawing measure, the uncertainty band should narrow to ~$30K either side.
 
 ---
 
@@ -109,10 +117,16 @@ Several recent TAMU System / TX higher-ed classroom and lab renovations have pub
 
 ---
 
-## F. Pricing posture recommendation
+## F. Pricing posture recommendation (refined post-portal-pull)
 
-- **Carry a 5–7% contingency at the bid level** (not 10%) — single-room scope with full drawings should not need a 10% pad. If drawings prove thin or assumptions multiply, bump to 10%.
-- **Bid the low end of the mid-tier range** if the firm is hungry for TAMU System work; bid the middle of the mid-tier range if not.
-- **Carry explicit allowances** for hazmat ($0 unless EHS survey forces it), lab utilities ($15K–$30K if program ambiguous), and after-hours premium labor.
-- **Don't go below ~$110/SF** even in the most optimistic interpretation — that's where labor and bond start eating into a real margin.
-- **Don't bid above ~$280/SF without justification in the proposal narrative** — TAMU evaluators will mark high outliers as a red flag and the bid will lose on price.
+- **Carry a 5–7% contingency at the bid level** (not 10%) — full drawings + specs in hand reduce the unknown-unknown risk. If A2.1 measurement reveals partition rework not visible from the drawings index, bump back to 10%.
+- **Bid the low-to-mid range** ($140–$190/SF) — Base Proposal Amount is 51% of evaluation weight per CSP §00 21 00 ¶11.2; low price wins big.
+- **Carry explicit allowances:**
+  - Asbestos abatement: $3K–$10K (procedurally scoped in 02 26 23 → likely modest)
+  - Lab casework (incl. H2I Sub-06 figure once retrieved): $20K–$60K  
+  - Fire suppression (deferred-submittal or T&M with TAMU vendor): $1K–$5K
+  - After-hours / weekend premium labor: 10–25% on demo, FA, sprinkler shutdowns
+- **Don't go below ~$110/SF** even in the most optimistic interpretation — that's where labor + the heavy MVA-§13 sub-flowdown insurance (mandatory $10M CGL + $10M Umbrella) start eating into margin.
+- **Don't bid above ~$230/SF without justification** in the Technical Proposal — TAMU/SSC evaluators will mark high outliers as a red flag and the bid will lose on the 51%-weighted price criterion.
+- **Bonding economics:** **no bid bond** required for this CSP (savings ~0.5–1% of bid envelope vs the prior assumption). Performance + Payment bonds at award only.
+- **Time bid:** Substantial Completion duration is bidder-chosen and 10% of the score. A 60-day commitment is aggressive but defensible for a single-room scope; 90 days is safer; 120 days is uncompetitive on the time criterion. Recommend **70–85 calendar days** with a defensible Gantt chart in the Technical Proposal.

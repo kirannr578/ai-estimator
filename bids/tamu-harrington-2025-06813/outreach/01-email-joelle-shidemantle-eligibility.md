@@ -1,20 +1,21 @@
-# Outreach 01 — Joelle Shidemantle (PRIMARY: eligibility + meeting record + portal access + site walk)
+# Outreach 01 — Joelle Shidemantle (PRIMARY: eligibility + meeting record + site walk)
 
 > **PRIORITY: 🔴 SEND FIRST. Send Monday 2026-05-24, 8:00 AM CT.**
-> This single email is the gating action for the entire bid. Without an eligibility confirmation and CSP-package access, no other work matters.
-> **Try the email both ways:** the Notice has Joelle's address as `Joelle.Shidementle@sscserv.com` (with a vowel transposition) but her name is "Shidemantle". Send to BOTH addresses on first send to maximize the chance of reaching her. If a bounce comes back from one, that confirms the working address.
+> This single email is the gating action for the entire bid. Without an eligibility confirmation, no other work matters.
+> **2026-05-23 update — portal access succeeded:** The e-Builder Public Landing page is open; we have pulled the drawings, specifications, Pre-Bid Attendance sheet, and the Notice of Project from the portal. The original "request CSP package access" ask is removed; what remains is **eligibility + meeting record + site walk**.
+> **Email spelling — CONFIRMED:** the correct address is `Joelle.Shidemantle@sscserv.com` (one `m`, two `e`s — matches her name). This is the address printed in CSP Section 00 21 00 ¶3.1 of the actual package. The Notice's `Shidementle` was a typo and the 2026-05-14 ESBD refresh corrected it. **Send only to the corrected address.**
 
 ---
 
 ## Send to
 
-**Primary (as published in Notice, likely typo'd):** `Joelle.Shidementle@sscserv.com`
-**Backup (corrected spelling matching her name):** `Joelle.Shidemantle@sscserv.com`
+**Primary:** `Joelle.Shidemantle@sscserv.com` (confirmed correct per CSP package)
 **Phone backup:** (979) 286-3497 — use `outreach/07-call-script-joelle-shidemantle.md` if no email reply by EOD Mon 2026-05-24
 
 ## Cc
 
-`[USER TO FILL: bid-prep lead's manager or partner, for visibility]`
+- `ctoler@tamu.edu` — **Cherise Toler, TAMU Procurement** (parallel TAMU-side procurement-record contact per ESBD; copy on this email so the eligibility ask is on the official TAMU procurement record)
+- `[USER TO FILL: bid-prep lead's manager or partner, for visibility]`
 
 ## Subject
 
@@ -57,25 +58,29 @@ we go further, I have three time-sensitive asks and one logistics request.
    any addenda issued from or following the meeting? We want to make sure
    we are working from the same information as firms that attended.
 
-3. CSP PACKAGE / e-BUILDER PORTAL ACCESS
+3. PORTAL CONTENT CONFIRMED — ONE FOLLOW-UP
 
-   The Notice directs proposers to the Trimble Unity Construct / e-Builder
-   Public Landing Page at:
-   https://app.e-builder.net/public/publicLanding.aspx?QS=323d686fd1304ccbb2a0ee7d143af64b
+   We have pulled the following five files from the e-Builder Public Landing
+   page (https://app.e-builder.net/public/publicLanding.aspx?QS=323d686fd1304ccbb2a0ee7d143af64b)
+   on 2026-05-23:
 
-   Could you please confirm:
-   - That the full CSP construction document package (drawings, specs, sample
-     Construction Services Agreement, TAMU SGC, HSP form, pricing form, bond
-     forms, and any addenda) is currently posted at that link?
-   - Whether the link requires registration on our part to access — and if so,
-     what the registration step is?
-   - Whether any documents were emailed to attendees of the 5/14 meeting that
-     are not posted to the e-Builder portal?
+   - 2025-06813 - Harrington Education Center Lab 303 Renovation Drawing Set.pdf
+     (10 sheets, dated 5/7/2026, Issued for Construction)
+   - 2025-06813 - Harrington Education Center Lab 303 Renovation Specifications.pdf
+     (308 pp project manual, including SSC UGSC, Special Conditions, Brazos
+     County wage rates, and the Subcontracting Plan template)
+   - 2025-06813 Pre-Bid Attendance.pdf
+   - 2025-06813_Notice of Project-CS_26.05.08.pdf
+   - H2I casework - TAMU Harrington Room 303 - SUB-06 - 05-13-26,ad.pdf
+     [our network blocked this one at download — see #4 below]
 
-   If portal access is gated and not immediately downloadable, could you please
-   share direct PDF copies (drawings + specifications + sample CSA + HSP form +
-   pricing form) so that we can keep our preparation moving while we sort out
-   portal credentials?
+   One follow-up: the H2I casework Sub-06 file (posted 5/13/2026 — appears to
+   be an addendum / clarification with casework details from a prospective
+   sub) was intercepted by our network's security policy and did not finish
+   downloading. Could you please re-share that file by email so we have it
+   in clean form, and please confirm whether it is an Addendum (in which case
+   we will acknowledge it on the Proposal Form, Section 00 42 13) or a
+   bidder-submitted sub-bid posted for general information?
 
 4. SITE WALK REQUEST
 
@@ -113,12 +118,12 @@ Best regards,
 
 ## After-send tracking
 
-- [ ] Sent Mon 2026-05-24 at `[time]` — to both spellings
-- [ ] Cc'd: `[USER TO FILL]`
-- [ ] Bounce check 30 min after send — note which spelling is working
+- [ ] Sent Mon 2026-05-24 at `[time]` — to `Joelle.Shidemantle@sscserv.com` (confirmed correct spelling, single send)
+- [ ] Cc'd: `ctoler@tamu.edu` (Cherise Toler, TAMU Procurement) + `[USER TO FILL]`
+- [ ] Bounce check 30 min after send — single address, but verify no MX bounce
 - [ ] Reply expected by EOD Mon 2026-05-24
-- [ ] If no reply by EOD Mon: phone call following `outreach/07-call-script-joelle-shidemantle.md`
-- [ ] If still no reply by EOD Tue 2026-05-26: escalate to Patty Winkler (already cc'd on her own thread) and to TAMU System Office of Facilities Planning & Construction
+- [ ] If no reply by EOD Mon: phone call following `outreach/07-call-script-joelle-shidemantle.md`. Parallel: phone Cherise Toler at (979) 845-5887 as the TAMU-procurement-side fallback.
+- [ ] If still no reply by EOD Tue 2026-05-26: escalate to Brittany Crawley (TAMU HUB Operations per CSP, `BrittanyFew@tamu.edu`) and Cherise Toler (TAMU Procurement); ASC second-touch on Patty Winkler at TAMU HUB Ops if Brittany doesn't pick up
 - [ ] Log this outreach in `local/contact-log.csv`
 
 ## Decision-tree from Joelle's reply

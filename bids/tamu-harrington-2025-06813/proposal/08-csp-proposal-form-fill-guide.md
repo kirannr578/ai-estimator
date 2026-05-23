@@ -1,6 +1,12 @@
 # 08 — CSP Proposal Form fill guide
 
-> **STATUS: PLACEHOLDER — the TAMU CSP Proposal Form is not yet in hand.** This file is a structural guide based on the standard TAMU System / Texas higher-ed CSP Proposal Form pattern. Replace this guide with the actual form on G2 close (CSP package downloaded from the e-Builder portal). **Do not submit the proposal package without the actual TAMU CSP Proposal Form filled in.**
+> **STATUS as of 2026-05-23: ACTUAL FORM NOW IN HAND.** The CSP package was pulled from the e-Builder portal on 2026-05-23. The real form lives in the project specifications at:
+>
+> - `inbox/opportunities/attachments/2026-05-21/tamu-csp/Harrington_Lab303_Specifications.pdf`, pages **20–24** (Section 00 42 13 — CSP Part 1 Proposal Form & Pricing Schedule), and is part of a 4-Part submission package: Part 1 (00 42 13), Part 2 Technical (00 45 16), Part 3 Safety/Risk/QC (00 45 17), Part 4 HUB/VetHUB Subcontracting Plan (00 45 17.1).
+>
+> The pre-portal-pull anticipated-fields table below has been **superseded** by the actual fields described in § A.bis. The table in § B is kept for now as a transitional cross-reference; **on the actual fill, use the printed form from the specs PDF, not § B.** The pre-portal table will be deleted in the final pre-submission cleanup pass.
+>
+> **Do not submit the proposal package without filling in the actual printed SSC Section 00 42 13 form (wet ink, in words AND figures, with the CSI-division line-item pricing table populated).**
 
 ---
 
@@ -23,7 +29,37 @@ A TAMU System Competitive Sealed Proposal under Tex. Gov't Code Ch. 2269 is anch
 - TAMU System-specific allowance + alternate categories (if any)
 - TAMU System-specific certification language (HUB commitment, conflict of interest, lobbying)
 
-`[PENDING e-BUILDER ACCESS: download the actual TAMU CSP Proposal Form and re-author this guide section-by-section against the actual fields.]`
+✅ **Resolved 2026-05-23 from the portal-pulled spec PDF.** See § A.bis below for the actual structure.
+
+## A.bis. Actual form structure (from portal pull, 2026-05-23)
+
+The real Section 00 42 13 in the CSP package is **4 pages**, structured as:
+
+| Page | Section | What it asks for |
+|---|---|---|
+| 1 of 4 | **Header + Boilerplate** | Business name + DBA designation (Corp / Partnership / Individual), affirmation that the bid is based on the SSC UGSC, SSC Special Conditions, the Drawings, the Project Manual/Specifications, and any Addenda; the four-bullet certification (collusion-free, full performance, 90-day acceptance window, 10-business-day contract execution after award, "amounts in words govern over figures") |
+| 2 of 4 | **Pricing Schedule** | A **CSI-division line-item table**: Contractor must enter a $ amount for **each CSI division actually in scope OR mark blank if the division is not in scope, OR bid will be disqualified for being incomplete**. Divisions listed on the form: 01, 02, 03, 04, 05, 06, 07, 08, 09, 10, 11, 12, 13, 14, 21, 22, 23, 25, 26, 27, 28, 31, 32, 33, 34, 44, 45. **BASE PROPOSAL AMOUNT** at bottom. (For this Lab 303 project: per the specs, only **01, 02, 06, 07, 09, 10, 21, 22, 23, 26** appear in the work scope; the rest will be marked blank.) |
+| 3 of 4 | **Item No. 1 — Base Proposal Amount, Substantial Completion, Addenda** | The complete construction price for "Harrington Education Center Lab 303 Renovation, including all general, plumbing, mechanical, and electrical work indicated on the drawings by Patterson Architects dated 5/7/2026" — entered in **both words AND figures** (words govern); **Substantial Completion in calendar days from NTP** (bidder-chosen — this is the 10%-weighted "Construction Time" criterion); **Final Completion is fixed at 30 calendar days after Substantial Completion**; Addenda numbers acknowledged. |
+| 4 of 4 | **Respondent block** | Company name, EIN, authorized signature, title, date, phone, email/fax, contact for invoice. |
+
+**No alternates section. No unit-prices section. No allowances section.** The CSP is a single base-proposal lump-sum with division-level subtotals. This is a meaningful simplification from the anticipated structure in § B below.
+
+**No bid bond at proposal.** The package has Performance Bond (00 61 13) and Payment Bond (00 61 14) forms — required at award, not at proposal.
+
+**Submission packaging (CSP §00 21 00 ¶5.2):**
+- 1 sealed envelope: Parts 1–3 in hard copy, labeled `CSP Submission for Project Number 2025-06813 Parts 1-3` with the firm's name on the outside.
+- 1 separate sealed envelope: Part 4 HSP/VetHUB, labeled `HUB Subcontracting Plan for Project Number 2025-06813` with the firm's name on the outside.
+- 1 USB flash drive: PDF of all four parts, inserted inside the Part 4 envelope.
+- Mailing address: **SSC Facilities Services Bldg. #1156, 600 Agronomy Road, Suite 218, College Station, TX. 77843, ATTN: Joelle Shidemantle, "PROPOSAL ENCLOSED"**.
+
+**Evaluation weighting (CSP §00 21 00 ¶11.2):**
+- Base Proposal Amount & Alternates: **51%**
+- Construction Time: **10%**
+- Technical Proposal: **24%** (Company Info, Experience, Personnel, Approach, Subs)
+- Litigation & Claims: **5%** Pass/Fail
+- Safety, Risk Assessment & QC: **5%** Pass/Fail
+- Quality Control: **5%** Pass/Fail
+- HUB Subcontracting Plan: **disqualifier if missing, incomplete, or late** (no point value — pure P/F gate)
 
 ---
 

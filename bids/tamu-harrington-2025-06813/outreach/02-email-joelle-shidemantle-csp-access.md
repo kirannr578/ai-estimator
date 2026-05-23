@@ -1,15 +1,26 @@
-# Outreach 02 — Joelle Shidemantle (follow-up if 01 doesn't yield portal access)
+# Outreach 02 — Joelle Shidemantle (LARGELY SUPERSEDED — see § A below; held as a contingency template only)
 
-> **PRIORITY: 🟡 Send only if outreach 01 didn't unblock portal access by EOD Mon 2026-05-24.**
-> Use if Joelle confirms eligibility but does NOT confirm the e-Builder portal carries the full CSP package, or if portal access is still gated 24 hours after outreach 01.
-> Send timing: Tue 2026-05-25, 8:30 AM CT (after a brief check at 7 AM whether outreach 01 has yielded full access overnight).
+> **STATUS as of 2026-05-23: LARGELY SUPERSEDED by successful portal access.**
+> The e-Builder Public Landing page is open and we have pulled the drawings, specifications, Pre-Bid Attendance sheet, and Notice from the portal. The only remaining ask of Joelle on CSP-content is the **H2I casework Sub-06 file** that our network blocked at download (now folded into outreach 01).
+> Keep this draft on hand as a contingency in case:
+> - Joelle reverts that the H2I file is an Addendum we must acknowledge, and we need a re-share by email, OR
+> - A future addendum is posted to the portal that we can't pull, OR
+> - The portal's `QS` token rotates and we lose access.
+> Otherwise, **do not send.**
+> **Email spelling confirmed:** `Joelle.Shidemantle@sscserv.com` per CSP package §00 21 00 ¶3.1.
 
 ---
 
-## Send to
+## A. Was-superseded summary
 
-**Primary:** confirmed working spelling from outreach 01
-**Cc:** `[USER TO FILL: bid-prep lead's manager]`
+Phase-1 portal-access attempt on 2026-05-23 succeeded. The full CSP package — Instructions, Proposal Form (Section 00 42 13), Technical Proposal form (Section 00 45 16), Safety / Risk / QC form (Section 00 45 17), HUB / VetHUB Subcontracting Plan form (Section 00 45 17.1), Master Vendor Agreement (Section 00 52 63), Performance Bond form (Section 00 61 13), Payment Bond form (Section 00 61 14), SSC UGSC (Section 00 72 00), Special Conditions (Section 00 73 00), Brazos County Wage Rates (Section 00 73 50), all Div 01–10 specs, MEP-per-drawings, and a 10-sheet drawing set (A0.1, A0.2 TAS, A0.3 TAS, A2.1 Floor Plans, A2.2 Ceiling, MEP1.0 specs, M1.1 Mechanical, E1.1 Electrical Demo, E1.2 Electrical, P1.1 Plumbing) — was pulled successfully. Items 4 (HSP/VetHUB form) and 8 (sample contract: it is the **Master Vendor Agreement** between Compass / SSC and the sub, not a TAMU SGC variant) were both retrieved. Item 9 (bid bond) is NOT REQUIRED for this CSP — the package only requires Performance + Payment bonds at award, not a bid bond at proposal. **Bonding agent outreach should be revised accordingly.**
+
+---
+
+## Send to (only if contingency triggers — see header)
+
+**Primary:** `Joelle.Shidemantle@sscserv.com` (confirmed correct per CSP package; single address — no parallel typo send needed)
+**Cc:** `ctoler@tamu.edu` (Cherise Toler, TAMU Procurement, for the official record) + `[USER TO FILL: bid-prep lead's manager]`
 
 ## Subject
 

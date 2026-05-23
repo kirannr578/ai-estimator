@@ -1,20 +1,27 @@
-# 04 — Scope of work (draft, pre-drawings)
+# 04 — Scope of work (refined from portal-pulled CSP package, 2026-05-23)
 
-> Source: Notice of Project ("303 Science Education Classroom/Lab Renovation") plus the user's expanded scope brief, cross-referenced against typical TAMU System single-room educational lab renovations.
+> **Source:** the actual CSP package pulled from the e-Builder portal on 2026-05-23 — `inbox/opportunities/attachments/2026-05-21/tamu-csp/Harrington_Lab303_Drawings.pdf` (10 sheets, dated 5/7/2026 IFC) and `Harrington_Lab303_Specifications.pdf` (308 pp project manual). Patterson Architects PA Project No. 2605; MEP by River MEP, LLC.
+> Site address: **540 Ross Street, Bldg #0435 (Harrington Tower), College Station, TX 77843.**
 >
-> Every quantity placeholder is `[TBD from drawings]` and ties back to a row in `takeoff-template.json`. The CSI section column references the seed cost DB at `config/cost_database.json` where a match exists; rows tagged "**no cost-DB hit**" will need the F1 (CWICR) cost-DB land to deliver a unit price.
+> Spec divisions explicitly **"NOT USED"**: 03 Concrete, 04 Masonry, 05 Metals, 08 Doors & Windows, 11 Equipment, 12 Furnishings, 13 Special Construction, 14 Conveying. **No casework spec in the project manual** — note the H2I casework Sub-06 file in the portal (pending re-download); casework appears to be design-deferred or sub-driven.
+>
+> Spec divisions **explicitly included**: 01 (Full set), 02 (02 26 23 Asbestos Assessment + 02 40 00 Demolition), 06 (06 10 00 Rough Carpentry only), 07 (07 90 00 Sealants), 09 (09 22 00 GWB, 09 51 00 Acoustical Ceilings, 09 65 00 Resilient Flooring, 09 91 00 Painting), 10 (10 14 00 Identifying Devices & Graphics), MEP divs 22 / 23 / 26 "see drawings" (no separate spec sections).
+>
+> Every quantity placeholder is `[TBD from drawings — user to measure in Bluebeam]` and ties back to a row in `takeoff-template.json`. The CSI section column references the seed cost DB at `config/cost_database.json` where a match exists.
 
 ---
 
-## A. Assumptions baked in (until drawings prove otherwise)
+## A. Assumptions confirmed / revised from portal pull
 
-1. **Single-room scope** — Lab 303 only. The Notice ties scope to "303 Science Education Classroom/Lab," not the whole building.
-2. **Room area assumption** — 800–1,500 SF typical for a single college science classroom/lab room in a TAMU office tower. Carry **1,200 SF** as the working assumption.
-3. **Existing wall structure stays** — perimeter demising walls remain; only the interior finish layer and any non-structural partitions get touched.
-4. **No structural mods** — slab and ceiling structure are not affected; demo + reno is interior-only.
-5. **Occupied building** — adjacent labs and classrooms continue operating; dust containment, after-hours noisy work, and EHS shutdown windows for fire-alarm and sprinkler work are required.
-6. **Lab type is "science classroom/lab"** — implies general chemistry / biology bench layout, eyewash + safety shower, possible fume hood, possible lab gas, possible DI water. Confirm against the drawings; a heavy-chemistry lab vs a "STEM teaching classroom with sinks" doubles the MEP cost.
-7. **No abatement budgeted** — pending TAMU EHS survey. If the existing flooring is mid-century VCT or the existing ceiling has any asbestos pipe insulation in the plenum, this assumption flips and a Div 02 abatement line gets added.
+1. ~~**Single-room scope** — Lab 303 only.~~ ✅ **CONFIRMED.** Drawings cover only Lab 303 in Harrington Tower Bldg 0435 at 540 Ross Street.
+2. ~~**Room area assumption — 1,200 SF.**~~ 🟡 **TO BE CONFIRMED from A2.1 Floor Plans.** User to measure room area in Bluebeam. Initial 1,200 SF working assumption holds until measured.
+3. ~~**Existing wall structure stays.**~~ ✅ **CONFIRMED.** Drawing index shows no structural sheets; spec Div 03–05 marked NOT USED.
+4. ~~**No structural mods.**~~ ✅ **CONFIRMED.** Same evidence as #3.
+5. ~~**Occupied building.**~~ ✅ **CONFIRMED.** Section 01 41 00 "General Requirements for Renovation Work" (5 pp) governs renovation procedures; Section 01 50 00 Temporary Facilities (9 pp) governs site logistics. Section 01 31 00 Project Management & Coordination (6 pp) is the SSC-side coordination spec.
+6. **Lab type — "Science Education Classroom/Lab"** — drawings package confirms a single Lab 303 reno with M1.1 mechanical, E1.1+E1.2 electrical (incl. demo plans), P1.1 plumbing. **NO fume hood spec in project manual** (Div 11 NOT USED — no lab equipment spec). **NO casework spec** in Div 06 spec set (only 06 10 00 Rough Carpentry, which is wall blocking and similar — no 06 41 lab casework spec). The H2I casework Sub-06 file in the portal is most likely a bid-only sub-quote on casework; the *casework details* are likely on A2.1/A2.2 only. **Verify on the drawings + once H2I file is retrieved.**
+7. **Asbestos handling is in scope.** Section 02 26 23 "Asbestos Assessment" (15 pp) is in the project manual — establishes the procedure for handling any asbestos found during the renovation. Section 02 40 00 Demolition is the demo spec. **Carry an abatement allowance** in the takeoff per `03-missing-documents.md` item #14. The TAMU EHS survey is implicitly already done (otherwise the asbestos-assessment-procedure spec would not be in the project manual) — confirm with Joelle whether a clearance certificate exists.
+8. **No fire-suppression spec in package — handle by deferred-submittal or T&M with the existing building sprinkler vendor.** Spec divisions list shows no Div 21 spec section (FP sheets are not in the 10-sheet drawing set). Sprinkler-head relocation triggered by ceiling rework will need to be either a deferred-submittal item (proposed in Technical Proposal) or carried as an allowance for the existing TAMU building sprinkler vendor to T&M.
+9. **No new exterior or site work** — Divs 31, 32, 33 NOT USED; no civil sheets in the drawing set.
 
 ---
 
@@ -31,113 +38,112 @@
 
 ### Division 02 — Existing conditions / selective demolition
 
-| Item | Notice says | Reasonable assumption | Quantity placeholder | CSI section |
+| Item | Spec section | Reasonable assumption | Quantity placeholder | CSI section / cost-DB |
 |---|---|---|---|---|
-| Selective interior demo of existing finishes (flooring, base, ceiling tile, casework) | Yes — "interior demo" | Strip room to perimeter walls & structure | `[TBD: ~1,200 SF]` | `02 41 16` ($4.50/SF seed) |
-| Demo of existing non-structural partitions if floor plan changes | Maybe | Confirm against drawings | `[TBD: LF of demo partition]` | `02 41 16` |
-| Demo of existing casework / countertops | Yes — implied by "casework/cabinetry" | Remove and dispose | `[TBD: LF of casework]` | `02 41 16` |
-| Hazmat abatement | Not stated | **Pending TAMU EHS survey**. Carry allowance only after survey returns. | `[TBD: 0 or allowance]` | no cost-DB hit |
+| **Asbestos assessment + abatement procedure** | **02 26 23 (15 pp)** | Procedure spec in the project manual — establishes handling protocol for any asbestos encountered during the renovation. **Carry an abatement allowance** until a clearance certificate is shared by Joelle. | `[TBD: LS allowance]` | no cost-DB hit; carry $3K–$10K allowance for a single-room reno |
+| Selective interior demo of existing finishes (flooring, base, ceiling tile, casework) | 02 40 00 Demolition (4 pp) | Strip room to perimeter walls & structure | `[TBD: measure from A2.1 demo plan]` | `02 41 16` ($4.50/SF seed) |
+| Demo of existing non-structural partitions if floor plan changes | 02 40 00 | Confirm against drawings | `[TBD: LF of demo partition from A2.1]` | `02 41 16` |
+| Demo of existing casework / countertops | 02 40 00 | Remove and dispose | `[TBD: LF from A2.1]` | `02 41 16` |
 
-### Division 06 — Carpentry / casework
+### Division 06 — Carpentry (no casework spec in project manual)
 
-| Item | Notice says | Reasonable assumption | Quantity placeholder | CSI section |
+| Item | Spec section | Reasonable assumption | Quantity placeholder | CSI section / cost-DB |
 |---|---|---|---|---|
-| Lab-grade casework — base cabs, wall cabs | Yes — "casework/cabinetry" | Plastic-laminate base + wall cabs with phenolic resin or epoxy work tops; lab-grade hinges & pulls | `[TBD: LF of base, LF of wall]` | `06 41 00` ($425/LF seed for general millwork — **lab-grade premium runs $600–$900/LF; the seed entry is light**) |
-| Lab work tops — phenolic resin or epoxy resin | Yes — implied | Chemical-resistant horizontal surface | `[TBD: SF of work top]` | no cost-DB hit (specialty material) |
-| Wall blocking for shelving, monitors, ADA grab | Likely | Carry as small allowance | `[TBD: LS]` | `06 10 00` |
+| Wall blocking for shelving, monitors, ADA grab, AV mount | **06 10 00 Rough Carpentry (5 pp)** | Per the only Div 06 spec in the project manual | `[TBD: LS / SF]` | `06 10 00` |
+| **Lab casework** (base + wall cabs, work tops) | **Not in spec.** See drawings A2.1 / A2.2 for any casework details, plus the H2I Sub-06 file (pending re-download). | If casework is shown on the drawings only, this is a design-light approach — most likely the casework scope is captured as a furniture / lab-equipment line that the GC carries as a lab-casework allowance OR awards to H2I per their Sub-06 pricing. **Carry an allowance until A2.1 + H2I file are reviewed.** | `[TBD: allowance or LF from drawings]` | no cost-DB hit; carry $20K–$60K allowance for a single lab room |
 
-### Division 08 — Openings (doors, frames, hardware)
+### Division 07 — Thermal and moisture protection
 
-| Item | Notice says | Reasonable assumption | Quantity placeholder | CSI section |
+| Item | Spec section | Reasonable assumption | Quantity placeholder | CSI section |
 |---|---|---|---|---|
-| Replace existing door, frame, hardware (if scope) | Not stated — confirm against drawings | Single classroom door; existing may stay if condition is good | `[TBD: 0–2 EA]` | `08 14 16` ($575/EA seed wood door) |
-| New door hardware | Maybe | Institutional grade, ANSI Grade 1, ADA lever | `[TBD: 0–2 sets]` | `08 71 00` ($425/EA seed) |
-| Vision lite kit in classroom door (per TAMU code) | Maybe | Code requires line-of-sight into classroom; existing may already have | `[TBD]` | no cost-DB hit |
+| Sealants — at flooring transitions, fixture trims, and any opening sealing | **07 90 00 Sealants (5 pp)** | Small allowance | `[TBD: LF allowance]` | no cost-DB hit; carry as part of finishes labor |
 
-### Division 09 — Finishes
+### Division 08 — Openings (NOT USED per spec)
 
-| Item | Notice says | Reasonable assumption | Quantity placeholder | CSI section |
+| Item | Status |
+|---|---|
+| Doors, frames, hardware | **Spec division NOT USED.** Existing door stays; no replacement scope. **Remove this row from `takeoff-template.json`**. |
+
+### Division 09 — Finishes (refined — single-spec resilient flooring, no LVT/sheet-vinyl split)
+
+| Item | Spec section | Reasonable assumption | Quantity placeholder | CSI section |
 |---|---|---|---|---|
-| Metal-stud framing for any new partitions or furring | Maybe | Confirm against drawings | `[TBD: SF of new partition]` | `09 22 16` ($6.40/SF seed) |
-| Gypsum board on framing | Same as above | 5/8" Type X both sides | `[TBD: SF, both faces]` | `09 29 00` ($2.85/SF seed) |
-| Acoustical ceiling — replace existing | Likely | 2x4 lay-in grid + tile | `[TBD: ~1,200 SF]` | `09 51 13` ($5.10/SF seed) |
-| Flooring — VCT or LVT in classroom zone | Yes — implied | LVT is the current TAMU classroom standard; chemical-resistant sheet vinyl with heat-welded seams in any "wet" lab zone | `[TBD: ~1,200 SF; split classroom vs lab]` | `09 65 19` ($6.40/SF seed for LVT). Sheet vinyl in lab zone is a **no cost-DB hit**; carry ~$10–$14/SF allowance |
-| Resilient base | Yes — implied | 4" rubber base, integral or cove | `[TBD: LF of perimeter]` | `09 65 13` ($3.25/LF seed) |
-| Painting — walls + soffits + door frames | Yes — explicit | 2-coat institutional latex, low-VOC | `[TBD: SF of paint surface]` | `09 91 23` ($1.65/SF seed) |
-| Epoxy paint in wet lab zone | Maybe | If lab area requires washdown | `[TBD]` | no cost-DB hit |
+| Metal-stud framing + gypsum wallboard (for any new partitions or furring) | **09 22 00 Gypsum Wallboard (6 pp)** | Confirm partitions against A2.1; 5/8" Type X both sides where called out | `[TBD: SF from A2.1]` | `09 22 16` / `09 29 00` (combined per spec) |
+| Acoustical ceiling — replace existing | **09 51 00 Acoustical Ceilings (4 pp)** | 2x4 lay-in grid + tile, full room replacement | `[TBD: measure from A2.2]` | `09 51 13` ($5.10/SF seed) |
+| **Resilient flooring** (single spec — type TBD from finish plan on A2.1) | **09 65 00 Resilient Flooring (5 pp)** | **Single resilient-flooring spec section** — no split between classroom-LVT and wet-lab-sheet-vinyl in the project manual; the finish plan on A2.1 will identify which resilient product. **Treat as a single resilient-flooring line in the takeoff.** | `[TBD: room area from A2.1]` | `09 65 19` ($6.40/SF seed if LVT). |
+| Resilient base | Same spec (09 65 00) | 4" rubber base | `[TBD: LF of room perimeter + casework toe-kick]` | `09 65 13` ($3.25/LF seed) |
+| Painting — walls + soffits + door frames | **09 91 00 Painting (10 pp)** | 2-coat institutional latex, low-VOC | `[TBD: SF of paint surface]` | `09 91 23` ($1.65/SF seed) |
 
-### Division 10 — Specialties
+### Division 10 — Specialties (signage only per project manual)
 
-| Item | Notice says | Reasonable assumption | Quantity placeholder | CSI section |
+| Item | Spec section | Reasonable assumption | Quantity placeholder | CSI section |
 |---|---|---|---|---|
-| Room signage (ADA-compliant) | Likely | "Lab 303" room sign per ADA + TAMU wayfinding standard | 1–2 EA | `10 14 00` ($95/EA seed) |
-| Tackable wall panels / marker board / AV mounting board | Maybe | Educational classroom standard | `[TBD]` | no cost-DB hit |
-| Eye-wash / safety-shower (if not in Div 22) | Yes — lab implies | Combination eye-wash + drench shower at lab sink | 1 EA | no cost-DB hit |
-| Fire extinguishers | Yes | Per code review | 1–2 EA | no cost-DB hit |
+| Room signage (ADA-compliant — see A0.2/A0.3 TAS sheets) | **10 14 00 Identifying Devices & Graphics (3 pp)** | "Lab 303" room sign + ADA tactile sign per TAMU wayfinding standard | 1–2 EA | `10 14 00` ($95/EA seed) |
+| Tackable wall panels / marker board / AV mounting board | **Not in spec.** Confirm against A2.1 plans. If shown, carry as deferred-submittal in technical proposal. | (likely owner-furnished or out of GC scope) | — | — |
+| Fire extinguishers | Not in spec | Confirm via TAMU EHS / fire-life-safety review | — | — |
 
-### Division 11 — Lab equipment
+### Division 11 — Lab Equipment (NOT USED per spec)
 
-| Item | Notice says | Reasonable assumption | Quantity placeholder | CSI section |
+| Item | Status |
+|---|---|
+| Fume hood, lab equipment | **Spec division NOT USED.** No GC scope for lab equipment — TAMU furnishes any lab equipment separately. **Remove these rows from `takeoff-template.json`.** |
+
+### Division 21 — Fire Suppression (NOT in spec — handle via deferred-submittal or T&M)
+
+| Item | Spec section | Reasonable assumption | Quantity placeholder | CSI section |
 |---|---|---|---|---|
-| Existing lab equipment to remain / be relocated | Yes — implied by "lab utility coordination" | TAMU likely owner-furnishes major lab equipment; GC roughs in utilities | `[TBD: EA fixtures / equipment]` | no cost-DB hit |
-| Fume hood — install, modify, or remove | Maybe | If room has a fume hood, this is a major MEP coordination point | `[TBD]` | no cost-DB hit |
+| Sprinkler head relocation per new ceiling layout | **No Div 21 spec section in the project manual; no FP sheets in the drawing set.** | Ceiling rework triggers some sprinkler-head adjustment; handle via (a) deferred submittal proposed in Technical Proposal, or (b) carry an allowance for the existing TAMU building sprinkler vendor to perform on T&M with EHS-coordinated shutdowns. | `[TBD: 4–10 EA allowance]` | no cost-DB hit; carry $250–$450/EA per-head allowance |
 
-### Division 21 — Fire suppression
+### Division 22 — Plumbing (per P1.1 + MEP1.0)
 
-| Item | Notice says | Reasonable assumption | Quantity placeholder | CSI section |
+| Item | Drawing | Reasonable assumption | Quantity placeholder | CSI section |
 |---|---|---|---|---|
-| Sprinkler head relocation per new ceiling layout | Likely (any ceiling rework triggers) | 4–10 heads typical for a single room | `[TBD: EA heads]` | `21 13 00` ($4.85/SF seed; per-head pricing not in seed DB — carry $250–$450 per head allowance) |
+| Lab sink(s), faucets, gooseneck spouts | **P1.1 Plumbing Plans** | Count from P1.1 fixture schedule | `[TBD: 1–4 EA from P1.1]` | `22 40 00` ($1,850/EA seed for fixture incl. rough; lab fixture trims at ~$2,500–$3,500/EA) |
+| Eye-wash / safety-shower combo (plumbed) — if shown | P1.1 | Confirm against P1.1 — typical lab requirement | `[TBD: 0–1 EA]` | no cost-DB hit (carry ~$3,500–$5,500/EA installed) |
+| DI water / lab gas / acid waste — if shown | MEP1.0 + P1.1 | Confirm against P1.1 — if not shown, not in scope | `[TBD: from P1.1]` | no cost-DB hit |
 
-### Division 22 — Plumbing
+### Division 23 — HVAC (per M1.1 + MEP1.0)
 
-| Item | Notice says | Reasonable assumption | Quantity placeholder | CSI section |
+| Item | Drawing | Reasonable assumption | Quantity placeholder | CSI section |
 |---|---|---|---|---|
-| Lab sink, faucet, gooseneck spout | Yes — "plumbing modifications" | 1–4 sinks typical | `[TBD: 1–4 EA]` | `22 40 00` ($1,850/EA seed for fixture incl. rough; lab fixture trims at ~$2,500–$3,500/EA) |
-| Eye-wash / safety-shower combo (plumbed) | Yes — lab implies | 1 unit at lab sink area | 1 EA | no cost-DB hit (carry ~$3,500–$5,500/EA installed) |
-| DI water tap (if program requires) | Maybe | Polishing loop tap | `[TBD]` | no cost-DB hit |
-| Acid-waste piping / neutralization tank | Maybe | Only if "wet chemistry" use | `[TBD]` | no cost-DB hit |
-| Lab gas (natural gas / compressed air / vacuum) | Maybe | Only if program requires | `[TBD: LF + outlets]` | no cost-DB hit |
+| HVAC modifications — diffuser/grille relocation, VAV box retrim | **M1.1 Mechanical Plan** | Light reconfiguration to match new ceiling layout from A2.2 | `[TBD: count diffusers / grilles on M1.1]` | `23 00 00` ($22.50/SF seed — too high for a single-room retrim; real cost ~$8–$15/SF) |
+| Lab exhaust modifications | M1.1 | Confirm against M1.1 — likely none since Div 11 NOT USED | `[TBD: from M1.1]` | no cost-DB hit |
+| Air balance + test report (TAB) | MEP1.0 spec | Required per MEP1.0 spec | `[TBD: 1 LS]` | $2,500–$5,000 range |
 
-### Division 23 — HVAC
+### Division 26 — Electrical (per E1.1 + E1.2 + MEP1.0)
 
-| Item | Notice says | Reasonable assumption | Quantity placeholder | CSI section |
+| Item | Drawing | Reasonable assumption | Quantity placeholder | CSI section |
 |---|---|---|---|---|
-| HVAC modifications — diffuser/grille relocation, VAV box retrim | Yes — "HVAC modifications" | Light reconfiguration to match new layout | `[TBD: SF served]` | `23 00 00` ($22.50/SF seed) — note this is light-commercial RTU+duct; for an existing-system retrim, real cost is typically ~$8–$15/SF |
-| Lab exhaust modifications (if fume hood / canopy hood) | Maybe | Major scope if present | `[TBD]` | no cost-DB hit |
-| Air balance + test report (TAB) | Yes — typical SGC requirement | 1 LS | `[TBD]` | no cost-DB hit |
+| Demolition of existing electrical | **E1.1 Electrical Demo Plans** | Remove + cap circuits per E1.1 | `[TBD: SF served]` | `02 40 00` / `26 05 00` |
+| Lighting — LED fixtures + classroom controls | **E1.2 Electrical Plans** | Replace all fixtures; new controls per E1.2 fixture schedule | `[TBD: count from E1.2]` | `26 51 00` ($285/EA seed for typical fixture) |
+| Branch wiring + devices — receptacles, switches, GFCI within 6' of sinks | E1.2 | Per E1.2 device plan | `[TBD: SF / device count from E1.2]` | `26 05 00` ($8.40/SF seed) |
+| Emergency egress lighting | E1.2 | Per code; verify from E1.2 | `[TBD: EA]` | no cost-DB hit |
+| Sub-panel for lab loads — if shown | E1.2 | Confirm against E1.2 panel schedule | `[TBD: 0–1 EA]` | $4,500–$7,000/EA |
 
-### Division 26 — Electrical
+### Division 27 — Communications / low-voltage (NOT in spec — pathway only by GC, per typical TAMU pattern)
 
-| Item | Notice says | Reasonable assumption | Quantity placeholder | CSI section |
-|---|---|---|---|---|
-| Lighting — LED retrofit + classroom controls (occupancy + daylight + dimming) | Yes — explicit | Replace all fixtures; new controls | `[TBD: EA fixtures, ~1,200 SF]` | `26 51 00` ($285/EA seed for typical fixture) |
-| Branch wiring + devices — receptacles for lab benches, AV outlets | Yes — implied by "electrical" | Dedicated 20A circuits at lab benches; GFCI within 6' of any sink | `[TBD: ~1,200 SF]` | `26 05 00` ($8.40/SF seed) |
-| Emergency egress lighting | Likely | Per IBC | `[TBD: EA]` | no cost-DB hit |
-| Possible sub-panel for lab loads | Maybe | Only if heavy-equipment loads | `[TBD]` | `26 24 16` (residential-spec seed — under-spec for institutional; carry $4,500–$7,000/EA for a real lab panel) |
+| Item | Assumption | Quantity placeholder | CSI section |
+|---|---|---|---|
+| Data + AV pathway (conduit, J-box, ring & string) | TAMU Tech Services furnishes cable + termination; GC furnishes pathway only. Coordinate. | `[TBD: count outlets from E1.2 or A2.1]` | no cost-DB hit |
 
-### Division 27 — Communications / low-voltage
+### Division 28 — Electronic safety / security / fire alarm (NOT in spec — handle as needed via existing TAMU vendors)
 
-| Item | Notice says | Reasonable assumption | Quantity placeholder | CSI section |
-|---|---|---|---|---|
-| Data drops + AV pathway / J-box / conduit | Yes — "technology infrastructure coord" | Coordinate with TAMU Tech Services; GC typically furnishes pathway (conduit, J-boxes, ring + string); TAMU furnishes the cable and termination | `[TBD: # outlets]` | no cost-DB hit |
-| Classroom AV — projector / display, ceiling speakers, mic array | Yes — implied by "technology" | Typically owner-furnished, owner-installed; GC provides power + pathway | `[TBD]` | no cost-DB hit |
-
-### Division 28 — Electronic safety / security / fire alarm
-
-| Item | Notice says | Reasonable assumption | Quantity placeholder | CSI section |
-|---|---|---|---|---|
-| Fire-alarm device relocation per new ceiling layout | Likely | Strobe + smoke detector relocation | `[TBD: EA]` | no cost-DB hit |
-| Building access / door reader if classroom is card-access | Maybe | TAMU often standardizes on Lenel; coordinate | `[TBD]` | no cost-DB hit |
+| Item | Assumption | Quantity placeholder |
+|---|---|---|
+| Fire-alarm device relocation per new ceiling layout | Coordinate with TAMU EHS / existing FA vendor on T&M | `[TBD: EA]` |
+| Card-access door reader if scope changes — likely none since Div 08 NOT USED | — | — |
 
 ---
 
-## C. Coordination notes (the pain-points worth pricing for)
+## C. Coordination notes (refined post-portal-pull)
 
-1. **Occupied building.** Harrington Education Center is an active office / academic tower. Expect: no daytime jackhammering, dust containment with negative-air, restricted dumpster placement, mandatory after-hours work for any noisy / odor-generating tasks. Carry **after-hours premium labor** for at least demo and any HVAC / sprinkler shutdown work.
-2. **EHS shutdown windows.** Fire alarm, sprinkler, and any plenum work require coordinated shutdowns with TAMU EHS. Typically 2-week advance notice + 2–4 hour shutdown windows. Doesn't kill the schedule but means your sub can't decide last-minute.
+1. **Occupied building.** Harrington Tower (Bldg 0435, 540 Ross St.) is an active academic tower. Section 01 41 00 "General Requirements for Renovation Work" governs. Carry **after-hours premium labor** for at least demo and any HVAC / sprinkler shutdown work.
+2. **EHS shutdown windows for fire alarm + sprinkler.** Since Div 21 / Div 28 are not in the project manual, fire-alarm and sprinkler shutdowns will be coordinated through SSC + the existing TAMU building FA / sprinkler vendor on T&M; reflect in the schedule.
 3. **TAMU Tech Services owns the cabling.** GC scope ends at the pathway; the cable, jack, and termination are TAMU. Don't accidentally bid the cable.
-4. **TAMU EHS owns hazmat clearance.** Don't accept "no asbestos / no lead" without the TAMU EHS survey in hand. Older campus buildings can have surprises.
-5. **Adjacent-lab impact.** If Lab 303 shares a return-air plenum, exhaust stack, lab-gas main, or DI water riser with an adjacent active lab, coordinate the cutover window with the adjacent-lab PI. This is where lab renos most commonly slip.
-6. **Patterson Architects is a small firm.** Small A/E shops can produce thin drawing packages. Carry ~5–10% RFI churn in the schedule; price extra PM hours in GCs.
-7. **Project start = TBD.** Bid your schedule against a generic "60 calendar days from NTP" or "90 calendar days from NTP" unless the CSP package specifies. The summer-fall academic-calendar window matters — if TAMU wants the room ready for spring semester, the substantial completion window narrows.
-8. **TAMU prefers a single point of accountability.** Even though there are many subs, the proposal narrative should emphasize one PM-of-record and a clean RACI.
+4. **Asbestos handling is procedurally scoped in 02 26 23.** The 15-page asbestos-assessment spec section implies TAMU EHS has a known protocol for any asbestos discovered during demo — most likely a Texas-licensed abatement sub is on-call. **Confirm with Joelle whether a clearance certificate exists for Lab 303 prior to demo, OR carry an asbestos-abatement allowance + 5–10-day schedule float.**
+5. **Adjacent-lab impact.** Confirm against M1.1 / P1.1 whether Lab 303 shares any plenum / riser / main with adjacent labs; coordinate cutovers with the adjacent-room user.
+6. **Patterson Architects + River MEP both look like small Texas A/E shops.** Carry ~5–10% RFI churn in the schedule; price extra PM hours in GCs.
+7. **Substantial Completion is bidder-chosen and 10% of the evaluation score** (per CSP §00 21 00 ¶11.2). **Final Completion is fixed at 30 calendar days after Substantial Completion.** The shorter the proposed duration, the higher the score — but the harder it is to deliver. Pricing-vs-time trade-off: do not propose <45 calendar days for this scope without a defensible CPM schedule in the Technical Proposal.
+8. **Proposal valid for 90 calendar days.** Hold the price commitment for 90 days post-submittal (per CSP §00 42 13 ¶3).
+9. **CSI-division line-item pricing is the proposal format.** The Section 00 42 13 form requires a $ amount for each CSI division actually in scope (blank for not-in-scope), or the bid is disqualified for being incomplete. Roll the takeoff into CSI-division subtotals: **01, 02, 06, 07, 09, 10, 22, 23, 26** are the divisions that will likely carry non-zero amounts on the pricing form.
+10. **Sample contract is the SSC/Compass Master Vendor Agreement (Section 00 52 63).** Before bidding, the firm should flag MVA §6 (2-year non-solicit), §7 (1-year non-compete with the Client), §5 (Net-75-day payment terms), and §13 (sub flow-down insurance limits including $10M CGL aggregate + $10M Umbrella) to leadership. **These are not blocking on bid submission but may inform the price (high insurance limits + slow payment terms increase carry cost).**

@@ -1,8 +1,18 @@
 # 09 — HSP (HUB Subcontracting Plan) form fill guide
 
-> **STATUS: PLACEHOLDER — the TAMU-specific HSP form is not yet in hand.** This file is a structural guide based on (a) the State of Texas standard HSP form pattern, (b) the Angelo State Attachment D HSP form in our inbox (`inbox/.../ESBD_516718_..._Attachment D - HSP (Historically Underutilized Businesses (HUB) Subcontracting Plan) documents.pdf`) used as a content-shape proxy, and (c) the working strategy in `../05-hsp-plan.md`.
-> **Action on G2 close:** swap to the actual TAMU HSP form once Patty Winkler responds (`outreach/04-email-patty-winkler-hub.md`) or once the CSP package is downloaded.
-> **Action TODAY (parallel to e-Builder access):** start HUB outreach immediately per `../05-hsp-plan.md` § D. The form can wait 1–2 days; the GFE outreach clock cannot.
+> **STATUS as of 2026-05-23: ACTUAL FORM NOW IN HAND, AND IT'S A DIFFERENT FORM THAN ASSUMED.**
+>
+> The CSP package was pulled from the e-Builder portal on 2026-05-23. **Section 00 45 17.1** of the project manual (`inbox/opportunities/attachments/2026-05-21/tamu-csp/Harrington_Lab303_Specifications.pdf` pp. 33–40) is **NOT** the older State of Texas HUB Subcontracting Plan form. It is the **TX State Subcontracting Plan (Rev. 5/26)** which uses the **VetHUB (Veteran Heroes United in Business)** framework — a Texas Comptroller-administered certification for veteran-owned businesses (Tex. Gov't Code Ch. 2161 Subchapter F; 34 TAC §20.285).
+>
+> **The whole strategy in `../05-hsp-plan.md` was built around the older HUB framework. It will need to be revised against the VetHUB framework.** Initial findings:
+>
+> - The form is **mandatory for every respondent**, even if the respondent intends to self-perform (in which case only pages 1–2 are completed + Section 3 affirmation).
+> - GFE consists of **NIGP-code-based outreach to ≥2 VetHUBs per subcontracting opportunity**, with at least 7 business days for response. Notification template provided in the spec.
+> - **HUB / VetHUB cert numbers are tracked by Texas Comptroller VID** (Vendor Identification Number), and certifications are looked up via the comptroller's CMBL (https://commbook.app.cpa.state.tx.us/) using the **VetHUB-only search** and `Active Bidder (A-Approved) VetHUB status` filter.
+> - **Action: Brittany Crawley** (`BrittanyFew@tamu.edu`, (979) 845-9010, per CSP §00 21 00 ¶3.3) is the TAMU HUB-Operations contact for this project — NOT Patty Winkler as previously assumed from the Notice. Update `outreach/04-email-patty-winkler-hub.md` to retarget Brittany.
+> - **Action: revise `../05-hsp-plan.md`** — replace HUB outreach with VetHUB outreach; refresh CMBL search guidance.
+>
+> **Action TODAY (post-portal-pull):** start the VetHUB outreach immediately per `../05-hsp-plan.md` § D (with the revised VetHUB filtering). The form structure is in hand; the GFE outreach clock is now the binding constraint.
 
 ---
 

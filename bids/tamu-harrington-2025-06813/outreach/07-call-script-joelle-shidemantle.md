@@ -1,17 +1,19 @@
-# Outreach 07 — Phone call script — Joelle Shidemantle (backup to outreach 01)
+# Outreach 07 — Phone call script — Joelle Shidemantle (backup to outreach 01) + parallel Cherise Toler (TAMU Procurement)
 
 > **PRIORITY: 🔴 Use only if outreach 01 has not yielded a reply by EOD Mon 2026-05-24.**
 > Place the call Tue 2026-05-25, 8:30 AM CT (after a brief 8:00 AM email check).
-> Phone: **(979) 286-3497** (verbatim from Notice of Project).
+> **Primary number:** **(979) 286-3497** — Joelle Shidemantle, SSC PM (confirmed in CSP §00 21 00 ¶3.1).
+> **TAMU-side parallel path (use if Joelle is non-responsive):** **(979) 845-5887** — Cherise Toler, TAMU Procurement (official solicitation officer per ESBD). Cherise is the proper TAMU-side escalation; calling her does not undercut Joelle (different agency — SSC is the ODR contractor, Cherise is TAMU staff). A short, professional outreach to Cherise on Tue afternoon if Joelle hasn't replied is legitimate procedural diligence.
 > Have the firm's representative call from a quiet space with the prep workspace folder open on a screen and `proposal/00-readme.md` § 2 in front of them.
 
 ---
 
 ## Pre-call prep
 
-- [ ] Reconfirm Joelle's correct email spelling from any reply on outreach 01 (Notice has `Joelle.Shidementle@sscserv.com` with a typo vs her name `Shidemantle`)
+- [ ] Joelle's email spelling is **CONFIRMED**: `Joelle.Shidemantle@sscserv.com` per CSP §00 21 00 ¶3.1 (the Notice typo `Shidementle` is corrected as of the 2026-05-14 ESBD refresh). No need to verify on-call.
 - [ ] Open `proposal/00-readme.md` for the BIG MISSING ITEMS list
-- [ ] Open `../03-missing-documents.md` for the priority document list
+- [ ] Open `../03-missing-documents.md` for the priority document list (note: most P1 docs are now in hand from the 2026-05-23 portal pull; remaining gaps are eligibility-confirmation + H2I casework Sub-06 file + site walk)
+- [ ] Cherise Toler's number written down as TAMU-side fallback: **(979) 845-5887**, `ctoler@tamu.edu`
 - [ ] Pen + paper for note-taking
 - [ ] Caller's email + direct phone ready to spell out
 - [ ] Mute notifications
@@ -41,14 +43,14 @@
 
 > "Whether or not we're ultimately able to bid, would it be possible for you to share the pre-proposal meeting sign-in sheet, the recording if there is one, and any written Q&A or addenda that came out of the meeting? That would help us understand the project even if we end up no-bidding."
 
-## Question 3 — e-Builder portal access
+## Question 3 — H2I casework Sub-06 file (only remaining portal-content gap)
 
-> "Quick question on the e-Builder portal. The Notice points us to a Trimble Unity Construct public landing page for the CSP construction document package — the link in the Notice. Could you confirm the full package, including drawings, specs, the sample Construction Services Agreement, the TAMU SGC, the HSP form, and the pricing form, are all currently posted there and accessible without registration friction? If there's a registration step or if any documents are behind a separate barrier, could you walk me through it?"
+> "Quick clarification on one file. We pulled the drawings, specifications, the Pre-Bid Attendance sheet, and the Notice off of the e-Builder portal cleanly. The 'H2I casework — Sub-06' file dated 5/13 didn't come through on our side — our network's content filter intercepted it. Could you confirm whether that file is an Addendum we'll need to acknowledge on Section 00 42 13 of the Proposal Form, or whether it's a bidder-submitted sub-bid posted for informational purposes only? And if it is an Addendum, could you re-share by email?"
 
 **Listen for:**
-- "Yes, it's all there" → confirm that we can pull immediately. Move to Q4.
-- "It's there but you need to register first" → ask for the registration URL + Joelle's contact for any registration friction.
-- "Not everything's posted — the [X] is missing" → ask whether she can email it directly. Move to Q4.
+- "It's an Addendum — I'll re-share by email" → confirm acknowledgment number, request the re-share, move to Q4.
+- "It's a sub-bid posted for everyone's reference, not binding" → fine, no acknowledgment needed; ask for it by email anyway since it likely contains pricing intelligence on lab casework.
+- "I'll have to check / let you know" → ask for a 24-hour callback. Move to Q4.
 
 ## Question 4 — site walk
 
@@ -88,4 +90,23 @@
 - Do not editorialize on having missed the meeting; treat it as a fact and move to the eligibility question without apology spiral
 - If she sounds rushed or annoyed, offer a 10-minute scheduled call instead of pushing through Q1–Q4
 - Texas state-procurement PMs prefer plain, direct conversation; avoid corporate jargon
-- Confirm the correct email spelling of her address conversationally ("just so I know which spelling reaches you, is it Shide**MENT**le or Shide**MANT**le?")
+- Her email spelling is now **CONFIRMED** as `Joelle.Shidemantle@sscserv.com` per the CSP package — no need to ask on-call
+
+---
+
+## Fallback script — Cherise Toler, TAMU Procurement (only if Joelle is non-responsive after Q1 attempt)
+
+**Use this only if:** outreach 01 has been outstanding for >24 hours AND Joelle did not pick up the primary call.
+
+**Place the call Tue 2026-05-25 by 3:00 PM CT** (gives Joelle a full business day before the parallel touch).
+
+> "Good afternoon, this is `[USER TO FILL: caller name]` with `[USER TO FILL: firm legal name]`. We're preparing a Competitive Sealed Proposal for the Harrington Education Center Lab 303 Renovation — SSC Solicitation 2025-06813, your file. I'm reaching out because we missed the 5/14 pre-proposal meeting and I have one eligibility question that I haven't been able to confirm through the SSC project manager yet. Do you have 2 minutes, or could you point me to the right person on the TAMU procurement side to confirm whether attendance at the pre-proposal meeting was mandatory for proposers?"
+
+**Listen for:**
+- "I can answer that" → ask Question 1 verbatim; capture her answer; confirm by follow-up email
+- "That's an SSC question — Joelle Shidemantle is the right person" → ask whether Cherise can ping Joelle internally on our behalf; politely reiterate that we have outreach 01 outstanding and would appreciate a nudge if appropriate
+- "Let me check with [colleague]" → request a callback time; offer email follow-up
+
+**Tone:** Cherise is a TAMU procurement officer, not an SSC PM. Treat as a higher-formality interaction; lead with "Good afternoon, ma'am" if it feels natural. Do not complain about Joelle being non-responsive — frame as "I want to make sure I haven't missed a TAMU-side procedural step."
+
+**After Cherise call:** Email her a one-line recap regardless of outcome ("To confirm what we discussed: ...") and cc Joelle. This creates the parallel-record we want for any later audit.
