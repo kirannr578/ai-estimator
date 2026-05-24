@@ -82,10 +82,11 @@ After substitution, the placeholders still in each workspace fall into these buc
 Items below are the gap between what the firm has on file (per `firm-profile.json`) and what the active bid pipeline needs. They're ordered by **bid-pipeline urgency** — items earlier in the list block earlier bid submissions.
 
 ### Block 0 — Federal-bid prerequisites (blocks USFWS 6/22, USACE PAIS, TXANG 6/4)
-- [ ] **SAM.gov current registration state** — verify at sam.gov; note current `Active` / `Inactive` status + last-renewal date into `firm-profile.json → sam_status`. Bid-prep checklists in `bids/usfws-san-marcos-140FC126R0017/02-bid-prep-checklist.md` § B make this a go/no-go.
-- [ ] **SAM Reps & Certs (FAR 52.204-8)** — refresh within 11 months. If older, refresh **now** — updates take 3–10 business days to propagate.
-- [ ] **EFT (banking) info in SAM** is current per 52.232-33.
-- [ ] **TIN matches IRS records** — mismatch blocks IPP payment.
+- [x] ~~**SAM.gov current registration state** — verify at sam.gov; note current `Active` / `Inactive` status + last-renewal date into `firm-profile.json → sam_status`.~~ **Resolved 2026-05-23** — user confirmed SAM registration is Active. See `firm/firm-profile.json → sam_status`. The *expiration date* is still TBD — tracked separately below.
+- [ ] **SAM.gov registration expiration date** — confirm with the user; SAM registrations expire annually and lapse causes immediate disqualification on any federal opportunity. Verify the next-expiration date at `https://sam.gov/` → Entity Management → Registration Status, and record it in `firm-profile.json → sam_status` (extend the schema with `sam_expiration_date` when surfaced).
+- [ ] **SAM Reps & Certs (FAR 52.204-8)** — refresh within 11 months. If older, refresh **now** — updates take 3–10 business days to propagate. *(Not implied by the 2026-05-23 "active" confirmation; verify separately.)*
+- [ ] **EFT (banking) info in SAM** is current per 52.232-33. *(Not implied by the 2026-05-23 "active" confirmation; verify separately.)*
+- [ ] **TIN matches IRS records** — mismatch blocks IPP payment. *(Not implied by the 2026-05-23 "active" confirmation; verify separately.)*
 
 ### Block 1 — Cert / insurance renewals (blocks all 4 active bids)
 - [ ] **TX HUB recertification** — VID 1874292998900, last cert expired 2024-08-31. Required for any TX state bid scoring HUB participation (TAMU, ASU).
@@ -203,3 +204,9 @@ The substitution script and the firm profile both honor the workspace security p
 - **Records/* xlsx files** were inventoried by sheet name + header only — no row iteration. The script that does this is `firm/_scripts/extract_sources.py`; see its `xlsx_summary(..., body_redacted=True)` mode.
 
 If you spot any PII in a file the substitution script created or modified, treat as a process incident and remove it before pushing. The `firm/firm-profile.json` is the propagation root — fix the JSON first, then re-run the apply script.
+
+---
+
+## 8. Change log
+
+- **2026-05-23** — SAM.gov status set to active (user-confirmed). Expiration date still TBD.

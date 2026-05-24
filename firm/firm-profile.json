@@ -17,8 +17,10 @@
   "uei": "LM4YHVQ71QG7",
   "cage": "9LET0",
   "duns_legacy": "053641222",
-  "sam_status": null,
-  "sam_status_notes": "Active CAGE 9LET0 + active UEI LM4YHVQ71QG7 suggest a prior SAM.gov registration. Current Active/Inactive status and last-renewal date NOT FOUND in any read file. User to verify at sam.gov before next federal submission.",
+  "sam_status": "active",
+  "sam_status_confirmed_at": "2026-05-23",
+  "sam_status_source": "User-confirmed active 2026-05-23 — registration expiration date TBD; user to verify and supply expiration before submitting any federal proposal",
+  "sam_status_notes": "User-confirmed active 2026-05-23 — registration expiration date TBD; user to verify and supply expiration before submitting any federal proposal. Reps & Certs / EFT / TIN refresh status NOT confirmed by this update — those remain open items per missing_data_flags.",
   "state_of_incorporation": "Texas",
   "year_founded": 2022,
   "year_founded_source": "BPC info.docx \"Year established: 2022\"; corroborated by capability statement, BPC profile, and Beck Group pre-qual (date business started 01/07/2022)",
@@ -525,7 +527,7 @@
       "Landmark/* — already mirrored elsewhere per task instructions"
     ],
     "missing_data_flags": [
-      "SAM.gov current status + last-renewal date NOT FOUND. CAGE 9LET0 and UEI LM4YHVQ71QG7 are valid identifiers but current registration state is unconfirmed. Register/renew at sam.gov before any federal submission (USFWS San Marcos 140FC126R0017, USACE PAIS cabin 140P6026Q0029, TXANG Cmd Post W50S7626QA001).",
+      "SAM.gov registration expiration date — TBD. User confirmed active status on 2026-05-23 but the specific expiration date has not been recorded. SAM registrations expire annually and a lapse causes immediate disqualification on any federal opportunity; confirm before any federal submission (USFWS San Marcos 140FC126R0017, USACE PAIS cabin 140P6026Q0029, TXANG Cmd Post W50S7626QA001). Reps & Certs, EFT, and TIN refresh currency are SEPARATE open items and not implied by 'active' status.",
       "TX HUB certificate (VID 1874292998900) expired 2024-08-31 per source file. Recertify before any TAMU / ASU / TX state bid that scores HUB participation.",
       "DFW MSDC MBE certificate (DL09279) expired 2024-08-31 per source file. Recertify; MBE recognition cascades into HUB recognition under the DFW MSDC / TX Comptroller MOU.",
       "DFW MSDC SBE certificate (DL09279) expired 2024-08-31 per source file. Recertify.",

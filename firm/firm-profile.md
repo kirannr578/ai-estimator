@@ -30,7 +30,7 @@
 | UEI (SAM.gov) | LM4YHVQ71QG7 | `BPC/BPC info.docx`; corroborated by `BPC/BPC Profile.pdf` |
 | CAGE (DLA) | 9LET0 | `BPC/BPC info.docx`; corroborated by `BPC/Blueprint Constructs Capability Statement.pdf` |
 | DUNS (legacy) | 053641222 | `BPC/BPC info.docx` (carried for historical / pre-UEI references) |
-| SAM.gov current registration state | [NOT FOUND IN BPC — needs to be supplied] — CAGE + UEI suggest a prior registration; renewal date unknown. **Verify at sam.gov before any federal submission** (USFWS San Marcos, USACE PAIS cabin, TXANG Cmd Post). | — |
+| SAM.gov current registration state | **Active** (user-confirmed 2026-05-23). Registration expiration date is still TBD — SAM registrations expire annually; user to verify the expiration date and supply it before any federal submission (USFWS San Marcos, USACE PAIS cabin, TXANG Cmd Post). Reps & Certs / EFT / TIN refresh currency are separate open items and not implied by this confirmation. | User confirmation 2026-05-23 |
 
 ## 3. Contact
 
