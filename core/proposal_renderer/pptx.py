@@ -1,37 +1,62 @@
-"""Build a pitch-deck (default) or full-walkthrough PPTX for a single bid.
+"""Build the BPC-branded pitch-deck PPTX for a single bid.
 
-Public entry point: `build_proposal_pptx(bid_dir, out_path, firm_profile,
-style="pitch_deck")`.
+Public entry point: `build_pitch_deck(bid_dir, out_path, firm_profile,
+template_path=None, show_placeholders=False)`.
 
-Two styles:
+Approach (per the user brief):
 
-  * `pitch_deck` — 10–15 slides distilled from the proposal markdown:
-    title, about, project understanding, technical approach, project team,
-    past performance, schedule, quality + safety, price, submission status,
-    why-BPC, Q&A. This is the primary deliverable.
+* Source the master template from a `.pptx` on disk if one exists at
+  `firm/assets/templates/bpc-pitch-deck-template.pptx`. The brief asks
+  us to look in BPC's OneDrive submission package first; that folder
+  only contains a markdown outline (no `.pptx`), so we generate the
+  template programmatically and save it on first render.
+* The "template" is a 16:9 widescreen `Presentation` with our slide
+  size and color palette pre-baked. python-pptx can only manipulate
+  layouts by hand-crafted XML, so the actual visual design (color
+  blocks, dividers, footers, gold-accent rules) is rendered by the
+  slide-builder helpers below. Re-opening the template across renders
+  guarantees identical output.
+* 12 default slides; can grow to 13–15 if richer per-bid content is
+  available (we cap at 15).
 
-  * `full` — one slide per H1 in the markdown source. Body prose is
-    truncated and split if it exceeds ~400 chars. Useful for internal review
-    walkthroughs.
+Placeholders: when `show_placeholders=False` (default for client-facing
+output), `[USER TO FILL …]` markers are rewritten to a neutral
+underline before each slide is built. When True, markers render in red
+bold.
 
-Both styles use 16:9 widescreen with a dark-navy / white palette.
+Backward compatibility: `build_proposal_pptx(... style="pitch_deck"|"full")`
+still works as a thin wrapper around `build_pitch_deck` for the pitch
+style, and a one-slide-per-H1 walkthrough builder for the full style.
 """
 
 from __future__ import annotations
 
 import re
+import shutil
 from datetime import date
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 from pptx import Presentation
 from pptx.dml.color import RGBColor
 from pptx.enum.shapes import MSO_SHAPE
-from pptx.enum.text import PP_ALIGN, MSO_ANCHOR
+from pptx.enum.text import MSO_ANCHOR, PP_ALIGN
 from pptx.util import Emu, Inches, Pt
 
+from .branding import (
+    BPC_GOLD,
+    BPC_GRAY_BG,
+    BPC_GRAY_LINE,
+    BPC_NAVY,
+    BPC_NAVY_DEEP,
+    BPC_SLATE,
+    LOGO_PATH,
+    PITCH_DECK_TEMPLATE,
+    PPTX_FONT_BODY,
+    PPTX_FONT_HEADING,
+)
 from .common import (
-    DEFAULT_LOGO_PATH,
+    PLACEHOLDER_PATTERNS,
     Section,
     collapse_whitespace,
     discover_sections,
@@ -40,6 +65,8 @@ from .common import (
     find_section,
     first_paragraph,
     list_items,
+    neutralize_placeholders,
+    neutralize_placeholders_in_section,
     parse_bid_title,
     parse_solicitation_number,
     primary_personnel,
@@ -47,38 +74,51 @@ from .common import (
     strip_blockquote_prefix,
 )
 
-NAVY = RGBColor(0x0F, 0x2A, 0x4A)
-NEAR_BLACK = RGBColor(0x11, 0x11, 0x11)
+
+def _hex_to_rgb(hex_str: str) -> RGBColor:
+    """`#RRGGBB` -> `RGBColor`."""
+    s = hex_str.lstrip("#")
+    return RGBColor(int(s[0:2], 16), int(s[2:4], 16), int(s[4:6], 16))
+
+
+NAVY = _hex_to_rgb(BPC_NAVY)
+NAVY_DEEP = _hex_to_rgb(BPC_NAVY_DEEP)
+SLATE = _hex_to_rgb(BPC_SLATE)
+GOLD = _hex_to_rgb(BPC_GOLD)
+GRAY_BG = _hex_to_rgb(BPC_GRAY_BG)
+GRAY_LINE = _hex_to_rgb(BPC_GRAY_LINE)
 WHITE = RGBColor(0xFF, 0xFF, 0xFF)
+NEAR_BLACK = RGBColor(0x1A, 0x1F, 0x26)
 RED = RGBColor(0xC0, 0x00, 0x00)
-LIGHT_GRAY = RGBColor(0xEE, 0xEE, 0xEE)
+FOOTER_GRAY = RGBColor(0x77, 0x77, 0x77)
 
 SLIDE_WIDTH = Inches(13.333)
 SLIDE_HEIGHT = Inches(7.5)
 
 
-def build_proposal_pptx(
+# ---------------------------------------------------------------------------
+# Public API
+# ---------------------------------------------------------------------------
+
+
+def build_pitch_deck(
     bid_dir: Path,
     out_path: Path,
     firm_profile: dict[str, Any],
     *,
-    style: str = "pitch_deck",
+    template_path: Path | None = None,
+    show_placeholders: bool = False,
     logo_path: Path | None = None,
 ) -> Path:
-    """Render `<bid_dir>/proposal/` to a PPTX file at `out_path`.
+    """Render `<bid_dir>/proposal/` to a 12-slide BPC-branded pitch deck.
 
-    `style="pitch_deck"` (default) produces 10-15 distilled slides.
-    `style="full"` produces one slide per H1 in the source markdown.
+    Returns the resolved output path.
     """
-    if style not in {"pitch_deck", "full"}:
-        raise ValueError(f"style must be 'pitch_deck' or 'full', got {style!r}")
-
     bid_dir = Path(bid_dir).resolve()
     out_path = Path(out_path).resolve()
     proposal_dir = bid_dir / "proposal"
     if not proposal_dir.is_dir():
         raise FileNotFoundError(f"no proposal directory at {proposal_dir}")
-
     sections = discover_sections(proposal_dir)
     if not sections:
         raise FileNotFoundError(f"no proposal sections found in {proposal_dir}")
@@ -87,34 +127,129 @@ def build_proposal_pptx(
     bid_title = parse_bid_title(proposal_dir, bid_slug)
     solicitation = parse_solicitation_number(bid_slug)
 
-    prs = Presentation()
+    rendered_sections = [
+        neutralize_placeholders_in_section(s, show_placeholders=show_placeholders)
+        for s in sections
+    ]
+
+    template = template_path or PITCH_DECK_TEMPLATE
+    _ensure_template(template)
+
+    prs = Presentation(str(template))
     prs.slide_width = SLIDE_WIDTH
     prs.slide_height = SLIDE_HEIGHT
 
-    if style == "pitch_deck":
-        _build_pitch_deck(
-            prs=prs,
-            bid_slug=bid_slug,
-            bid_title=bid_title,
-            solicitation=solicitation,
-            sections=sections,
-            firm_profile=firm_profile,
-            logo_path=logo_path or DEFAULT_LOGO_PATH,
-        )
-    else:
-        _build_full_deck(
-            prs=prs,
-            bid_slug=bid_slug,
-            bid_title=bid_title,
-            solicitation=solicitation,
-            sections=sections,
-            firm_profile=firm_profile,
-            logo_path=logo_path or DEFAULT_LOGO_PATH,
-        )
+    _build_pitch_deck(
+        prs=prs,
+        bid_slug=bid_slug,
+        bid_title=bid_title,
+        solicitation=solicitation,
+        sections=rendered_sections,
+        firm_profile=firm_profile,
+        logo_path=logo_path or LOGO_PATH,
+        show_placeholders=show_placeholders,
+    )
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
     prs.save(str(out_path))
     return out_path
+
+
+def build_proposal_pptx(
+    bid_dir: Path,
+    out_path: Path,
+    firm_profile: dict[str, Any],
+    *,
+    style: str = "pitch_deck",
+    show_placeholders: bool = False,
+    template_path: Path | None = None,
+    logo_path: Path | None = None,
+) -> Path:
+    """Backward-compatible entry. `style="pitch_deck"` produces the
+    branded 12-slide deck; `style="full"` produces a one-slide-per-H1
+    walkthrough used by internal review only."""
+    if style not in {"pitch_deck", "full"}:
+        raise ValueError(
+            f"style must be 'pitch_deck' or 'full', got {style!r}"
+        )
+    if style == "pitch_deck":
+        return build_pitch_deck(
+            bid_dir,
+            out_path,
+            firm_profile,
+            template_path=template_path,
+            show_placeholders=show_placeholders,
+            logo_path=logo_path,
+        )
+
+    bid_dir = Path(bid_dir).resolve()
+    out_path = Path(out_path).resolve()
+    proposal_dir = bid_dir / "proposal"
+    sections = discover_sections(proposal_dir)
+    bid_slug = bid_dir.name
+    bid_title = parse_bid_title(proposal_dir, bid_slug)
+    solicitation = parse_solicitation_number(bid_slug)
+    rendered_sections = [
+        neutralize_placeholders_in_section(s, show_placeholders=show_placeholders)
+        for s in sections
+    ]
+
+    template = template_path or PITCH_DECK_TEMPLATE
+    _ensure_template(template)
+    prs = Presentation(str(template))
+    prs.slide_width = SLIDE_WIDTH
+    prs.slide_height = SLIDE_HEIGHT
+
+    _build_full_deck(
+        prs=prs,
+        bid_slug=bid_slug,
+        bid_title=bid_title,
+        solicitation=solicitation,
+        sections=rendered_sections,
+        firm_profile=firm_profile,
+        logo_path=logo_path or LOGO_PATH,
+    )
+
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    prs.save(str(out_path))
+    return out_path
+
+
+# ---------------------------------------------------------------------------
+# Template — generate once, reuse across renders
+# ---------------------------------------------------------------------------
+
+
+def _ensure_template(template_path: Path) -> None:
+    """Create `template_path` if it doesn't already exist.
+
+    The template is an empty 16:9 Presentation with our slide
+    dimensions baked in. python-pptx can't easily author custom slide
+    layouts at runtime, so the visual design lives in the slide
+    builder helpers — but generating + reusing the same .pptx file
+    on disk gives us a stable place for designers to swap in a real
+    template later if BPC produces one.
+    """
+    template_path = Path(template_path)
+    if template_path.exists():
+        return
+    template_path.parent.mkdir(parents=True, exist_ok=True)
+    prs = Presentation()
+    prs.slide_width = SLIDE_WIDTH
+    prs.slide_height = SLIDE_HEIGHT
+    # Save with no slides so re-openers don't have to purge a placeholder
+    # slide on every render (which leaves orphan slide1.xml parts and
+    # warns "Duplicate name 'ppt/slides/slide1.xml'").
+    prs.save(str(template_path))
+
+
+def _purge_template_placeholder_slides(prs: Presentation) -> None:
+    """Remove any placeholder slides the template may carry over so the
+    final deck is exactly the slides we built."""
+    sld_id_lst = prs.slides._sldIdLst  # noqa: SLF001 — python-pptx idiom
+    ids = list(sld_id_lst)
+    for sld_id_el in ids:
+        sld_id_lst.remove(sld_id_el)
 
 
 # ---------------------------------------------------------------------------
@@ -131,7 +266,10 @@ def _build_pitch_deck(
     sections: list[Section],
     firm_profile: dict[str, Any],
     logo_path: Path,
+    show_placeholders: bool,
 ) -> None:
+    _purge_template_placeholder_slides(prs)
+
     _slide_title(
         prs,
         bid_title=bid_title,
@@ -139,35 +277,26 @@ def _build_pitch_deck(
         firm_profile=firm_profile,
         logo_path=logo_path,
     )
-
     _slide_about_bpc(prs, firm_profile=firm_profile, bid_slug=bid_slug)
-
     _slide_project_understanding(
         prs, sections=sections, bid_slug=bid_slug, bid_title=bid_title
     )
-
     _slide_technical_approach(prs, sections=sections, bid_slug=bid_slug)
-
     _slide_project_team(prs, sections=sections, bid_slug=bid_slug)
 
-    _slide_past_performance(prs, sections=sections, bid_slug=bid_slug)
+    # Past performance — three slides, one per pick from firm_profile.
+    _slides_past_performance(
+        prs,
+        sections=sections,
+        firm_profile=firm_profile,
+        bid_slug=bid_slug,
+    )
 
     _slide_schedule(prs, sections=sections, bid_slug=bid_slug)
-
     _slide_quality_safety(prs, sections=sections, bid_slug=bid_slug)
-
     _slide_price(prs, sections=sections, bid_slug=bid_slug)
-
-    _slide_submission_status(prs, sections=sections, bid_slug=bid_slug)
-
     _slide_why_bpc(prs, firm_profile=firm_profile, bid_slug=bid_slug)
-
     _slide_qa(prs, firm_profile=firm_profile, bid_slug=bid_slug)
-
-
-# ---------------------------------------------------------------------------
-# Full-deck builder
-# ---------------------------------------------------------------------------
 
 
 def _build_full_deck(
@@ -180,6 +309,7 @@ def _build_full_deck(
     firm_profile: dict[str, Any],
     logo_path: Path,
 ) -> None:
+    _purge_template_placeholder_slides(prs)
     _slide_title(
         prs,
         bid_title=bid_title,
@@ -187,18 +317,25 @@ def _build_full_deck(
         firm_profile=firm_profile,
         logo_path=logo_path,
     )
-
     for section in sections:
-        for h1_title, body in find_h1_blocks(section.body) or [(section.title, section.body)]:
+        for h1_title, body in find_h1_blocks(section.body) or [
+            (section.title, section.body)
+        ]:
             chunks = _chunk_text_for_slide(body, max_chars=400)
             if not chunks:
                 chunks = [""]
             for i, chunk in enumerate(chunks):
-                title = h1_title if len(chunks) == 1 else f"{h1_title} ({i + 1}/{len(chunks)})"
+                title = (
+                    h1_title
+                    if len(chunks) == 1
+                    else f"{h1_title} ({i + 1}/{len(chunks)})"
+                )
                 _body_slide(
                     prs,
                     title=title,
-                    body_lines=[ln.strip() for ln in chunk.splitlines() if ln.strip()][:8],
+                    body_lines=[
+                        ln.strip() for ln in chunk.splitlines() if ln.strip()
+                    ][:8],
                     bid_slug=bid_slug,
                 )
 
@@ -216,29 +353,45 @@ def _slide_title(
     firm_profile: dict[str, Any],
     logo_path: Path,
 ) -> None:
-    slide = prs.slides.add_slide(prs.slide_layouts[6])  # blank
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
     _set_background(slide, NAVY)
 
-    # Logo (centered top half)
-    if logo_path and logo_path.exists():
-        # 4 inches wide, height auto.
+    # Gold accent stripe across the top
+    _add_rect(
+        slide,
+        left=Inches(0), top=Inches(0),
+        width=SLIDE_WIDTH, height=Inches(0.18),
+        fill=GOLD,
+    )
+
+    # Logo (centered upper-third)
+    if logo_path and Path(logo_path).exists():
         try:
             slide.shapes.add_picture(
                 str(logo_path),
-                left=Inches(4.667),
-                top=Inches(0.7),
-                width=Inches(4.0),
+                left=Inches(5.167),
+                top=Inches(0.85),
+                width=Inches(3.0),
             )
         except Exception:
-            # Image add can fail on weird PNG metadata; skip silently.
             pass
+
+    # Eyebrow
+    _add_text(
+        slide,
+        text="BLUE PRINT CONSTRUCTS",
+        left=Inches(0.5), top=Inches(2.6), width=Inches(12.333), height=Inches(0.4),
+        font_size=Pt(13), bold=True, color=GOLD, align=PP_ALIGN.CENTER,
+        font_name=PPTX_FONT_HEADING,
+    )
 
     # Bid title
     _add_text(
         slide,
         text=bid_title,
-        left=Inches(0.5), top=Inches(3.5), width=Inches(12.333), height=Inches(1.2),
-        font_size=Pt(34), bold=True, color=WHITE, align=PP_ALIGN.CENTER,
+        left=Inches(0.5), top=Inches(3.05), width=Inches(12.333), height=Inches(1.7),
+        font_size=Pt(36), bold=True, color=WHITE, align=PP_ALIGN.CENTER,
+        font_name=PPTX_FONT_HEADING,
     )
 
     # Solicitation
@@ -246,29 +399,39 @@ def _slide_title(
         _add_text(
             slide,
             text=f"Solicitation: {solicitation}",
-            left=Inches(0.5), top=Inches(4.7), width=Inches(12.333), height=Inches(0.5),
-            font_size=Pt(16), color=WHITE, align=PP_ALIGN.CENTER,
+            left=Inches(0.5), top=Inches(4.85), width=Inches(12.333), height=Inches(0.45),
+            font_size=Pt(15), color=WHITE, align=PP_ALIGN.CENTER,
         )
 
-    # Firm line
+    # Gold rule under solicitation
+    _add_rect(
+        slide,
+        left=Inches(6.166), top=Inches(5.5),
+        width=Inches(1.0), height=Inches(0.04),
+        fill=GOLD,
+    )
+
+    # Firm tag
     legal = firm_profile.get("legal_name", "")
     dba = firm_profile.get("dba", "")
     firm_line = (
-        f"{dba} (legal: {legal})" if dba and legal and dba != legal else dba or legal
+        f"{dba} (legal: {legal})"
+        if dba and legal and dba != legal
+        else dba or legal
     )
     _add_text(
         slide,
-        text=f"{firm_line} — Submission Date TBD by reviewer",
-        left=Inches(0.5), top=Inches(5.5), width=Inches(12.333), height=Inches(0.5),
+        text=firm_line,
+        left=Inches(0.5), top=Inches(5.7), width=Inches(12.333), height=Inches(0.4),
         font_size=Pt(13), color=WHITE, align=PP_ALIGN.CENTER, italic=True,
     )
 
-    # Footer date
+    # Submission date placeholder
     _add_text(
         slide,
-        text=f"Prepared {date.today().isoformat()}",
-        left=Inches(0.5), top=Inches(6.7), width=Inches(12.333), height=Inches(0.4),
-        font_size=Pt(10), color=WHITE, align=PP_ALIGN.CENTER,
+        text=f"Submission date __________   ·   Document prepared {date.today().isoformat()}",
+        left=Inches(0.5), top=Inches(6.15), width=Inches(12.333), height=Inches(0.4),
+        font_size=Pt(10), color=GOLD, align=PP_ALIGN.CENTER,
     )
 
 
@@ -282,24 +445,31 @@ def _slide_about_bpc(
     uei = firm_profile.get("uei", "")
     cage = firm_profile.get("cage", "")
     sa = firm_profile.get("set_aside_eligibility") or {}
-    self_perform = (firm_profile.get("trade_capabilities") or {}).get("self_perform") or []
+    self_perform = (firm_profile.get("trade_capabilities") or {}).get(
+        "self_perform"
+    ) or []
+    year_founded = firm_profile.get("year_founded", "")
 
     bullets = [
-        (False, f"Legal name: {legal} dba {dba}"),
+        (False, f"{dba} — legal entity {legal}; founded {year_founded}, "
+                f"Texas-incorporated, founder-led."),
         (False,
-         f"NAICS: primary {primary_naics} (Commercial & Institutional Building "
-         f"Construction); {len(naics_codes)} codes registered total"),
-        (False, f"UEI: {uei}   CAGE: {cage}   SAM.gov status: "
-                f"{firm_profile.get('sam_status', 'TBD')}"),
+         f"NAICS: primary {primary_naics} (Commercial & Institutional "
+         f"Building Construction); {len(naics_codes)} codes registered."),
         (False,
-         "Set-aside posture: " + ", ".join(filter(None, [
-             "small business" if sa.get("small_business") else "",
-             "minority-owned" if sa.get("minority_owned") else "",
-             f"MBE ({sa.get('mbe_status')})" if sa.get("mbe_status") else "",
-             f"TX HUB ({sa.get('tx_hub_status')})" if sa.get("tx_hub_status") else "",
-         ]))),
+         f"Federal IDs: UEI {uei} · CAGE {cage} · SAM.gov status: "
+         f"{firm_profile.get('sam_status', 'TBD')}."),
         (False,
-         "Self-perform trades: " + (", ".join(self_perform[:6]) if self_perform else "—")),
+         "Set-aside posture: " + (
+             ", ".join(filter(None, [
+                 "Texas HUB" if sa.get("tx_hub_status") else "",
+                 f"DFW MSDC MBE" if sa.get("mbe_status") else "",
+                 "Small Business" if sa.get("small_business") else "",
+                 "Minority-owned" if sa.get("minority_owned") else "",
+             ])) or "—")),
+        (False,
+         "Self-perform trades: "
+         + (", ".join(self_perform[:6]) if self_perform else "—") + "."),
     ]
     _body_slide(
         prs,
@@ -323,12 +493,14 @@ def _slide_project_understanding(
     )
     bullets: list[tuple[bool, str]] = []
     if src is not None:
-        # First find an "Executive summary" / "Project understanding" h2
-        # block, else fall back to the document's first paragraph.
         for h2_title, body in find_h2_blocks(src.body):
+            tl = h2_title.lower()
             if any(
-                key in h2_title.lower()
-                for key in ("executive summary", "understanding", "overview", "scope at a glance")
+                k in tl
+                for k in (
+                    "understanding", "intent", "scope", "executive summary",
+                    "overview",
+                )
             ):
                 items = list_items(body)[:3]
                 if items:
@@ -341,11 +513,12 @@ def _slide_project_understanding(
         if not bullets:
             text = first_paragraph(src.body)
             if text:
-                bullets.append((False, _truncate(text, 280)))
+                bullets.append((False, _truncate(text, 320)))
+
     if not bullets:
         bullets = [(False, f"Project: {bid_title}")]
     while len(bullets) < 3:
-        bullets.append((False, "(See proposal PDF — detail not surfaced as bullets here)"))
+        bullets.append((False, "(See full proposal for additional detail.)"))
     bullets = bullets[:4]
 
     _body_slide(
@@ -370,13 +543,20 @@ def _slide_technical_approach(
             label = h2_title.split("—", 1)[0].strip()
             label = re.sub(r"^\d+\.\s*", "", label)
             label = label.strip(":") or h2_title
+            tl = label.lower()
+            if any(
+                skip in tl for skip in ("appendix", "table of", "acronym")
+            ):
+                continue
             first = first_paragraph(body)
-            text = f"{label}: {_truncate(first, 200)}" if first else label
+            text = (
+                f"{label}: {_truncate(first, 200)}" if first else label
+            )
             bullets.append((False, _truncate(text, 240)))
             if len(bullets) >= 6:
                 break
     if not bullets:
-        bullets = [(False, "(Technical approach section not detected)")]
+        bullets = [(False, "Technical-approach phases not detected in source markdown.")]
     _body_slide(
         prs,
         title="Technical approach",
@@ -389,100 +569,214 @@ def _slide_technical_approach(
 def _slide_project_team(
     prs: Presentation, *, sections: list[Section], bid_slug: str
 ) -> None:
-    src = find_section(
-        sections,
-        3,
-        slug_contains="project-team",
-    )
-    rows: list[tuple[str, str]] = []  # (role, name)
+    src = find_section(sections, 3, slug_contains="project-team")
+    rows: list[tuple[str, str]] = []
     if src is not None:
-        # Look for "Role" / "Name" pairs in tables; fall back to text.
         for h2_title, body in find_h2_blocks(src.body):
-            if "role" in h2_title.lower() or "résumé" in h2_title.lower() or "resume" in h2_title.lower():
-                role = re.sub(r"^Role\s+\d+\s*[—-]\s*", "", h2_title).strip()
-                name = ""
-                m = re.search(
-                    r"\|\s*Name\s*\|\s*([^|]+?)\s*\|", body, re.IGNORECASE
-                )
-                if m:
-                    name = m.group(1).strip().strip("`")
-                if not name:
-                    name = "[USER TO FILL — name]"
-                rows.append((role, name))
-        if not rows:
-            for h3_title, _ in find_h3_blocks(src.body):
-                rows.append((h3_title, "[USER TO FILL — name]"))
-        if not rows:
-            rows.append(("Project lead", "(see project-team section)"))
-    else:
-        rows.append(("Project lead", "(no project-team section)"))
+            tl = h2_title.lower()
+            if "key personnel" not in tl and "role" not in tl:
+                continue
+            role = re.sub(
+                r"^[A-Z]\.\s*Key personnel\s*[—-]\s*", "", h2_title
+            ).strip()
+            role = re.sub(r"^Role\s+\d+\s*[—-]\s*", "", role).strip()
+            name = ""
+            m = re.search(
+                r"\|\s*Name\s*\|\s*([^|]+?)\s*\|", body, re.IGNORECASE
+            )
+            if m:
+                name = m.group(1).strip().strip("`")
+            if not name or name.startswith("____"):
+                name = "____________________"
+            rows.append((role, name))
+            if len(rows) >= 8:
+                break
+    if not rows:
+        rows = [("Project lead", "____________________")]
 
-    rows = rows[:8]
     _table_slide(
         prs,
         title="Project team",
-        headers=["Role", "Name"],
+        headers=["Role", "Named lead"],
         rows=rows,
         bid_slug=bid_slug,
         col_widths=[Inches(5.0), Inches(7.0)],
     )
 
 
-def _slide_past_performance(
-    prs: Presentation, *, sections: list[Section], bid_slug: str
+def _slides_past_performance(
+    prs: Presentation,
+    *,
+    sections: list[Section],
+    firm_profile: dict[str, Any],
+    bid_slug: str,
 ) -> None:
-    src = (
-        find_section(sections, 4, slug_contains="past-performance")
-        or find_section(sections, 3, slug_contains="past-performance")
-        or find_section(sections, 3, slug_contains="volume-III")
+    """Render one slide per pick (3 slides) using the section-divider
+    layout when no project photo is available — text-only is fine and
+    cleaner than a stock image (per the brief)."""
+    rules = firm_profile.get("past_project_selection_rules") or {}
+    pick_names = (rules.get(bid_slug) or {}).get("picks") or []
+    projects_by_name = {
+        p.get("name", ""): p for p in (firm_profile.get("past_projects") or [])
+    }
+
+    rendered = 0
+    for idx, name in enumerate(pick_names[:3], start=1):
+        project = projects_by_name.get(name)
+        if project is None:
+            for k, v in projects_by_name.items():
+                if name and name.split(" — ")[0] in k:
+                    project = v
+                    break
+        if project is None:
+            continue
+        _slide_past_perf_one(
+            prs,
+            title=f"Past performance — Project {idx} of 3",
+            project=project,
+            bid_slug=bid_slug,
+        )
+        rendered += 1
+
+    # Fall back to a single text slide if firm_profile didn't surface
+    # any picks for this bid.
+    if rendered == 0:
+        _body_slide(
+            prs,
+            title="Past performance",
+            bullets=[
+                (
+                    False,
+                    "(No past-performance picks configured for this bid in "
+                    "firm-profile.json — see full proposal for the complete roster.)",
+                )
+            ],
+            bid_slug=bid_slug,
+        )
+
+
+def _slide_past_perf_one(
+    prs: Presentation,
+    *,
+    title: str,
+    project: dict[str, Any],
+    bid_slug: str,
+) -> None:
+    """Single past-performance slide — text-only layout (no image)."""
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    _set_background(slide, WHITE)
+    _add_title_bar(slide, title)
+
+    name = project.get("name", "")
+    owner = project.get("owner", "")
+    value = project.get("contract_value") or "—"
+    completion = (
+        project.get("actual_completion_date")
+        or project.get("completion_date")
+        or project.get("scheduled_substantial_completion")
+        or "—"
     )
-    headers = ["Project", "Owner", "Value", "Completion", "Scope summary"]
-    rows: list[list[str]] = []
-    if src is not None:
-        rows = _extract_past_perf_rows(src.body, max_rows=3)
-    if not rows:
-        rows = [
-            [
-                "(No past performance rows extracted)",
-                "—", "—", "—",
-                "Renderer could not parse rows; see proposal PDF for the full file.",
-            ]
-        ]
-    _table_slide(
-        prs,
-        title="Past performance",
-        headers=headers,
-        rows=rows,
-        bid_slug=bid_slug,
-        col_widths=[Inches(2.5), Inches(2.5), Inches(1.5), Inches(1.5), Inches(4.0)],
-        font_size=Pt(10),
+    scope = project.get("scope_summary") or ""
+    role = project.get("role", "GC")
+    delivery = project.get("delivery_method") or "—"
+
+    # Project name as a large eyebrow + secondary metadata
+    _add_text(
+        slide,
+        text=name,
+        left=Inches(0.5), top=Inches(1.45),
+        width=Inches(12.333), height=Inches(0.7),
+        font_size=Pt(24), bold=True, color=NAVY,
+        font_name=PPTX_FONT_HEADING,
     )
+
+    meta_lines = [
+        f"Owner: {owner}",
+        f"Contract value: {value}",
+        f"Completion: {completion}",
+        f"Role: {role}   ·   Delivery: {delivery}",
+    ]
+    for i, line in enumerate(meta_lines):
+        _add_text(
+            slide,
+            text=line,
+            left=Inches(0.5),
+            top=Inches(2.2 + i * 0.32),
+            width=Inches(12.333),
+            height=Inches(0.32),
+            font_size=Pt(13),
+            color=SLATE,
+        )
+
+    # Gold rule
+    _add_rect(
+        slide,
+        left=Inches(0.5), top=Inches(3.55),
+        width=Inches(1.0), height=Inches(0.04),
+        fill=GOLD,
+    )
+
+    # Scope summary
+    _add_text(
+        slide,
+        text="Scope summary",
+        left=Inches(0.5), top=Inches(3.75),
+        width=Inches(12.333), height=Inches(0.32),
+        font_size=Pt(11), bold=True, color=NAVY,
+    )
+    _add_text(
+        slide,
+        text=_truncate(scope, 800),
+        left=Inches(0.5), top=Inches(4.05),
+        width=Inches(12.333), height=Inches(2.6),
+        font_size=Pt(13), color=NEAR_BLACK,
+    )
+
+    _add_footer(slide, bid_slug=bid_slug, slide_number=len(prs.slides))
 
 
 def _slide_schedule(
     prs: Presentation, *, sections: list[Section], bid_slug: str
 ) -> None:
     src = find_section(sections, 5, slug_contains="schedule")
-    bullets: list[tuple[bool, str]] = []
+    rows: list[list[str]] = []
     if src is not None:
-        # Look for milestone bullets or a table with Milestone / Date columns.
         for h2_title, body in find_h2_blocks(src.body):
-            if "milestone" in h2_title.lower() or "schedule" in h2_title.lower():
+            tl = h2_title.lower()
+            if "milestone" in tl or "schedule" in tl:
                 items = list_items(body)
-                for it in items[:8]:
-                    bullets.append((False, _truncate(it, 200)))
-                if bullets:
+                for it in items[:6]:
+                    if ":" in it:
+                        m, d = it.split(":", 1)
+                        rows.append(
+                            [_truncate(m.strip(), 60), _truncate(d.strip(), 80)]
+                        )
+                    else:
+                        rows.append([_truncate(it, 60), "—"])
+                if rows:
                     break
-        if not bullets:
-            for it in list_items(src.body)[:8]:
-                bullets.append((False, _truncate(it, 200)))
-        if not bullets:
-            text = first_paragraph(src.body)
-            if text:
-                bullets.append((False, _truncate(text, 280)))
-    if not bullets:
-        bullets = [(False, "(Schedule section not detected)")]
-    _body_slide(prs, title="Schedule", bullets=bullets, bid_slug=bid_slug)
+        if not rows:
+            for it in list_items(src.body)[:6]:
+                if ":" in it:
+                    m, d = it.split(":", 1)
+                    rows.append(
+                        [_truncate(m.strip(), 60), _truncate(d.strip(), 80)]
+                    )
+    if not rows:
+        rows = [
+            ["Notice to proceed", "____________________"],
+            ["Mobilization", "____________________"],
+            ["Substantial completion", "____________________"],
+            ["Final completion", "____________________"],
+        ]
+    _table_slide(
+        prs,
+        title="Schedule milestones",
+        headers=["Milestone", "Date / duration"],
+        rows=rows,
+        bid_slug=bid_slug,
+        col_widths=[Inches(5.0), Inches(7.0)],
+    )
 
 
 def _slide_quality_safety(
@@ -491,16 +785,18 @@ def _slide_quality_safety(
     qc = find_section(sections, 6, slug_contains="quality")
     safety = find_section(sections, 7, slug_contains="safety")
     bullets: list[tuple[bool, str]] = []
-
     for label, src in (("QC: ", qc), ("Safety: ", safety)):
         if src is None:
             continue
-        # Try to surface a "highlights" or "summary" h2 block.
         used = False
         for h2_title, body in find_h2_blocks(src.body):
+            tl = h2_title.lower()
             if any(
-                k in h2_title.lower()
-                for k in ("highlights", "summary", "philosophy", "overview", "objectives")
+                k in tl
+                for k in (
+                    "highlights", "summary", "philosophy", "overview",
+                    "objectives",
+                )
             ):
                 first = first_paragraph(body)
                 if first:
@@ -517,79 +813,61 @@ def _slide_quality_safety(
             if first:
                 bullets.append((False, _truncate(label + first, 240)))
 
-    if not bullets:
-        bullets = [(False, "(Quality / safety highlights not detected)")]
-    _body_slide(prs, title="Quality & safety", bullets=bullets, bid_slug=bid_slug)
+    while len(bullets) < 4:
+        bullets.append(
+            (False, "(Additional QC / safety detail in the full proposal.)")
+        )
+    bullets = bullets[:4]
+    _body_slide(
+        prs, title="Quality & safety", bullets=bullets, bid_slug=bid_slug
+    )
 
 
 def _slide_price(
     prs: Presentation, *, sections: list[Section], bid_slug: str
 ) -> None:
-    # RFCSP shape: 10-price-proposal. Federal: 01-volume-I-price-proposal /
-    # 01-price-proposal.
     src = (
         find_section(sections, 10, slug_contains="price-proposal")
         or find_section(sections, 1, slug_contains="price-proposal")
         or find_section(sections, 1, slug_contains="volume-I")
     )
-    bullets: list[tuple[bool, str]] = []
+
+    total = "$____________________"
+    bullets: list[str] = []
     if src is not None:
-        # Pull the section's first paragraph; then surface any line that
-        # looks like "Total bid price" or "Grand total" or "$..." as bullets.
-        first = first_paragraph(src.body)
-        if first:
-            bullets.append((False, _truncate(first, 260)))
-        money_re = re.compile(r"(Total[^|\n]*\$[^|\n]+)|(Grand total[^|\n]*\$[^|\n]+)")
+        money_re = re.compile(
+            r"(grand total|total bid|total proposal|total price|base bid)[^|\n]*?(\$\s*[\d,_]+|\$\s*_+)",
+            re.IGNORECASE,
+        )
         for line in src.body.splitlines():
             stripped = line.strip().lstrip("|").lstrip("-").strip()
             if not stripped:
                 continue
-            if money_re.search(stripped):
-                bullets.append((False, _truncate(collapse_whitespace(stripped), 220)))
-            elif "[USER TO FILL — $" in line or "[USER TO FILL: $" in line:
-                bullets.append((False, _truncate(collapse_whitespace(stripped), 220)))
-            if len(bullets) >= 5:
+            m = money_re.search(stripped)
+            if m and "$" in m.group(2):
+                bullets.append(
+                    _truncate(collapse_whitespace(stripped), 200)
+                )
+                if "total" in m.group(1).lower() and total == "$____________________":
+                    total = m.group(2)
+            if len(bullets) >= 4:
                 break
-    if not bullets:
-        bullets = [(False, "(Price proposal section not detected)")]
-    _body_slide(prs, title="Price proposal", bullets=bullets, bid_slug=bid_slug)
-
-
-def _slide_submission_status(
-    prs: Presentation, *, sections: list[Section], bid_slug: str
-) -> None:
-    src = (
-        find_section(sections, 11, slug_contains="submission-checklist")
-        or find_section(sections, 10, slug_contains="submission-checklist")
-    )
-    bullets: list[tuple[bool, str]] = []
-    if src is not None:
-        ready_count = 0
-        partial_count = 0
-        pending_count = 0
-        for line in src.body.splitlines():
-            s = line.strip()
-            if re.match(r"^[-*]\s*\[x\]\s", s, re.IGNORECASE):
-                ready_count += 1
-            elif re.match(r"^[-*]\s*\[~\]\s", s):
-                partial_count += 1
-            elif re.match(r"^[-*]\s*\[\s\]\s", s):
-                pending_count += 1
-        total = ready_count + partial_count + pending_count
-        if total:
-            bullets = [
-                (False, f"Ready: {ready_count} item(s)"),
-                (False, f"Partial: {partial_count} item(s)"),
-                (False, f"Pending: {pending_count} item(s)"),
-            ]
-        else:
+        if not bullets:
             first = first_paragraph(src.body)
             if first:
-                bullets.append((False, _truncate(first, 280)))
-    if not bullets:
-        bullets = [(False, "(Submission checklist section not detected)")]
-    _body_slide(
-        prs, title="Submission checklist status", bullets=bullets, bid_slug=bid_slug
+                bullets.append(_truncate(first, 240))
+
+    while len(bullets) < 3:
+        bullets.append("(See full proposal for itemized pricing detail.)")
+    bullets = bullets[:3]
+
+    _stat_slide(
+        prs,
+        title="Price proposal summary",
+        stat_label="TOTAL PROPOSED PRICE",
+        stat_value=total,
+        bullets=[(False, b) for b in bullets],
+        bid_slug=bid_slug,
     )
 
 
@@ -597,42 +875,118 @@ def _slide_why_bpc(
     prs: Presentation, *, firm_profile: dict[str, Any], bid_slug: str
 ) -> None:
     sa = firm_profile.get("set_aside_eligibility") or {}
-    self_perform = (firm_profile.get("trade_capabilities") or {}).get("self_perform") or []
-    sectors = (firm_profile.get("trade_capabilities") or {}).get("served_sectors") or []
+    self_perform = (firm_profile.get("trade_capabilities") or {}).get(
+        "self_perform"
+    ) or []
+    sectors = (firm_profile.get("trade_capabilities") or {}).get(
+        "served_sectors"
+    ) or []
     bullets = [
-        (False, f"Texas-based small business — self-perform across {len(self_perform)} core trades"),
-        (False, "Diverse-business posture: " + ", ".join(filter(None, [
-            "TX HUB" if sa.get("tx_hub_status") else "",
-            f"MBE ({sa.get('mbe_status')})" if sa.get("mbe_status") else "",
-            "small business" if sa.get("small_business") else "",
-            "minority-owned" if sa.get("minority_owned") else "",
-        ])) or "—"),
-        (False,
-         "Sector breadth: "
-         + (", ".join(s.split("—")[0].strip() for s in sectors[:4]) if sectors else "—")),
-        (False,
-         f"Founder-led PMP / CSM operator with 22 years delivery leadership — "
-         f"{(firm_profile.get('key_personnel') or [{}])[0].get('name', '')}"),
+        (
+            False,
+            f"Texas-based small business — self-perform across "
+            f"{len(self_perform)} core trades.",
+        ),
+        (
+            False,
+            "Diverse-business posture: "
+            + (
+                ", ".join(
+                    filter(
+                        None,
+                        [
+                            "TX HUB" if sa.get("tx_hub_status") else "",
+                            "DFW MSDC MBE" if sa.get("mbe_status") else "",
+                            "Small Business" if sa.get("small_business") else "",
+                            "Minority-owned" if sa.get("minority_owned") else "",
+                        ],
+                    )
+                )
+                or "—"
+            )
+            + ".",
+        ),
+        (
+            False,
+            "Sector breadth: "
+            + (
+                ", ".join(s.split("—")[0].strip() for s in sectors[:4])
+                if sectors
+                else "—"
+            )
+            + ".",
+        ),
+        (
+            False,
+            f"Founder-led PMP / CSM operator with 22 years delivery leadership — "
+            f"{(firm_profile.get('key_personnel') or [{}])[0].get('name', '')}.",
+        ),
     ]
-    _body_slide(prs, title="Why Blue Print Constructs", bullets=bullets, bid_slug=bid_slug)
+    _body_slide(
+        prs, title="Why Blue Print Constructs", bullets=bullets, bid_slug=bid_slug
+    )
 
 
 def _slide_qa(
     prs: Presentation, *, firm_profile: dict[str, Any], bid_slug: str
 ) -> None:
     person = primary_personnel(firm_profile)
-    bullets = [
-        (False, f"{person.get('name', '')} — {person.get('title', '')}"),
-        (False, f"Email: {person.get('email', '')}"),
-        (False, f"Phone: {person.get('phone', '')}"),
-        (False, f"Web: {firm_profile.get('website', '')}"),
-        (False, "Next steps: site walk, RFI consolidation, sub bid coordination, final pricing."),
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    _set_background(slide, NAVY)
+    _add_rect(
+        slide,
+        left=Inches(0), top=Inches(0),
+        width=SLIDE_WIDTH, height=Inches(0.18),
+        fill=GOLD,
+    )
+
+    _add_text(
+        slide,
+        text="Q & A",
+        left=Inches(0.5), top=Inches(1.0),
+        width=Inches(12.333), height=Inches(1.5),
+        font_size=Pt(60), bold=True, color=WHITE, align=PP_ALIGN.CENTER,
+        font_name=PPTX_FONT_HEADING,
+    )
+
+    _add_text(
+        slide,
+        text="THANK YOU FOR YOUR CONSIDERATION",
+        left=Inches(0.5), top=Inches(2.7),
+        width=Inches(12.333), height=Inches(0.5),
+        font_size=Pt(13), bold=True, color=GOLD, align=PP_ALIGN.CENTER,
+    )
+
+    _add_rect(
+        slide,
+        left=Inches(6.166), top=Inches(3.4),
+        width=Inches(1.0), height=Inches(0.04),
+        fill=GOLD,
+    )
+
+    contact_lines = [
+        person.get("name", ""),
+        person.get("title", ""),
+        person.get("email", ""),
+        person.get("phone", ""),
+        firm_profile.get("website", ""),
     ]
-    _body_slide(
-        prs,
-        title="Q&A / Next steps",
-        bullets=bullets,
-        bid_slug=bid_slug,
+    for i, line in enumerate(contact_lines):
+        _add_text(
+            slide,
+            text=line,
+            left=Inches(0.5),
+            top=Inches(3.7 + i * 0.42),
+            width=Inches(12.333), height=Inches(0.4),
+            font_size=Pt(15), color=WHITE, align=PP_ALIGN.CENTER,
+        )
+
+    _add_text(
+        slide,
+        text=f"Bid {bid_slug}   ·   {date.today().isoformat()}",
+        left=Inches(0.5), top=Inches(7.05),
+        width=Inches(12.333), height=Inches(0.3),
+        font_size=Pt(9), color=GOLD, align=PP_ALIGN.CENTER,
     )
 
 
@@ -652,18 +1006,19 @@ def _body_slide(
 ) -> None:
     slide = prs.slides.add_slide(prs.slide_layouts[6])
     _set_background(slide, WHITE)
-
-    # Title bar
     _add_title_bar(slide, title)
 
-    # Body
     body = slide.shapes.add_textbox(
         left=Inches(0.5), top=Inches(1.4),
         width=Inches(12.333), height=Inches(5.4),
     ).text_frame
     body.word_wrap = True
 
-    items = bullets if bullets is not None else [(False, ln) for ln in (body_lines or [])]
+    items = (
+        bullets
+        if bullets is not None
+        else [(False, ln) for ln in (body_lines or [])]
+    )
     if not items:
         items = [(False, "(no content)")]
 
@@ -679,10 +1034,16 @@ def _body_slide(
             head, rest = text.split(":", 1)
             r1 = para.add_run()
             r1.text = head + ":"
-            _style_run(r1, font_size=Pt(16), bold=True, color=NAVY)
+            _style_run(
+                r1,
+                font_size=Pt(17), bold=True, color=NAVY,
+                font_name=PPTX_FONT_HEADING,
+            )
             r2 = para.add_run()
             r2.text = rest
-            _style_run(r2, font_size=Pt(16), color=NEAR_BLACK)
+            _style_run(
+                r2, font_size=Pt(17), color=NEAR_BLACK, font_name=PPTX_FONT_BODY
+            )
             runs_added = True
         else:
             for is_ph, frag in split_placeholders(text):
@@ -692,15 +1053,94 @@ def _body_slide(
                 r.text = frag
                 _style_run(
                     r,
-                    font_size=Pt(16),
+                    font_size=Pt(17),
                     bold=is_red or is_ph,
                     color=RED if (is_red or is_ph) else NEAR_BLACK,
+                    font_name=PPTX_FONT_BODY,
                 )
                 runs_added = True
         if not runs_added:
             r = para.add_run()
             r.text = text
-            _style_run(r, font_size=Pt(16), color=NEAR_BLACK)
+            _style_run(
+                r, font_size=Pt(17), color=NEAR_BLACK, font_name=PPTX_FONT_BODY
+            )
+
+    _add_footer(slide, bid_slug=bid_slug, slide_number=len(prs.slides))
+
+
+def _stat_slide(
+    prs: Presentation,
+    *,
+    title: str,
+    stat_label: str,
+    stat_value: str,
+    bullets: list[tuple[bool, str]],
+    bid_slug: str,
+) -> None:
+    """Slide with a single big stat plus 3 supporting bullets — used for
+    the price-proposal summary."""
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    _set_background(slide, WHITE)
+    _add_title_bar(slide, title)
+
+    # Stat box (gold accent + light gray bg)
+    box_left = Inches(0.5)
+    box_top = Inches(1.55)
+    box_w = Inches(12.333)
+    box_h = Inches(2.0)
+
+    _add_rect(
+        slide,
+        left=box_left, top=box_top,
+        width=box_w, height=box_h,
+        fill=GRAY_BG,
+    )
+    # Gold left rule
+    _add_rect(
+        slide,
+        left=box_left, top=box_top,
+        width=Inches(0.08), height=box_h,
+        fill=GOLD,
+    )
+
+    _add_text(
+        slide,
+        text=stat_label,
+        left=Inches(0.85), top=Inches(1.75),
+        width=Inches(11.5), height=Inches(0.4),
+        font_size=Pt(11), bold=True, color=SLATE,
+    )
+    _add_text(
+        slide,
+        text=stat_value,
+        left=Inches(0.85), top=Inches(2.15),
+        width=Inches(11.5), height=Inches(1.4),
+        font_size=Pt(48), bold=True, color=NAVY,
+        font_name=PPTX_FONT_HEADING,
+    )
+
+    body_top = Inches(3.85)
+    body = slide.shapes.add_textbox(
+        left=Inches(0.5), top=body_top,
+        width=Inches(12.333), height=Inches(3.0),
+    ).text_frame
+    body.word_wrap = True
+    for i, (is_red, text) in enumerate(bullets):
+        para = body.paragraphs[0] if i == 0 else body.add_paragraph()
+        para.alignment = PP_ALIGN.LEFT
+        for is_ph, frag in split_placeholders(text):
+            if not frag:
+                continue
+            r = para.add_run()
+            r.text = frag
+            _style_run(
+                r,
+                font_size=Pt(15),
+                bold=is_red or is_ph,
+                color=RED if (is_red or is_ph) else NEAR_BLACK,
+                font_name=PPTX_FONT_BODY,
+            )
 
     _add_footer(slide, bid_slug=bid_slug, slide_number=len(prs.slides))
 
@@ -740,7 +1180,6 @@ def _table_slide(
         for i, w in enumerate(col_widths):
             table.columns[i].width = w
 
-    # Header row
     for c, h in enumerate(headers):
         cell = table.cell(0, c)
         cell.fill.solid()
@@ -751,15 +1190,21 @@ def _table_slide(
         para = tf.paragraphs[0]
         run = para.add_run()
         run.text = h
-        _style_run(run, font_size=Pt(12), bold=True, color=WHITE)
+        _style_run(
+            run,
+            font_size=Pt(12),
+            bold=True,
+            color=WHITE,
+            font_name=PPTX_FONT_HEADING,
+        )
         cell.vertical_anchor = MSO_ANCHOR.MIDDLE
 
     for r_idx, row in enumerate(rows_norm, start=1):
-        is_alt = (r_idx % 2 == 0)
+        is_alt = r_idx % 2 == 0
         for c_idx, val in enumerate(row):
             cell = table.cell(r_idx, c_idx)
             cell.fill.solid()
-            cell.fill.fore_color.rgb = LIGHT_GRAY if is_alt else WHITE
+            cell.fill.fore_color.rgb = GRAY_BG if is_alt else WHITE
             tf = cell.text_frame
             tf.clear()
             tf.word_wrap = True
@@ -774,6 +1219,7 @@ def _table_slide(
                     font_size=font_size,
                     bold=is_ph,
                     color=RED if is_ph else NEAR_BLACK,
+                    font_name=PPTX_FONT_BODY,
                 )
             if not para.runs:
                 run = para.add_run()
@@ -783,7 +1229,6 @@ def _table_slide(
 
 
 def _add_title_bar(slide, title: str) -> None:
-    # Navy bar across the top
     bar = slide.shapes.add_shape(
         MSO_SHAPE.RECTANGLE,
         left=Inches(0), top=Inches(0),
@@ -799,45 +1244,62 @@ def _add_title_bar(slide, title: str) -> None:
     para.alignment = PP_ALIGN.LEFT
     run = para.add_run()
     run.text = title
-    _style_run(run, font_size=Pt(24), bold=True, color=WHITE)
+    _style_run(
+        run,
+        font_size=Pt(24),
+        bold=True,
+        color=WHITE,
+        font_name=PPTX_FONT_HEADING,
+    )
+
+    # Gold accent stripe under the title bar
+    _add_rect(
+        slide,
+        left=Inches(0), top=Inches(1.0),
+        width=SLIDE_WIDTH, height=Inches(0.06),
+        fill=GOLD,
+    )
 
 
 def _add_footer(slide, *, bid_slug: str, slide_number: int) -> None:
     box = slide.shapes.add_textbox(
         left=Inches(0.5), top=Inches(7.05),
-        width=Inches(12.333), height=Inches(0.35),
+        width=Inches(8.5), height=Inches(0.35),
     )
     tf = box.text_frame
     tf.margin_left = Inches(0)
     para = tf.paragraphs[0]
     para.alignment = PP_ALIGN.LEFT
     r1 = para.add_run()
-    r1.text = bid_slug
-    _style_run(r1, font_size=Pt(9), color=RGBColor(0x77, 0x77, 0x77))
-    # Right-aligned slide number — easier to read with a tab + right align by
-    # adding a separate trailing text box.
+    r1.text = f"Blue Print Constructs   ·   {bid_slug}"
+    _style_run(r1, font_size=Pt(9), color=FOOTER_GRAY)
+
     box_r = slide.shapes.add_textbox(
-        left=Inches(11.0), top=Inches(7.05),
-        width=Inches(1.833), height=Inches(0.35),
+        left=Inches(10.5), top=Inches(7.05),
+        width=Inches(2.333), height=Inches(0.35),
     )
     tf_r = box_r.text_frame
     para_r = tf_r.paragraphs[0]
     para_r.alignment = PP_ALIGN.RIGHT
     r2 = para_r.add_run()
     r2.text = f"Slide {slide_number}"
-    _style_run(r2, font_size=Pt(9), color=RGBColor(0x77, 0x77, 0x77))
+    _style_run(r2, font_size=Pt(9), color=FOOTER_GRAY)
 
 
 def _add_text(
     slide,
     *,
     text: str,
-    left: Emu, top: Emu, width: Emu, height: Emu,
+    left: Emu,
+    top: Emu,
+    width: Emu,
+    height: Emu,
     font_size: Pt = Pt(14),
     bold: bool = False,
     italic: bool = False,
     color: RGBColor = NEAR_BLACK,
     align: PP_ALIGN = PP_ALIGN.LEFT,
+    font_name: str = PPTX_FONT_BODY,
 ) -> None:
     box = slide.shapes.add_textbox(left, top, width, height)
     tf = box.text_frame
@@ -846,7 +1308,31 @@ def _add_text(
     para.alignment = align
     run = para.add_run()
     run.text = text
-    _style_run(run, font_size=font_size, bold=bold, italic=italic, color=color)
+    _style_run(
+        run,
+        font_size=font_size,
+        bold=bold,
+        italic=italic,
+        color=color,
+        font_name=font_name,
+    )
+
+
+def _add_rect(
+    slide,
+    *,
+    left: Emu,
+    top: Emu,
+    width: Emu,
+    height: Emu,
+    fill: RGBColor,
+) -> None:
+    rect = slide.shapes.add_shape(
+        MSO_SHAPE.RECTANGLE, left, top, width, height
+    )
+    rect.fill.solid()
+    rect.fill.fore_color.rgb = fill
+    rect.line.fill.background()
 
 
 def _style_run(
@@ -856,17 +1342,17 @@ def _style_run(
     bold: bool = False,
     italic: bool = False,
     color: RGBColor = NEAR_BLACK,
+    font_name: str = PPTX_FONT_BODY,
 ) -> None:
     run.font.size = font_size
     run.font.bold = bold
     run.font.italic = italic
     run.font.color.rgb = color
+    if font_name:
+        run.font.name = font_name
 
 
 def _set_background(slide, color: RGBColor) -> None:
-    # python-pptx doesn't expose a direct "set slide background to RGB" API
-    # without going through theme-color juggling; for our blank layout we
-    # paint a full-bleed rectangle behind everything else.
     bg = slide.shapes.add_shape(
         MSO_SHAPE.RECTANGLE,
         left=Inches(0), top=Inches(0),
@@ -876,7 +1362,6 @@ def _set_background(slide, color: RGBColor) -> None:
     bg.fill.fore_color.rgb = color
     bg.line.fill.background()
     bg.shadow.inherit = False
-    # Send to back so subsequently added shapes draw on top.
     spTree = bg._element.getparent()
     spTree.remove(bg._element)
     spTree.insert(2, bg._element)
@@ -888,7 +1373,7 @@ def _set_background(slide, color: RGBColor) -> None:
 
 
 def _truncate(text: str, max_len: int) -> str:
-    text = collapse_whitespace(strip_blockquote_prefix(text))
+    text = collapse_whitespace(strip_blockquote_prefix(text or ""))
     if len(text) <= max_len:
         return text
     return text[: max_len - 1].rstrip() + "…"
@@ -902,9 +1387,7 @@ def _chunk_text_for_slide(body: str, *, max_chars: int) -> list[str]:
     cursor = 0
     while cursor < len(body):
         end = min(cursor + max_chars, len(body))
-        # Try not to cut in the middle of a sentence.
         if end < len(body):
-            # Walk back to last period/newline within window.
             window = body[cursor:end]
             last_break = max(
                 window.rfind(". "),
@@ -916,92 +1399,3 @@ def _chunk_text_for_slide(body: str, *, max_chars: int) -> list[str]:
         chunks.append(body[cursor:end].strip())
         cursor = end
     return chunks
-
-
-def find_h3_blocks(text: str) -> list[tuple[str, str]]:
-    lines = text.splitlines()
-    blocks: list[tuple[str, list[str]]] = []
-    cur_t: str | None = None
-    cur_b: list[str] = []
-    h3_re = re.compile(r"^###\s+(.+?)\s*$")
-    for line in lines:
-        m = h3_re.match(line)
-        if m:
-            if cur_t is not None:
-                blocks.append((cur_t, cur_b))
-            cur_t = m.group(1).strip()
-            cur_b = []
-            continue
-        if cur_t is not None:
-            cur_b.append(line)
-    if cur_t is not None:
-        blocks.append((cur_t, cur_b))
-    return [(t, "\n".join(b).strip()) for t, b in blocks]
-
-
-def _extract_past_perf_rows(text: str, *, max_rows: int = 3) -> list[list[str]]:
-    """Try to surface up to `max_rows` past-performance rows from the file's
-    "at-a-glance" Markdown table, falling back to per-`Project Reference N`
-    headings."""
-    rows: list[list[str]] = []
-
-    # Find the at-a-glance table. We look for a line like
-    # "| # | Project name | Owner | Contract value | Completion year |"
-    table_start = -1
-    lines = text.splitlines()
-    for idx, line in enumerate(lines):
-        s = line.lower()
-        if "|" in line and "project name" in s and ("owner" in s or "value" in s):
-            table_start = idx
-            break
-
-    if table_start >= 0:
-        # Skip header + separator rows; collect data rows until blank/non-pipe.
-        for line in lines[table_start + 2:]:
-            if not line.strip().startswith("|"):
-                break
-            cells = [c.strip() for c in line.strip().strip("|").split("|")]
-            if not cells or all(not c for c in cells):
-                continue
-            # Common shape: # | name | owner | value | completion | ... | why
-            if len(cells) >= 5:
-                row = [
-                    cells[1],  # project
-                    cells[2],  # owner
-                    cells[3],  # value
-                    cells[4],  # completion
-                    cells[-1] if len(cells) > 5 else "",  # why/scope
-                ]
-                rows.append(row)
-            if len(rows) >= max_rows:
-                break
-
-    if rows:
-        return rows[:max_rows]
-
-    # Fallback: walk H2 blocks like "Project Reference #1 — Hindu Temple".
-    for h2_title, body in find_h2_blocks(text):
-        if not re.search(r"project\s*reference\b|reference\s*\d+", h2_title, re.IGNORECASE):
-            continue
-        name = re.sub(r"^.*?[—-]\s*", "", h2_title).strip()
-        owner = _grep_field(body, "Owner") or ""
-        value = _grep_field(body, "Contract value") or ""
-        completion = _grep_field(body, "Actual completion") or _grep_field(body, "Completion") or ""
-        scope = _truncate(first_paragraph(body) or "", 220)
-        rows.append([name, owner, value, completion, scope])
-        if len(rows) >= max_rows:
-            break
-
-    return rows[:max_rows]
-
-
-def _grep_field(body: str, field: str) -> str | None:
-    """Return the value of a `| **Field** | value |` Markdown table cell."""
-    pat = re.compile(
-        r"\|\s*\*?\*?" + re.escape(field) + r"\*?\*?\s*\|\s*([^|]+?)\s*\|",
-        re.IGNORECASE,
-    )
-    m = pat.search(body)
-    if not m:
-        return None
-    return collapse_whitespace(m.group(1).strip().strip("`"))

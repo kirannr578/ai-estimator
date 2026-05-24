@@ -575,14 +575,16 @@ with st.sidebar:
 
 
 def _render_proposal_panel() -> None:
-    """Render-bid-proposal panel — picks a bid workspace, renders PDF +
-    pitch-deck PPTX (and optionally a full-walkthrough PPTX), and surfaces
-    download buttons. Independent of the analyze flow above; safe to use
-    without an active estimate in session state.
+    """Render-bid-proposal panel — picks a bid workspace, renders the four
+    tier-appropriate artifacts (executive-summary PDF, full proposal PDF,
+    internal workbook PDF, pitch-deck PPTX), and surfaces download
+    buttons. Independent of the analyze flow above; safe to use without
+    an active estimate in session state.
     """
     from core.proposal_renderer import (
-        build_proposal_pdf,
-        build_proposal_pptx,
+        build_client_pdfs,
+        build_internal_workbook,
+        build_pitch_deck,
         load_firm_profile,
     )
 
@@ -606,20 +608,30 @@ def _render_proposal_panel() -> None:
         help="Each option corresponds to a `bids/<slug>/proposal/` directory.",
     )
 
-    fc1, fc2, fc3 = st.columns(3)
-    want_pdf = fc1.checkbox("Full PDF", value=True)
-    want_pptx_pitch = fc2.checkbox("Pitch-deck PPTX", value=True)
-    want_pptx_full = fc3.checkbox("Full PPTX (one slide / H1)", value=False)
+    show_placeholders = st.checkbox(
+        "Show `[USER TO FILL]` markers in red on client outputs",
+        value=False,
+        help=(
+            "Default is to neutralize markers to a fillable underline on "
+            "client-facing PDFs and the pitch deck. Toggle this on for "
+            "your own internal review. The internal workbook always "
+            "shows markers in red."
+        ),
+    )
 
     render_clicked = st.button(
-        "Render proposal package",
+        "Re-render proposal package",
         type="primary",
-        disabled=not (want_pdf or want_pptx_pitch or want_pptx_full),
+        help=(
+            "Re-renders all four artifacts: client executive-summary PDF, "
+            "full proposal PDF, internal workbook PDF, and pitch-deck PPTX."
+        ),
     )
 
     state_key = f"proposal_render__{bid_choice}"
     if render_clicked:
         bid_dir = bids_root / bid_choice
+        bid_slug = bid_dir.name
         out_dir = bid_dir / "proposal" / "exports"
         out_dir.mkdir(parents=True, exist_ok=True)
         try:
@@ -631,43 +643,59 @@ def _render_proposal_panel() -> None:
         artifacts: dict[str, Path] = {}
         errors: list[str] = []
 
-        if want_pdf:
-            pdf_out = out_dir / "proposal-full.pdf"
-            try:
-                build_proposal_pdf(bid_dir, pdf_out, firm_profile)
-                artifacts["pdf"] = pdf_out
-            except Exception as exc:
-                errors.append(f"PDF render failed: {exc}")
+        try:
+            client = build_client_pdfs(
+                bid_dir, out_dir, firm_profile,
+                show_placeholders=show_placeholders,
+            )
+            artifacts["executive_summary"] = client["executive_summary"]
+            artifacts["full_proposal"] = client["full_proposal"]
+        except Exception as exc:
+            errors.append(f"Client PDF render failed: {exc}")
 
-        if want_pptx_pitch:
-            pptx_out = out_dir / "proposal-pitch.pptx"
-            try:
-                build_proposal_pptx(
-                    bid_dir, pptx_out, firm_profile, style="pitch_deck"
-                )
-                artifacts["pptx_pitch"] = pptx_out
-            except Exception as exc:
-                errors.append(f"Pitch-deck PPTX render failed: {exc}")
+        try:
+            internal_path = out_dir / f"{bid_slug}-internal-workbook.pdf"
+            build_internal_workbook(bid_dir, internal_path, firm_profile)
+            artifacts["internal_workbook"] = internal_path
+        except Exception as exc:
+            errors.append(f"Internal workbook render failed: {exc}")
 
-        if want_pptx_full:
-            pptx_full_out = out_dir / "proposal-full.pptx"
-            try:
-                build_proposal_pptx(
-                    bid_dir, pptx_full_out, firm_profile, style="full"
-                )
-                artifacts["pptx_full"] = pptx_full_out
-            except Exception as exc:
-                errors.append(f"Full-walkthrough PPTX render failed: {exc}")
+        try:
+            pitch_path = out_dir / f"{bid_slug}-pitch-deck.pptx"
+            build_pitch_deck(
+                bid_dir, pitch_path, firm_profile,
+                show_placeholders=show_placeholders,
+            )
+            artifacts["pitch_deck"] = pitch_path
+        except Exception as exc:
+            errors.append(f"Pitch-deck render failed: {exc}")
 
         st.session_state[state_key] = {"artifacts": artifacts, "errors": errors}
 
     rendered = st.session_state.get(state_key)
     if not rendered:
         st.caption(
-            "Click **Render proposal package** to generate the selected "
-            "artifacts under `bids/<slug>/proposal/exports/`."
+            "Click **Re-render proposal package** to (re-)generate the four "
+            "tier-appropriate artifacts under "
+            "`bids/<slug>/proposal/exports/`. If existing artifacts are on "
+            "disk from a prior run, the download buttons below will surface "
+            "them on next render."
         )
-        return
+        # Try to surface previously rendered artifacts on disk so the user
+        # doesn't have to re-render every reload.
+        bid_dir = bids_root / bid_choice
+        out_dir = bid_dir / "proposal" / "exports"
+        bid_slug = bid_dir.name
+        existing = {
+            "executive_summary": out_dir / f"{bid_slug}-client-executive-summary.pdf",
+            "full_proposal": out_dir / f"{bid_slug}-full-proposal.pdf",
+            "internal_workbook": out_dir / f"{bid_slug}-internal-workbook.pdf",
+            "pitch_deck": out_dir / f"{bid_slug}-pitch-deck.pptx",
+        }
+        existing = {k: v for k, v in existing.items() if v.exists()}
+        if not existing:
+            return
+        rendered = {"artifacts": existing, "errors": []}
 
     for err in rendered["errors"]:
         st.error(err)
@@ -677,23 +705,26 @@ def _render_proposal_panel() -> None:
         return
 
     st.success(
-        f"Rendered {len(artifacts)} artifact(s) under "
+        f"{len(artifacts)} artifact(s) ready under "
         f"`bids/{bid_choice}/proposal/exports/`."
     )
 
+    pdf_mime = "application/pdf"
+    pptx_mime = (
+        "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+    )
     label_map = {
-        "pdf": ("Download full PDF", "application/pdf"),
-        "pptx_pitch": (
-            "Download pitch-deck PPTX",
-            "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-        ),
-        "pptx_full": (
-            "Download full PPTX",
-            "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-        ),
+        "executive_summary": ("Executive summary (PDF)", pdf_mime),
+        "full_proposal": ("Full proposal (PDF)", pdf_mime),
+        "internal_workbook": ("Internal workbook (PDF)", pdf_mime),
+        "pitch_deck": ("Pitch deck (PPTX)", pptx_mime),
     }
-    cols = st.columns(len(artifacts))
-    for col, (key, path) in zip(cols, artifacts.items()):
+    # Stable display order: client deliverables first, then internal,
+    # then pitch deck — matches the four-tier brief.
+    order = ["executive_summary", "full_proposal", "internal_workbook", "pitch_deck"]
+    ordered = [(k, artifacts[k]) for k in order if k in artifacts]
+    cols = st.columns(len(ordered))
+    for col, (key, path) in zip(cols, ordered):
         label, mime = label_map.get(key, (path.name, "application/octet-stream"))
         with col:
             st.download_button(
@@ -706,12 +737,16 @@ def _render_proposal_panel() -> None:
             st.caption(f"{path.stat().st_size:,} bytes")
 
 
-with st.expander("Bid Proposals — render PDF + pitch-deck PPTX", expanded=False):
+with st.expander(
+    "Bid Proposals — render client PDFs, internal workbook, and pitch deck",
+    expanded=False,
+):
     st.caption(
         "Independent of the plan-set analyzer above. Picks a bid workspace "
-        "under `bids/`, reads its `proposal/*.md` files, and produces a "
-        "full PDF + pitch-deck PPTX (and optionally a full-walkthrough PPTX) "
-        "under `bids/<slug>/proposal/exports/`."
+        "under `bids/`, reads its `proposal/*.md` files, and produces four "
+        "tier-appropriate artifacts under `bids/<slug>/proposal/exports/`: "
+        "client executive-summary PDF, full proposal PDF, internal workbook "
+        "PDF, and pitch-deck PPTX."
     )
     _render_proposal_panel()
 

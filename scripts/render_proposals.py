@@ -1,27 +1,35 @@
-"""CLI: render a single bid's proposal markdown to PDF and/or PPTX, or all
-of them at once.
+"""CLI: render a single bid's proposal markdown into the four-tier
+artifact set, or all active workspaces at once.
 
 Examples (PowerShell):
 
-    # One bid, both formats (default)
+    # All four tiers, single bid (default tier=all)
     python scripts/render_proposals.py --bid bids/tamu-harrington-2025-06813
 
-    # All four active bids, both formats
+    # All four active bids, all tiers
     python scripts/render_proposals.py --all
 
-    # PDF only, single bid
-    python scripts/render_proposals.py --bid bids/cmd-post-ndi-W50S7626QA001 --format pdf
+    # Just the pitch deck for one bid
+    python scripts/render_proposals.py --bid bids/cmd-post-ndi-W50S7626QA001 --tier pitch
 
-    # Full-walkthrough PPTX (one slide per H1) instead of pitch deck
-    python scripts/render_proposals.py --bid bids/usfws-san-marcos-140FC126R0017 --pptx-style full
+    # Show `[USER TO FILL ...]` markers in red on the client outputs
+    # (default behavior is to neutralize them to a fillable underline).
+    python scripts/render_proposals.py --all --show-placeholders
 
-Output:
+Output (per bid, in `bids/<slug>/proposal/exports/`):
 
-    bids/<slug>/proposal/exports/proposal-full.pdf
-    bids/<slug>/proposal/exports/proposal-pitch.pptx        # style=pitch_deck
-    bids/<slug>/proposal/exports/proposal-full.pptx         # style=full
+    <slug>-client-executive-summary.pdf      # tier=client
+    <slug>-full-proposal.pdf                  # tier=client
+    <slug>-internal-workbook.pdf              # tier=internal
+    <slug>-pitch-deck.pptx                    # tier=pitch
 
-Errors on a single bid are logged but do not abort the run when `--all` is
+The `--tier` flag selects which artifact(s) to produce (`client` builds
+both client PDFs; `internal` builds the workbook; `pitch` builds the
+PPTX; `all` is the default and builds all four).
+
+Note: this is a breaking change vs. the previous `--format` /
+`--pptx-style` flags. Old callers should migrate to `--tier`. Errors
+on a single bid are logged but do not abort the run when `--all` is
 used; partial output is better than none.
 """
 
@@ -32,13 +40,13 @@ import logging
 import sys
 from pathlib import Path
 
-# Make the project root importable when running `python scripts/...`.
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from core.proposal_renderer import (  # noqa: E402  - after sys.path mutation
-    build_proposal_pdf,
-    build_proposal_pptx,
+    build_client_pdfs,
+    build_internal_workbook,
+    build_pitch_deck,
     load_firm_profile,
 )
 
@@ -57,53 +65,77 @@ def _bid_dirs() -> list[Path]:
 def _render_one(
     bid_dir: Path,
     *,
-    fmt: str,
-    pptx_style: str,
+    tier: str,
+    show_placeholders: bool,
     firm_profile: dict,
     log: logging.Logger,
 ) -> dict[str, str]:
-    """Render PDF / PPTX for a single bid. Returns map of artifact name → status."""
+    """Render the requested tier(s) for a single bid. Returns a status
+    map keyed by artifact tag ("executive_summary" / "full_proposal" /
+    "internal_workbook" / "pitch_deck")."""
+    bid_slug = bid_dir.name
     out_dir = bid_dir / "proposal" / "exports"
     out_dir.mkdir(parents=True, exist_ok=True)
-    artifacts: dict[str, str] = {}
+    statuses: dict[str, str] = {}
 
-    do_pdf = fmt in {"pdf", "both"}
-    do_pptx = fmt in {"pptx", "both"}
+    do_client = tier in {"client", "all"}
+    do_internal = tier in {"internal", "all"}
+    do_pitch = tier in {"pitch", "all"}
 
-    if do_pdf:
-        pdf_out = out_dir / "proposal-full.pdf"
+    if do_client:
         try:
-            build_proposal_pdf(bid_dir, pdf_out, firm_profile)
-            artifacts["pdf"] = (
-                f"OK ({pdf_out.stat().st_size:,} bytes) -> {pdf_out.relative_to(ROOT)}"
+            artifacts = build_client_pdfs(
+                bid_dir,
+                out_dir,
+                firm_profile,
+                show_placeholders=show_placeholders,
+            )
+            for key, path in artifacts.items():
+                statuses[key] = (
+                    f"OK ({path.stat().st_size:,} bytes) -> "
+                    f"{path.relative_to(ROOT)}"
+                )
+        except Exception as exc:
+            log.error("Client PDFs failed for %s: %s", bid_slug, exc)
+            statuses["executive_summary"] = f"FAILED: {exc}"
+            statuses["full_proposal"] = f"FAILED: {exc}"
+
+    if do_internal:
+        out_path = out_dir / f"{bid_slug}-internal-workbook.pdf"
+        try:
+            build_internal_workbook(bid_dir, out_path, firm_profile)
+            statuses["internal_workbook"] = (
+                f"OK ({out_path.stat().st_size:,} bytes) -> "
+                f"{out_path.relative_to(ROOT)}"
             )
         except Exception as exc:
-            log.error("PDF render failed for %s: %s", bid_dir.name, exc)
-            artifacts["pdf"] = f"FAILED: {exc}"
+            log.error("Internal workbook failed for %s: %s", bid_slug, exc)
+            statuses["internal_workbook"] = f"FAILED: {exc}"
 
-    if do_pptx:
-        pptx_name = (
-            "proposal-pitch.pptx" if pptx_style == "pitch_deck" else "proposal-full.pptx"
-        )
-        pptx_out = out_dir / pptx_name
+    if do_pitch:
+        out_path = out_dir / f"{bid_slug}-pitch-deck.pptx"
         try:
-            build_proposal_pptx(
-                bid_dir, pptx_out, firm_profile, style=pptx_style,
+            build_pitch_deck(
+                bid_dir,
+                out_path,
+                firm_profile,
+                show_placeholders=show_placeholders,
             )
-            artifacts["pptx"] = (
-                f"OK ({pptx_out.stat().st_size:,} bytes) -> "
-                f"{pptx_out.relative_to(ROOT)}"
+            statuses["pitch_deck"] = (
+                f"OK ({out_path.stat().st_size:,} bytes) -> "
+                f"{out_path.relative_to(ROOT)}"
             )
         except Exception as exc:
-            log.error("PPTX render failed for %s: %s", bid_dir.name, exc)
-            artifacts["pptx"] = f"FAILED: {exc}"
+            log.error("Pitch deck failed for %s: %s", bid_slug, exc)
+            statuses["pitch_deck"] = f"FAILED: {exc}"
 
-    return artifacts
+    return statuses
 
 
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(
-        description="Render a bid's proposal markdown to PDF + PPTX deliverables."
+        description="Render a bid's proposal markdown into the four-tier "
+        "artifact set."
     )
     grp = p.add_mutually_exclusive_group(required=True)
     grp.add_argument(
@@ -117,16 +149,24 @@ def main(argv: list[str] | None = None) -> int:
         help="Render every workspace under `bids/` that has a `proposal/` subdir.",
     )
     p.add_argument(
-        "--format",
-        choices=["pdf", "pptx", "both"],
-        default="both",
-        help="Which artifact(s) to produce (default: both).",
+        "--tier",
+        choices=["client", "internal", "pitch", "all"],
+        default="all",
+        help=(
+            "Which tier(s) to produce. `client` builds the executive-summary "
+            "+ full-proposal PDFs; `internal` builds the workbook PDF; "
+            "`pitch` builds the PPTX; `all` (default) builds all four."
+        ),
     )
     p.add_argument(
-        "--pptx-style",
-        choices=["pitch_deck", "full"],
-        default="pitch_deck",
-        help="`pitch_deck` (default, 10-15 distilled slides) or `full` (one slide per H1).",
+        "--show-placeholders",
+        action="store_true",
+        help=(
+            "Render `[USER TO FILL ...]` markers in red on the client-facing "
+            "outputs (executive summary, full proposal, pitch deck). Default "
+            "is to neutralize them to a fillable underline. The internal "
+            "workbook always shows markers in red regardless."
+        ),
     )
     p.add_argument(
         "--quiet", action="store_true", help="Less console chatter."
@@ -153,21 +193,25 @@ def main(argv: list[str] | None = None) -> int:
             return 2
         bid_dirs = [bid_dir]
 
-    log.info("Rendering %d workspace(s); format=%s, pptx-style=%s",
-             len(bid_dirs), args.format, args.pptx_style)
+    log.info(
+        "Rendering %d workspace(s); tier=%s, show-placeholders=%s",
+        len(bid_dirs),
+        args.tier,
+        args.show_placeholders,
+    )
 
     any_failed = False
     for bid_dir in bid_dirs:
         log.info("=== %s ===", bid_dir.name)
-        artifacts = _render_one(
+        statuses = _render_one(
             bid_dir,
-            fmt=args.format,
-            pptx_style=args.pptx_style,
+            tier=args.tier,
+            show_placeholders=args.show_placeholders,
             firm_profile=firm_profile,
             log=log,
         )
-        for kind, status in artifacts.items():
-            print(f"  [{kind:4}] {status}")
+        for key, status in statuses.items():
+            print(f"  [{key:>20}] {status}")
             if status.startswith("FAILED"):
                 any_failed = True
 

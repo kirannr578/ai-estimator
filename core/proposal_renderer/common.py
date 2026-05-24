@@ -26,12 +26,53 @@ DEFAULT_FIRM_PROFILE = REPO_ROOT / "firm" / "firm-profile.json"
 DEFAULT_LOGO_PATH = REPO_ROOT / "firm" / "assets" / "bpc-logo.png"
 
 # `[USER TO FILL ...]` style markers we want highlighted in red so reviewers
-# can see at a glance what is still missing in the rendered output.
+# can see at a glance what is still missing in the rendered output. The
+# client tier hides them (replaced with a neutral underline) unless the
+# `--show-placeholders` flag is on; the internal-workbook tier always
+# renders them in red.
 PLACEHOLDER_PATTERNS = [
     re.compile(r"\[USER TO FILL[^\]]*\]"),
     re.compile(r"\[NOT FOUND IN BPC[^\]]*\]"),
-    re.compile(r"\[PENDING [A-Z][^\]]*\]"),
+    # `[PENDING e-BUILDER ACCESS: ...]` and similar — the lowercase token
+    # after PENDING (`e-BUILDER`) means we can't insist on `[A-Z]` here.
+    re.compile(r"\[PENDING [^\]]*\]", re.IGNORECASE),
     re.compile(r"\[TBD[^\]]*\]"),
+    # Catch-all for `[X+30]` / `[X]` placeholders from schedule narrative.
+    re.compile(r"\[X[+0-9]*\]"),
+]
+
+# File-routing rules — see the user brief.
+# Always client-facing (kept in full proposal + executive summary inputs):
+CLIENT_FACING_FILENAMES = {
+    "00-readme.md",
+    "01-executive-summary.md",
+    "02-technical-approach.md",
+    "02-volume-II-technical-acceptability.md",
+    "02-technical-acceptability.md",
+    "03-project-team.md",
+    "03-volume-III-past-performance.md",
+    "03-past-performance.md",
+    "04-past-performance.md",
+    "05-schedule-narrative.md",
+    "06-quality-control-plan.md",
+    "07-safety-plan.md",
+    "10-price-proposal.md",
+    "01-volume-I-price-proposal.md",
+    "01-price-proposal.md",
+}
+
+# Internal-only patterns — go in the internal workbook PDF only.
+INTERNAL_PATTERNS = [
+    re.compile(r".*fill-guide\.md$", re.IGNORECASE),
+    re.compile(r".*pull-guide\.md$", re.IGNORECASE),
+    re.compile(r".*template\.md$", re.IGNORECASE),
+    re.compile(r".*compliance.*\.md$", re.IGNORECASE),
+    re.compile(r".*acknowledgment\.md$", re.IGNORECASE),
+    re.compile(r".*memo\.md$", re.IGNORECASE),
+    re.compile(r".*rfi.*\.md$", re.IGNORECASE),
+    re.compile(r".*cover-letter\.md$", re.IGNORECASE),
+    re.compile(r".*submission-checklist\.md$", re.IGNORECASE),
+    re.compile(r".*bond.*\.md$", re.IGNORECASE),
 ]
 
 
@@ -306,6 +347,83 @@ def split_placeholders(text: str) -> list[tuple[bool, str]]:
     if cursor < len(text):
         out.append((False, text[cursor:]))
     return out
+
+
+def route_section(section: "Section") -> str:
+    """Return `"client"` or `"internal"` for a given proposal section,
+    using the rules in the user brief.
+
+    A file is `internal` if it matches any of `INTERNAL_PATTERNS`. It is
+    `client` if it appears in `CLIENT_FACING_FILENAMES`. Files that
+    match neither default to `client` (per brief).
+    """
+    name = section.filename
+    name_lc = name.lower()
+    if name_lc in {n.lower() for n in CLIENT_FACING_FILENAMES}:
+        return "client"
+    for pat in INTERNAL_PATTERNS:
+        if pat.match(name_lc):
+            return "internal"
+    return "client"
+
+
+def partition_sections(
+    sections: list["Section"],
+) -> tuple[list["Section"], list["Section"]]:
+    """Split sections into `(client_sections, internal_sections)`."""
+    client: list[Section] = []
+    internal: list[Section] = []
+    for s in sections:
+        if route_section(s) == "internal":
+            internal.append(s)
+        else:
+            client.append(s)
+    return client, internal
+
+
+def neutralize_placeholders(text: str, *, underline_char: str = "_") -> str:
+    """Replace `[USER TO FILL — ...]`-style markers with a neutral
+    underline of comparable length. Used on client-facing tiers so the
+    output looks like a fillable form rather than carrying red audit
+    callouts. The underline is a sequence of underscore chars so both
+    PDF and PPTX downstream renderers preserve length without needing
+    a special font glyph.
+
+    Length heuristic: clamp to [12, 60] characters so very short markers
+    still look like a fillable line and very long ones don't run off the
+    page.
+    """
+    if not text:
+        return text
+
+    def _replace(match: re.Match[str]) -> str:
+        marker_len = match.end() - match.start()
+        target = max(12, min(60, marker_len))
+        return underline_char * target
+
+    out = text
+    for pat in PLACEHOLDER_PATTERNS:
+        out = pat.sub(_replace, out)
+    return out
+
+
+def neutralize_placeholders_in_section(
+    section: "Section", *, show_placeholders: bool
+) -> "Section":
+    """Return a copy of `section` with placeholder markers neutralized
+    when `show_placeholders=False`, or returned unchanged when True."""
+    if show_placeholders:
+        return section
+    new_body = neutralize_placeholders(section.body)
+    if new_body == section.body:
+        return section
+    return Section(
+        path=section.path,
+        prefix=section.prefix,
+        slug=section.slug,
+        title=section.title,
+        body=new_body,
+    )
 
 
 def primary_personnel(profile: dict[str, Any]) -> dict[str, str]:
