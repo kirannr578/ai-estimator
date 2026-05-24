@@ -28,6 +28,13 @@ config/client_quote.local.json
 # under bids/<opportunity>/ are still committed.
 bids/*/local/
 
+# Proposal renderer output — derivative artifacts produced by
+# `scripts/render_proposals.py` from `bids/<slug>/proposal/*.md`. The first
+# rendered set was committed once with `git add -f` so reviewers see them
+# alongside the feature; subsequent re-renders should NOT churn the diff.
+# To commit a specific snapshot intentionally, use `git add -f`.
+bids/*/proposal/exports/
+
 # Firm profile — drop-zone for unredacted corporate PDFs the user wants accessible
 # locally (current COI, current bond letter, current W-9, etc.) without committing
 # them. firm/firm-profile.json + firm/firm-profile.md ARE committed; binaries are not.
