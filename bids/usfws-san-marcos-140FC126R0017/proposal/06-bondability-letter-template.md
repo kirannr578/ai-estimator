@@ -59,7 +59,7 @@ Department of the Treasury Circular 570 (NAIC Code: [NAIC]; State of
 Domicile: [State]), with single-project underwriting authority of
 $[Underwriting Limit] per FAR 28.202-1 / Circular 570, has reviewed the
 financial condition and bonding history of [Offeror Legal Name] ("Principal"),
-[Offeror Address], CAGE [CAGE], UEI [UEI].
+[Offeror Address], CAGE 9LET0, UEI LM4YHVQ71QG7.
 
 Based on that review and subject to normal underwriting at time of issue,
 Surety states the following:

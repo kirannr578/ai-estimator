@@ -49,8 +49,8 @@ I will follow up with the formal bond-request letter on 2026-06-02 confirming th
 Thank you,
 `[USER TO FILL: bid-prep lead name]`
 `[USER TO FILL: title]`
-`[USER TO FILL: firm name]`
-`[USER TO FILL: phone] | [USER TO FILL: email]`
+`Blue Print Constructs`
+`(469) 213-1838 | contactus@blueprintconstructs.com`
 
 ---
 

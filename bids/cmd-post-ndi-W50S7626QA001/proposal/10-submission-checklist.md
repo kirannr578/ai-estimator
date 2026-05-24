@@ -46,7 +46,7 @@ Use this email body template:
 TO:        136.AW.MSC@us.af.mil
 CC:        [PM email]; [Authorized Signer email]
 BCC:       [Bonding agent email]; [Lead estimator email]
-SUBJECT:   Quote — W50S7626QA001 — Alter Command Post + NDI Room — [Firm Name] (UEI: [UEI])
+SUBJECT:   Quote — W50S7626QA001 — Alter Command Post + NDI Room — Blue Print Constructs (UEI: LM4YHVQ71QG7)
 
 Captain Crabtree:
 
@@ -82,7 +82,7 @@ and applies.
 Insurance minimums per FAR 52.228-5 + Section L (g) will be in effect
 at award.
 
-[Firm Name]'s SAM.gov registration is active and Reps & Certs are
+Blue Print Constructs's SAM.gov registration is active and Reps & Certs are
 current as of the offer date; SPRS NIST 800-171 Basic Assessment is
 on file.
 
@@ -93,7 +93,7 @@ Sincerely,
 
 [Authorized Signer name]
 [Title]
-[Firm Name]
+Blue Print Constructs
 [Phone]
 [Email]
 [UEI / CAGE]
@@ -125,7 +125,7 @@ Sincerely,
 All attachments follow this pattern:
 
 ```
-W50S7626QA001_[document]_[Firm Name].pdf
+W50S7626QA001_[document]_Blue Print Constructs.pdf
 ```
 
 Examples:
@@ -142,7 +142,7 @@ Examples:
 
 Use the format:
 ```
-Quote — W50S7626QA001 — Alter Command Post + NDI Room — [Firm Name] (UEI: [UEI])
+Quote — W50S7626QA001 — Alter Command Post + NDI Room — Blue Print Constructs (UEI: LM4YHVQ71QG7)
 ```
 
 This makes the email instantly recognizable in the CO's inbox + serves as proof-of-receipt language.

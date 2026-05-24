@@ -39,7 +39,7 @@ These blocks are pre-filled on the SF 1442 in the solicitation PDF. Do NOT edit.
 
 | Sub-field | Fill with |
 |---|---|
-| Legal entity name | `[USER TO FILL: legal entity name as registered in SAM]` |
+| Legal entity name | `RK Residential Homes and Commercial Constructions, LLC dba Blue Print Constructs` |
 | Street address line 1 | `[USER TO FILL]` |
 | Street address line 2 | `[USER TO FILL or blank]` |
 | City | `[USER TO FILL]` |
@@ -64,7 +64,7 @@ If different: `[USER TO FILL: full remittance address]`
 |---|---|
 | CAGE Code | `[USER TO FILL: 5-character CAGE]` |
 | DUNS Number (deprecated since 2022; SAM uses UEI) | (Optional — write **"N/A — see UEI"**) |
-| Unique Entity ID (UEI) | `[USER TO FILL: 12-character SAM UEI]` |
+| Unique Entity ID (UEI) | `LM4YHVQ71QG7` |
 
 ### Block 18 — Offer Date
 

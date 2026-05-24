@@ -13,12 +13,12 @@ TO:        david.jones.233@us.af.mil; michael.meeks@us.af.mil
 CC:        nathaniel.norton@us.af.mil; david.shamburger.5@us.af.mil;
            donald.crabtree.3@us.af.mil; 136.AW.MSC@us.af.mil
 SUBJECT:   Site-visit exception request — Solicitation W50S7626QA001
-           [Firm Name] (UEI: [UEI])
+           Blue Print Constructs (UEI: LM4YHVQ71QG7)
 
 
 MSgt Jones, MSgt Meeks:
 
-[Firm Name] is preparing a competitive comparative-evaluation quote
+Blue Print Constructs is preparing a competitive comparative-evaluation quote
 for Solicitation W50S7626QA001 (Alter Command Post and Nondestructive
 Inspection Room) for submission on or before 04 June 2026. Per
 Section L paragraph (a)(1) and the FAR 12.203(c)(2) comparative-
@@ -40,7 +40,7 @@ B1675 (NDI Room conversion footprint) at any mutually convenient time
 between Wednesday 28 May 2026 and Wednesday 03 June 2026.
 
 Visit specifics we propose:
-  - Personnel: 2 [Firm Name] representatives only —
+  - Personnel: 2 Blue Print Constructs representatives only —
       [PM name + DOB + last 4 SSN]
       [Estimator name + DOB + last 4 SSN]
   - Vehicle: [make / model / license plate]
@@ -51,7 +51,7 @@ Visit specifics we propose:
       glasses (we provide)
   - Documentation: tape measure, notebook, camera if photography is
       permitted (please advise)
-  - Firm:    [Firm Name]    UEI: [UEI]    CAGE: [CAGE]
+  - Firm:    Blue Print Constructs    UEI: LM4YHVQ71QG7    CAGE: 9LET0
   - SAM.gov: Active. Reps & Certs current. SPRS NIST 800-171 Basic
       Assessment on file.
 
@@ -88,7 +88,7 @@ Sincerely,
 
 [Authorized Signer or PM name]
 [Title]
-[Firm Name]
+Blue Print Constructs
 [Phone]
 [Email]
 [UEI / CAGE]

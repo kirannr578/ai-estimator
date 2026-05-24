@@ -1,5 +1,16 @@
 # Past Performance — template for 2–3 prior similar projects
 
+
+<!-- firm-profile:picks-banner -->
+> **Past-performance picks for this bid** (from `firm/firm-profile.json` → `past_project_selection_rules.cmd-post-ndi-W50S7626QA001`):
+> 
+> 1. **Hindu Temple of Southlake** — North Texas Hindu Heritage Society (nonprofit religious owner); ≈10,700 SF Assembly A-3 (Place of Religious Worship) renovation at 595 South Kimball Avenue, Southlake, TX 76092; owner-side project # 2024-024; scope: demolition + finishes + phenolic toilet partitions + partition framework; drawings dated 2025-06-20 (PDF), updated 2025-09-12 (Arch + Structural); in execution per material quote 2025-10-30; delivery method: negotiated lump-sum (owner direct); role: GC. Final contract value: [USER TO FILL — not in BPC source files]. Reference contact: [USER TO FILL — North Texas Hindu Heritage Society POC].
+> 2. **Holiday Inn (Hall Park, Frisco)** — Holiday Inn franchisee (hospitality owner); commercial renovation at Hall Park, Frisco, TX; role: GC. Contract value, scope detail, and completion date: [USER TO FILL — cited by name in `BPC/Rocky Business Profile.docx` but no project-folder source on OneDrive; reconstruct from project records]. Reference contact: [USER TO FILL — Holiday Inn Hall Park property POC].
+> 3. **Lavon RV Park** — Lavon Leisure 78 RV Park LLC (commercial owner); 30-lot new-build RV park at County Road 597, Farmersville, TX 75442; $1,050,000 fixed-price AIA A101-2020 contract; start 2025-07-30, scheduled substantial completion 2026-04-30 (currently in execution); scope: mobilization + excavation, rough grade, driveway/culvert, utility trenching (electrical / plumbing / septic), meters per lot, septic + sewer lines, storm drain + detention, 6-ft cedar fencing + metal gate per lot, 8x8 storage shed per lot, 150-LF retaining wall, laundromat building; $1M performance bond procured per Article 8; delivery method: design-bid-build; role: GC. Reference contact: [USER TO FILL — Lavon Leisure 78 RV Park LLC owner POC].
+> 
+> The per-project entry templates below have been pre-filled for sections that match the standard TAMU/ASU reference-header shape. Bid workspaces with a different template shape (USACE / federal) still need the user to copy the recommended pick data manually into each Project N section.
+
+
 Per Section M.52.212-2 (a)(iii):
 > *"Past Performance: Information for past performance reviews may come from either an information system or personal knowledge of an Offeror. Information may be sourced from systems such as, but not limited to, the Contractor Performance Assessment Reporting System (CPARS), the Supplier Performance Risk System (SPRS), or the Contracting Officer's personal knowledge of work performed on any previous federal contract. **If unfavorable information is discovered or known of an Offeror, the Offeror may be removed from the competition and further evaluation.**"*
 

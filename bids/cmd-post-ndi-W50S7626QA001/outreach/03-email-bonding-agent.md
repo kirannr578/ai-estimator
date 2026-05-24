@@ -17,7 +17,7 @@ SUBJECT:   Bid bond + bondability — W50S7626QA001 (Cmd Post + NDI Room) —
 
 [Bonding Agent name],
 
-[Firm Name] is bidding on Solicitation W50S7626QA001, a 136th Airlift
+Blue Print Constructs is bidding on Solicitation W50S7626QA001, a 136th Airlift
 Wing (Texas Air National Guard) interior renovation project at NAS/JRB
 Fort Worth, TX 76127. Two CLINs, both Firm-Fixed Price, total bid
 envelope $300K – $700K with mid-target ~$475K.
@@ -78,9 +78,9 @@ We need your firm to provide:
 
 Firm-internal:
 
-  Firm Name:              [Firm Name]
-  UEI:                    [UEI]
-  CAGE:                   [CAGE]
+  Firm Name:              Blue Print Constructs
+  UEI:                    LM4YHVQ71QG7
+  CAGE:                   9LET0
   Authorized signer:      [Name + title]
   Existing bonded backlog: [USER TO FILL — to confirm aggregate capacity]
   Most recent financial statements available: [USER TO CONFIRM]

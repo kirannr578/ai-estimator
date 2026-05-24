@@ -158,7 +158,7 @@ Owner: PM + authorized signer. Deadline: **Thu 2026-06-04, time \[VERIFY BLOCK 1
 | 3 | Project schedule (Gantt PDF, 90-day POP, both CLINs) | PM |
 | 4 | Scanned bid bond SF 24 | Bonding agent → PM |
 | 5 | Acknowledgment of Amendment 0001 (SF 1442 Block 19 OR SF 30 returned) | Authorized signer |
-| 6 | One submission email to **`136.AW.MSC@us.af.mil`** with subject line: `Quote — W50S7626QA001 — Alter Command Post + NDI Room — \[Firm Name + UEI\]` | PM |
+| 6 | One submission email to **`136.AW.MSC@us.af.mil`** with subject line: `Quote — W50S7626QA001 — Alter Command Post + NDI Room — Blue Print Constructs (UEI LM4YHVQ71QG7)` | PM |
 | 7 | Submission timestamp before Block 13 close time (build a 3-hour buffer; **send by 1200 CDT**) | PM |
 | 8 | Save sent-email confirmation + delivery receipt for the file | PM |
 | 9 | Receive bounce / non-delivery receipt? — escalate to bonding agent + PE phone (Maj Norton 817-852-3323) immediately | PM |

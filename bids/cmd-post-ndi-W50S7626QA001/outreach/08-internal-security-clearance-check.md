@@ -110,6 +110,6 @@ Before any crew member starts on Day 1:
 
 The offer should affirm (in the SOW Acknowledgment paragraph or Subfactor 1 / 2):
 
-> *"[Firm Name] commits to comply with all NAS/JRB Fort Worth installation rules, including the 14-business-day base-access advance request, the firearms prohibition, daily clearout, FOD prevention, working-hours discipline (Tuesday–Friday 0630–1715 absent CO approval), and the cultural / environmental / classified-material protocols required by the Statement of Work and applicable installation orders."*
+> *"Blue Print Constructs commits to comply with all NAS/JRB Fort Worth installation rules, including the 14-business-day base-access advance request, the firearms prohibition, daily clearout, FOD prevention, working-hours discipline (Tuesday–Friday 0630–1715 absent CO approval), and the cultural / environmental / classified-material protocols required by the Statement of Work and applicable installation orders."*
 
 This affirmation is a soft signal of execution literacy that the CO will recognize.

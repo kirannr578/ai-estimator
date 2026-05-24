@@ -24,8 +24,7 @@
 ```
 Fred,
 
-Good morning. My name is [USER TO FILL: name] and I am with [USER TO FILL:
-firm legal name], a [USER TO FILL: brief firm descriptor — e.g. "Central Texas
+Good morning. My name is [USER TO FILL: name] and I am with RK Residential Homes and Commercial Constructions, LLC dba Blue Print Constructs, a [USER TO FILL: brief firm descriptor — e.g. "Central Texas
 GC focused on institutional and educational renovation work"]. We are
 preparing a Competitive Sealed Proposal for the Harrington Education Center
 Lab 303 Renovation (Project 2025-06813), due to SSC Services for Education on
@@ -93,20 +92,20 @@ I am reaching out as a prospective bidder for two reasons:
 
 For your reference:
 
-   Firm:               [USER TO FILL: firm legal name]
+   Firm:               RK Residential Homes and Commercial Constructions, LLC dba Blue Print Constructs
    Project Manager:    [USER TO FILL: name]
    Estimator:          [USER TO FILL: name]
    Phone | Email:      [USER TO FILL]
 
-I am available on the phone today and tomorrow at [USER TO FILL: phone] if
+I am available on the phone today and tomorrow at (469) 213-1838 if
 a 10-minute call would be easier than written replies.
 
 Thank you,
 
 [USER TO FILL: signer name]
 [USER TO FILL: title]
-[USER TO FILL: firm legal name]
-[USER TO FILL: phone | email | website]
+RK Residential Homes and Commercial Constructions, LLC dba Blue Print Constructs
+(469) 213-1838 | contactus@blueprintconstructs.com | https://www.blueprintconstructs.com
 ```
 
 ---

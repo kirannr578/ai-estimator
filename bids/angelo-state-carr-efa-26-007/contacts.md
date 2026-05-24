@@ -112,7 +112,7 @@ Note: sign-in sheet says "PAGE 1 OF 2" — there may be additional attendees on 
 >
 > Hi Hannah,
 >
-> [Firm name] is preparing a proposal in response to Solicitation 26-007 for the Carr EFA Dressing Room Renovation. We have the full document package in hand — the original RFCSP + Attachments A–F.1, plus the base drawing set (38 sheets, 2026-03-27), Drawings Addenda 1 and 2 (2026-04-15 and 2026-05-07), Addendum #1 (the pre-response meeting deck + sign-in sheet), and the 796-page Project Manual. Thank you for posting the full package to the ESBD.
+> Blue Print Constructs is preparing a proposal in response to Solicitation 26-007 for the Carr EFA Dressing Room Renovation. We have the full document package in hand — the original RFCSP + Attachments A–F.1, plus the base drawing set (38 sheets, 2026-03-27), Drawings Addenda 1 and 2 (2026-04-15 and 2026-05-07), Addendum #1 (the pre-response meeting deck + sign-in sheet), and the 796-page Project Manual. Thank you for posting the full package to the ESBD.
 >
 > ~~1. Pre-response meeting eligibility — RESOLVED, the RFCSP § 00050 II language is clear that the meeting was not mandatory.~~ (Confirmed by reading the original RFCSP.)
 >
@@ -132,8 +132,8 @@ Note: sign-in sheet says "PAGE 1 OF 2" — there may be additional attendees on 
 >
 > Best regards,
 > [USER TO FILL: bid-prep lead name]
-> [USER TO FILL: phone]
-> [Firm name]
+> (469) 213-1838
+> Blue Print Constructs
 
 ### Draft #2 — Voicemail / call script if Hannah doesn't respond to email within 24 hours
 
@@ -147,7 +147,7 @@ Note: sign-in sheet says "PAGE 1 OF 2" — there may be additional attendees on 
 >
 > [Sub name],
 >
-> [Firm name] is bidding on the Carr EFA Dressing Room Renovation at Angelo State University, Solicitation 26-007. We are inviting your firm to bid the [trade] scope for this project. Per Texas HUB Program guidelines, we are reaching out to HUB-certified subcontractors as part of our good-faith effort.
+> Blue Print Constructs is bidding on the Carr EFA Dressing Room Renovation at Angelo State University, Solicitation 26-007. We are inviting your firm to bid the [trade] scope for this project. Per Texas HUB Program guidelines, we are reaching out to HUB-certified subcontractors as part of our good-faith effort.
 >
 > **Project facts:**
 > - Project: Carr EFA Dressing Room Renovation, ASU
@@ -174,7 +174,7 @@ Note: sign-in sheet says "PAGE 1 OF 2" — there may be additional attendees on 
 >
 > Best regards,
 > [name]
-> [Firm name]
+> Blue Print Constructs
 
 ### Draft #4 — Bonding agent
 

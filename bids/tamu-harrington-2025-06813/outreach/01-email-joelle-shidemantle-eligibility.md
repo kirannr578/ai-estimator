@@ -28,7 +28,7 @@
 ```
 Joelle,
 
-Good morning. [Firm name] is preparing a Competitive Sealed Proposal for the
+Good morning. Blue Print Constructs is preparing a Competitive Sealed Proposal for the
 Harrington Education Center Lab 303 Renovation (project number 2025-06813),
 which posted on the Electronic State Business Daily on 2026-05-08 and is due
 to SSC Services for Education on 2026-06-10 at 2:00 PM CT.
@@ -100,8 +100,8 @@ For your reference, our team for this bid:
    Project Manager:   [USER TO FILL: name + title + phone + email]
    Estimator:         [USER TO FILL: name + title + phone + email]
 
-I am available on the phone today and tomorrow at [USER TO FILL: phone]
-or can be reached at [USER TO FILL: email] any time. Thank you in advance
+I am available on the phone today and tomorrow at (469) 213-1838
+or can be reached at contactus@blueprintconstructs.com any time. Thank you in advance
 for the quick turnaround — we recognize the bid window is tight given our
 late discovery of the solicitation.
 
@@ -109,9 +109,9 @@ Best regards,
 
 [USER TO FILL: signer name]
 [USER TO FILL: title]
-[USER TO FILL: firm legal name]
-[USER TO FILL: street address]
-[USER TO FILL: phone | email | website]
+RK Residential Homes and Commercial Constructions, LLC dba Blue Print Constructs
+16283 Willowick Ln
+(469) 213-1838 | contactus@blueprintconstructs.com | https://www.blueprintconstructs.com
 ```
 
 ---

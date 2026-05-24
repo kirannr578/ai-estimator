@@ -73,8 +73,8 @@ Thank you for any clarifications you're able to provide. We understand many of t
 Best regards,
 `[USER TO FILL: bid-prep lead name]`
 `[USER TO FILL: title]`
-`[USER TO FILL: firm name]`
-`[USER TO FILL: phone] | [USER TO FILL: email]`
+`Blue Print Constructs`
+`(469) 213-1838 | contactus@blueprintconstructs.com`
 
 ---
 

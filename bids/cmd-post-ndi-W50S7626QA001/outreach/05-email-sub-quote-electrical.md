@@ -22,7 +22,7 @@ SUBJECT:   Sub-quote request — Electrical (DoD-experienced) —
 
 [Sub name],
 
-[Firm Name] is bidding on Solicitation W50S7626QA001, a 136th Airlift
+Blue Print Constructs is bidding on Solicitation W50S7626QA001, a 136th Airlift
 Wing (Texas Air National Guard) interior renovation project at NAS/JRB
 Fort Worth, TX 76127. We are requesting your firm-fixed-price quote on
 the following electrical scope.
@@ -135,7 +135,7 @@ Best regards,
 [PM name]
 [Phone]
 [Email]
-[Firm Name]
+Blue Print Constructs
 ```
 
 ---

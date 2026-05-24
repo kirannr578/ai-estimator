@@ -13,13 +13,13 @@ Re: **Solicitation 2025-06813 — Harrington Education Center Lab 303 Renovation
 
 ## From
 
-`[USER TO FILL: firm legal name]`
-`[USER TO FILL: street address]`
-`[USER TO FILL: city, state, ZIP]`
-`[USER TO FILL: phone | email | website]`
-Texas Comptroller Taxpayer ID: `[USER TO FILL]`
-TX HUB Cert (if applicable): `[USER TO FILL: cert # / not certified]`
-Federal EIN: `[USER TO FILL]`
+`RK Residential Homes and Commercial Constructions, LLC dba Blue Print Constructs`
+`16283 Willowick Ln`
+`Frisco, TX 75033`
+`(469) 213-1838 | contactus@blueprintconstructs.com | https://www.blueprintconstructs.com`
+Texas Comptroller Taxpayer ID: `32082600456`
+TX HUB Cert (if applicable): `VID 1874292998900 — EXPIRED 2024-08-31 per source cert; user to confirm renewal`
+Federal EIN: `87-4292998`
 
 ## Date
 
@@ -29,7 +29,7 @@ Federal EIN: `[USER TO FILL]`
 
 ## 1. Statement of intent
 
-`[USER TO FILL: firm legal name]` is pleased to submit this Competitive Sealed Proposal for the renovation of the **Harrington Education Center Lab 303** (Texas A&M University, Bldg 0435, College Station, TX). We acknowledge the Notice of Project dated 2026-05-08 and any addenda issued through the proposal due date (addenda received and acknowledged: `[USER TO FILL: list addenda # / "none received as of submission"]`).
+`RK Residential Homes and Commercial Constructions, LLC dba Blue Print Constructs` is pleased to submit this Competitive Sealed Proposal for the renovation of the **Harrington Education Center Lab 303** (Texas A&M University, Bldg 0435, College Station, TX). We acknowledge the Notice of Project dated 2026-05-08 and any addenda issued through the proposal due date (addenda received and acknowledged: `[USER TO FILL: list addenda # / "none received as of submission"]`).
 
 ## 2. Project understanding
 

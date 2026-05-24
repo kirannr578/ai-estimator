@@ -37,8 +37,8 @@ The L.1.1 Proposal Submission Checklist defines what makes the bid responsive. E
 Per FAR 52.204-7 and RFP L.1.0, the prospective awardee must be registered in SAM **prior to award, during performance, and through final payment**. The Reps & Certs at SAM are also re-used per 52.204-8(d). All six items below are go/no-go.
 
 - [ ] ⚠️ **Active SAM.gov registration with current expiration date** (annual cycle from submission of Reps & Certs). Log in at `https://sam.gov/` → Workspace → Entity Management → confirm Registration Status = **Active**. `[USER TO VERIFY]`
-- [ ] ⚠️ **Unique Entity ID (UEI)** — 12-digit alphanumeric — published on SAM record. Will be inserted into Section B header on the Quote Schedule. `[USER TO FILL: UEI]`
-- [ ] ⚠️ **CAGE Code** — issued by Defense Logistics Agency; persists across SAM renewals; confirm active and matches the entity in SAM. `[USER TO FILL: CAGE]`
+- [ ] ⚠️ **Unique Entity ID (UEI)** — 12-digit alphanumeric — published on SAM record. Will be inserted into Section B header on the Quote Schedule. `LM4YHVQ71QG7`
+- [ ] ⚠️ **CAGE Code** — issued by Defense Logistics Agency; persists across SAM renewals; confirm active and matches the entity in SAM. `9LET0`
 - [ ] ⚠️ **NAICS 236220 is in the registered NAICS list** AND firm has **certified as small at the $45.0M size standard** for this code. Per SBA size-standard table, the size standard for NAICS 236220 is currently $45M average annual receipts; firms above it cannot bid on this set-aside. `[USER TO VERIFY]`
 - [ ] ⚠️ **Reps & Certs per FAR 52.204-8 / 52.212-3** — annual cycle, expire 12 months after last update. If older than ~11 months, refresh in SAM **immediately** — updates take 3–10 business days to propagate. `[USER TO VERIFY: date of last Reps & Certs update]`
 - [ ] ⚠️ **Electronic Funds Transfer (EFT) banking info in SAM is current** — required by 52.232-33. IPP enrollment after award uses this. `[USER TO VERIFY with controller / treasurer]`

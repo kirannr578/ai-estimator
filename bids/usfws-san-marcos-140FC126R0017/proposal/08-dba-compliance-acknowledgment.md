@@ -20,9 +20,9 @@ Solicitation 140FC126R0017
 San Marcos Aquatic Resources Center, Rehabilitate Shop & 2 Stall Garage Building
 
 
-Offeror:                 [USER TO FILL: legal entity name]
-UEI:                     [USER TO FILL]
-CAGE:                    [USER TO FILL]
+Offeror:                 RK Residential Homes and Commercial Constructions, LLC dba Blue Print Constructs
+UEI:                     LM4YHVQ71QG7
+CAGE:                    9LET0
 Date:                    [USER TO FILL: submission date — 2026-06-22]
 
 

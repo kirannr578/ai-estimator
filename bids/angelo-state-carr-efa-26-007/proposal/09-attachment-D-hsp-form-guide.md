@@ -29,7 +29,7 @@ The form is fillable on the TX Comptroller's website at `https://comptroller.tex
 
 | Field | What to enter | Source |
 |---|---|---|
-| Respondent name (legal) | `[USER TO FILL: firm's exact legal name — MUST match Attachment A, W-9, bid bond, ACORDs]` | — |
+| Respondent name (legal) | `RK Residential Homes and Commercial Constructions, LLC dba Blue Print Constructs` | — |
 | Respondent address | `[USER TO FILL]` | — |
 | Telephone | `[USER TO FILL]` | — |
 | Email | `[USER TO FILL]` | — |
@@ -121,7 +121,7 @@ The form has a free-text block (typically 1 page) for justifying any work the fi
 ```
 SELF-PERFORMING JUSTIFICATION
 
-[Firm name] intends to self-perform the following scopes of work on the Carr EFA
+Blue Print Constructs intends to self-perform the following scopes of work on the Carr EFA
 Dressing Room Renovation, with the justification stated for each:
 
 1. Project management, supervision, and general conditions (Div 01)
@@ -222,7 +222,7 @@ The HUB outreach emails to actually send are in `../outreach/05-email-hub-subs-t
   HSP — Carr EFA Dressing Room Renovation
   Solicitation 26-007
   Due: 2026-06-08, 5:00 PM CST
-  From: [Firm legal name]
+  From: RK Residential Homes and Commercial Constructions, LLC dba Blue Print Constructs
   ```
 - Hand-deliver preferred; if courier, schedule for Saturday 6/6 or Monday 6/8 AM delivery with signature required
 - Arrive ≥30 minutes before 5:00 PM CST deadline on Monday

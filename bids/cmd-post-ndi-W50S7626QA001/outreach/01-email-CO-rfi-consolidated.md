@@ -7,13 +7,13 @@
 ```
 TO:        136.AW.MSC@us.af.mil
 CC:        donald.crabtree.3@us.af.mil
-SUBJECT:   RFI — Solicitation W50S7626QA001 — [Firm Name]
+SUBJECT:   RFI — Solicitation W50S7626QA001 — Blue Print Constructs
 
 
 Captain Crabtree:
 
 Pursuant to Section L paragraph (f) of Solicitation W50S7626QA001
-(Issued 03 May 2026, due 04 June 2026), [Firm Name] respectfully
+(Issued 03 May 2026, due 04 June 2026), Blue Print Constructs respectfully
 submits the following six (6) consolidated requests for information.
 We have reviewed the SF 1442 cover form, the SF 30 Amendment 0001, the
 Statement of Work dated 05/03/2026, and the Plans dated 05/12/2026.
@@ -32,11 +32,11 @@ than 14 business days in advance. With closing on 04 June 2026, a
 standard pre-bid site walk is administratively impractical. We
 respectfully request the Government's accommodation in one of two forms:
 (a) a one-time accelerated-processing exception for an escorted 30-minute
-walk through B1672 + B1675 by no more than 2 [Firm Name] personnel
+walk through B1672 + B1675 by no more than 2 Blue Print Constructs personnel
 between 28 May and 03 June 2026, OR (b) confirmation that an offeror
 submitting on field-verified-after-award basis (per FAR 52.236-3) will
 not be disadvantaged in the comparative evaluation. Identifying contact:
-[PM name], [phone], [email]. UEI [UEI], CAGE [CAGE]. We acknowledge that
+[PM name], [phone], [email]. UEI LM4YHVQ71QG7, CAGE 9LET0. We acknowledge that
 the choice between (a) and (b) is the Government's.
 
 Question 3 — B1675 NDI Room scope confirmation. SOW §2.2 enumerates the
@@ -82,7 +82,7 @@ Sincerely,
 
 [Authorized Signer or PM name]
 [Title]
-[Firm Name]
+Blue Print Constructs
 [Phone]
 [Email]
 [UEI / CAGE]

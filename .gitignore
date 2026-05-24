@@ -28,6 +28,19 @@ config/client_quote.local.json
 # under bids/<opportunity>/ are still committed.
 bids/*/local/
 
+# Firm profile — drop-zone for unredacted corporate PDFs the user wants accessible
+# locally (current COI, current bond letter, current W-9, etc.) without committing
+# them. firm/firm-profile.json + firm/firm-profile.md ARE committed; binaries are not.
+firm/private/
+
+# Firm profile — one-shot text dumps from firm/_scripts/extract_sources.py.
+# Regenerable; contains raw quoted text from corporate source files that may include
+# firm-internal data. Do not commit.
+firm/_scripts/_extracted/
+firm/_scripts/_placeholders_report.json
+firm/_scripts/_placeholders_report_after.json
+firm/_scripts/_apply_report.json
+
 # Inbox of raw solicitation source PDFs/DOCX/etc. Per-bid source-files-manifest.md
 # files under bids/<opportunity>/ list what was downloaded and where it lives.
 inbox/

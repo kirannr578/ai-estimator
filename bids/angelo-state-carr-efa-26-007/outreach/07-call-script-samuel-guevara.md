@@ -10,22 +10,22 @@
 
 ## Opening (if Samuel answers)
 
-> "Hi Samuel, this is `[USER TO FILL: bid-prep lead name]` from `[USER TO FILL: firm name]`. Do you have 5 minutes to talk about the Carr EFA Dressing Room Renovation bid — Solicitation 26-007?"
+> "Hi Samuel, this is `[USER TO FILL: bid-prep lead name]` from `Blue Print Constructs`. Do you have 5 minutes to talk about the Carr EFA Dressing Room Renovation bid — Solicitation 26-007?"
 
 If he says yes → proceed to "Substance" below.
 If he says no → "No problem — when would be a better time? I'll call back."
 
 ## Opening (if voicemail)
 
-> "Hi Samuel, this is `[USER TO FILL: bid-prep lead name]` from `[USER TO FILL: firm name]`. I'm reaching out about Carr EFA Dressing Room Renovation, Solicitation 26-007. We're preparing a proposal and need to confirm a few items before we go further — most importantly whether the May 20 pre-response meeting was mandatory and whether we can still submit. I sent an email about a day ago; happy to walk through everything by phone whenever works. My number is `[USER TO FILL: phone]`. Thank you, and look forward to connecting."
+> "Hi Samuel, this is `[USER TO FILL: bid-prep lead name]` from `Blue Print Constructs`. I'm reaching out about Carr EFA Dressing Room Renovation, Solicitation 26-007. We're preparing a proposal and need to confirm a few items before we go further — most importantly whether the May 20 pre-response meeting was mandatory and whether we can still submit. I sent an email about a day ago; happy to walk through everything by phone whenever works. My number is `(469) 213-1838`. Thank you, and look forward to connecting."
 
 (Total voicemail length: ≤25 seconds. Do NOT leave a list of questions in voicemail — keep it short, give a name and a callback number, mention the email.)
 
 ## Opening (if a non-Samuel person at FP&C answers)
 
-> "Hi, this is `[USER TO FILL: bid-prep lead name]` from `[USER TO FILL: firm name]`. I'm trying to reach Samuel Guevara about the Carr EFA Dressing Room Renovation bid — Solicitation 26-007. Is he available, or do you know when's a good time to catch him? I sent him an email yesterday and wanted to follow up by phone."
+> "Hi, this is `[USER TO FILL: bid-prep lead name]` from `Blue Print Constructs`. I'm trying to reach Samuel Guevara about the Carr EFA Dressing Room Renovation bid — Solicitation 26-007. Is he available, or do you know when's a good time to catch him? I sent him an email yesterday and wanted to follow up by phone."
 
-(If transferred to Samuel → "Opening" above. If not → "Could I leave a callback number for Samuel? It's `[USER TO FILL: phone]`. The reason I'm calling is to confirm our eligibility after missing the pre-response meeting — Sol 26-007.")
+(If transferred to Samuel → "Opening" above. If not → "Could I leave a callback number for Samuel? It's `(469) 213-1838`. The reason I'm calling is to confirm our eligibility after missing the pre-response meeting — Sol 26-007.")
 
 ---
 

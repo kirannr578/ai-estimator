@@ -15,9 +15,9 @@ To:        Captain D. Jake Crabtree, Contracting Officer
            136 AW Mission Support Contracting
            c/o 136.AW.MSC@us.af.mil
 
-From:      [Firm Name]
-           UEI: [UEI]
-           CAGE: [CAGE]
+From:      Blue Print Constructs
+           UEI: LM4YHVQ71QG7
+           CAGE: 9LET0
            Authorized contact: [PM name + email + phone]
 
 Subject:   RFI — Solicitation W50S7626QA001 — Alter Command Post and
@@ -42,7 +42,7 @@ Sincerely,
 
 [Authorized Signer or PM name]
 [Title]
-[Firm Name]
+Blue Print Constructs
 ```
 
 ## B. Six questions
@@ -62,7 +62,7 @@ Sincerely,
 **Reference**: SOW §4.3 (site visit "urged" prior to offer submission), §7 (14-business-day advance access request rule).
 
 **Question**: SOW §4.3 urges site visits prior to offer submission. SOW §7 requires base-access requests no less than 14 business days prior to access. With the closing date 12 calendar days from today, a standard-rule pre-bid site walk of B1672 and B1675 is administratively impractical. We request the Government's accommodation in one of two forms:
-- (a) Issue a one-time accelerated-processing exception for an escorted 30-minute walk through B1672 + B1675 by no more than 2 [Firm Name] personnel between Wednesday 28 May 2026 and Wednesday 03 June 2026, OR
+- (a) Issue a one-time accelerated-processing exception for an escorted 30-minute walk through B1672 + B1675 by no more than 2 Blue Print Constructs personnel between Wednesday 28 May 2026 and Wednesday 03 June 2026, OR
 - (b) Confirm that an offeror submitting on field-verified-after-award basis (per FAR 52.236-3) will not be disadvantaged in the comparative evaluation.
 
 We acknowledge that the choice between (a) and (b) is the Government's. Identifying contact: [PM name + email + phone].
@@ -80,7 +80,7 @@ We acknowledge that the choice between (a) and (b) is the Government's. Identify
 **Question**: To enable accurate sub-quoting for fire-suppression and HVAC modification:
 - (a) What is the **manufacturer + model + system type (wet-pipe / dry-pipe / pre-action)** of the existing fire-suppression system serving B1672 and B1675?
 - (b) What is the **manufacturer + control-platform** of the existing HVAC building management system (e.g., Trane Tracer, Honeywell, Siemens, BACnet generic) at B1672 and B1675, for purposes of integrating the in-room HVAC override button?
-- (c) Can the Government make existing as-built drawings or system documentation available, or alternatively, schedule a maintenance-staff Q&A call between [Firm Name] and the relevant 136 CES facility-services point of contact?
+- (c) Can the Government make existing as-built drawings or system documentation available, or alternatively, schedule a maintenance-staff Q&A call between Blue Print Constructs and the relevant 136 CES facility-services point of contact?
 
 ### Question 5 — AFFF-residue handling on B1675 demolition
 
@@ -106,10 +106,10 @@ If (b), is the 136 Environmental Office the operational coordination point, and 
 |---|---|
 | Email to | `136.AW.MSC@us.af.mil` |
 | CC | None (per Section L (f); CO may cc PE/PM internally) |
-| Subject | `RFI — Solicitation W50S7626QA001 — [Firm Name]` |
+| Subject | `RFI — Solicitation W50S7626QA001 — Blue Print Constructs` |
 | Date sent | Friday 2026-05-29 EOD |
 | Format | PDF attachment + body text summarizing |
-| Filename | `W50S7626QA001_RFI_[Firm Name].pdf` |
+| Filename | `W50S7626QA001_RFI_Blue Print Constructs.pdf` |
 
 ## D. Expected response
 

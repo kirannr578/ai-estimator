@@ -17,20 +17,20 @@
 
 ## Opening (if Hannah answers)
 
-> "Hi Hannah, this is `[USER TO FILL: bid-prep lead name]` from `[USER TO FILL: firm name]`. Do you have 5 minutes to talk about the Carr EFA Dressing Room Renovation bid — Solicitation 26-007?"
+> "Hi Hannah, this is `[USER TO FILL: bid-prep lead name]` from `Blue Print Constructs`. Do you have 5 minutes to talk about the Carr EFA Dressing Room Renovation bid — Solicitation 26-007?"
 
 If she says yes → proceed to "Substance" below.
 If she says no → "No problem — when would be a better time? I'll call back."
 
 ## Opening (if voicemail)
 
-> "Hi Hannah, this is `[USER TO FILL: bid-prep lead name]` from `[USER TO FILL: firm name]`. I'm calling about Carr EFA Dressing Room Renovation, Solicitation 26-007. We have the full document package and we're putting our proposal together — I just have a couple of asks: a quick site walk this week, and Section 00 31 00 (the existing-conditions / hazmat survey referenced in the demo spec). I sent you an email about a day ago. My direct line is `[USER TO FILL: phone]`. Thank you, look forward to connecting."
+> "Hi Hannah, this is `[USER TO FILL: bid-prep lead name]` from `Blue Print Constructs`. I'm calling about Carr EFA Dressing Room Renovation, Solicitation 26-007. We have the full document package and we're putting our proposal together — I just have a couple of asks: a quick site walk this week, and Section 00 31 00 (the existing-conditions / hazmat survey referenced in the demo spec). I sent you an email about a day ago. My direct line is `(469) 213-1838`. Thank you, look forward to connecting."
 
 (Total voicemail length: ≤25 seconds. Keep it short — name, project, two asks, callback number, email reference.)
 
 ## Opening (if FP&C front desk picks up generally)
 
-> "Hi, this is `[USER TO FILL: bid-prep lead name]` from `[USER TO FILL: firm name]`. I'm trying to reach Hannah Bignall about the Carr EFA Dressing Room Renovation bid, Solicitation 26-007 — is she available? If not, Samuel Guevara would also be fine."
+> "Hi, this is `[USER TO FILL: bid-prep lead name]` from `Blue Print Constructs`. I'm trying to reach Hannah Bignall about the Carr EFA Dressing Room Renovation bid, Solicitation 26-007 — is she available? If not, Samuel Guevara would also be fine."
 
 (If transferred to either → "Opening" above. If neither available → leave callback number + ask for a call-back.)
 

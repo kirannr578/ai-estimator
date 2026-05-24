@@ -19,7 +19,7 @@ Use whichever the CSP package prescribes. Each question is published to all prop
 
 ## Subject line (anticipated)
 
-`Pre-proposal Q&A — SSC 2025-06813 — Harrington Education Center Lab 303 Renovation — [Firm name]`
+`Pre-proposal Q&A — SSC 2025-06813 — Harrington Education Center Lab 303 Renovation — Blue Print Constructs`
 
 ---
 

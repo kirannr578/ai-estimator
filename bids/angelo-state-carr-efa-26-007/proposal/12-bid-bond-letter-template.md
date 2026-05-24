@@ -23,7 +23,7 @@ cc: [USER TO FILL: surety company name + AM Best rating + Treasury Circular 570 
 
 Dear `[Bonding agent name]`:
 
-`[Firm legal name]` requests issuance of a bid bond for the upcoming proposal on the Carr EFA Dressing Room Renovation at Angelo State University, a member institution of the Texas Tech University System. The full bid envelope was reserved with you on 2026-05-22 (or earliest reservation date); this letter confirms the final number and submits the request to draw the bond.
+`RK Residential Homes and Commercial Constructions, LLC dba Blue Print Constructs` requests issuance of a bid bond for the upcoming proposal on the Carr EFA Dressing Room Renovation at Angelo State University, a member institution of the Texas Tech University System. The full bid envelope was reserved with you on 2026-05-22 (or earliest reservation date); this letter confirms the final number and submits the request to draw the bond.
 
 **Project facts:**
 
@@ -80,8 +80,8 @@ Best regards,
 _______________________________
 [USER TO FILL: bid-prep lead name, printed]
 [USER TO FILL: title]
-[USER TO FILL: firm legal name]
-[USER TO FILL: phone] | [USER TO FILL: email]
+RK Residential Homes and Commercial Constructions, LLC dba Blue Print Constructs
+(469) 213-1838 | contactus@blueprintconstructs.com
 ```
 
 ---

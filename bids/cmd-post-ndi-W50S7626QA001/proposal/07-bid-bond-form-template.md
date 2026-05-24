@@ -39,7 +39,7 @@ For this contract — bid envelope $300K–$700K — penal amount is **$60K–$1
 DATE BOND EXECUTED:        [Date — within 30 days of bid submission]
 
 PRINCIPAL (legal name and address):
-   [Firm legal name as registered in SAM]
+   RK Residential Homes and Commercial Constructions, LLC dba Blue Print Constructs
    [Address]
    [City, State, ZIP]
 
@@ -135,7 +135,7 @@ CORPORATE SURETY(IES):
 | Surety issues SF 24 in wet-ink | 1–3 business days after bonding agent confirms bid amount |
 | Wet-ink original retained on file | At firm + at surety; required for any post-award protest defense |
 | Scanned copy attached to submission email | At ≥ 300 DPI; legible all blocks |
-| Filename | `W50S7626QA001_BidBond_SF24_[Firm Name].pdf` |
+| Filename | `W50S7626QA001_BidBond_SF24_Blue Print Constructs.pdf` |
 | Wet-ink original may need to follow scanned copy by mail | \[VERIFY VS SECTION L\] — most ANG / federal contractors using e-bond accept the scanned copy + retained wet-ink-on-file as final; CO can request mailed original at award. **Confirm with CO Capt Crabtree at RFI cycle if uncertain.** |
 
 ## E. Surety alternatives (if SF 24 cannot be issued in time)

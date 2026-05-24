@@ -165,7 +165,7 @@ Visitor PPE — hard hat, safety glasses, high-vis vest provided at the site ent
   - ASU Police Department: 325-942-2071 (24/7)
   - ASU Health Services: 325-942-2173
   - ASU Facilities Emergency: 325-942-2257
-  - Samuel Guevara: `[USER TO FILL: phone from ASU directory]`
+  - Samuel Guevara: `(469) 213-1838`
   - Firm's PM: `[USER TO FILL]`
   - Firm's Safety Manager: `[USER TO FILL]`
 - **Nearest hospital:** Shannon Medical Center, San Angelo — ~3 miles from ASU campus

@@ -18,8 +18,8 @@ The CO did not provide a formal Schedule of Prices template. Use the following f
                   SCHEDULE OF PRICES
         Solicitation W50S7626QA001
    Alter Command Post and NDI Room
-              [Firm Name]
-              UEI: [UEI]    CAGE: [CAGE]
+              Blue Print Constructs
+              UEI: LM4YHVQ71QG7    CAGE: 9LET0
               Date: [date of submission]
 ─────────────────────────────────────────────────────────────────
 CLIN    Description                                  Qty  Unit   Firm Fixed Price

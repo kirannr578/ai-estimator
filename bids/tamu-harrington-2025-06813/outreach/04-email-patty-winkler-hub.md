@@ -24,7 +24,7 @@
 ```
 Patty,
 
-Good morning. [Firm legal name] is preparing a Competitive Sealed Proposal for
+Good morning. RK Residential Homes and Commercial Constructions, LLC dba Blue Print Constructs is preparing a Competitive Sealed Proposal for
 the Harrington Education Center Lab 303 Renovation (Project 2025-06813),
 administered by SSC Services for Education on behalf of Texas A&M University
 (Part 02). Proposals are due to SSC on Wed 2026-06-10 at 2:00 PM CT. The
@@ -81,21 +81,21 @@ We have three HSP-specific questions for you, and one administrative request.
 
 For your reference, the team for this bid:
 
-   Firm:               [USER TO FILL: firm legal name]
+   Firm:               RK Residential Homes and Commercial Constructions, LLC dba Blue Print Constructs
    TX HUB cert # (if applicable): [USER TO FILL or "Not HUB-certified; will
                                   meet goal through subcontracting"]
    Project Manager:    [USER TO FILL: name + email + phone]
    HSP lead at the firm:  [USER TO FILL: name + email + phone]
 
-I am available by phone at [USER TO FILL: phone] today or tomorrow if a brief
+I am available by phone at (469) 213-1838 today or tomorrow if a brief
 conversation is more efficient than written replies.
 
 Thank you in advance,
 
 [USER TO FILL: signer name]
 [USER TO FILL: title]
-[USER TO FILL: firm legal name]
-[USER TO FILL: phone | email]
+RK Residential Homes and Commercial Constructions, LLC dba Blue Print Constructs
+(469) 213-1838 | contactus@blueprintconstructs.com
 ```
 
 ---

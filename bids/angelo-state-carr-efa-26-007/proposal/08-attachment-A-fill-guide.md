@@ -42,7 +42,7 @@ This tells us the form expects: a base bid line + the $25,000 allowance line + a
 | Project number / Solicitation number | **26-007** | RFCSP cover |
 | Issuing entity | **Angelo State University** (a member institution of the Texas Tech University System) | RFCSP cover |
 | Proposal due date / time | **2026-06-05, 2:00 PM CST** | RFCSP cover |
-| Proposer legal name | `[USER TO FILL: firm's exact legal name — MUST match W-9, CIQ, HB 1295]` | — |
+| Proposer legal name | `RK Residential Homes and Commercial Constructions, LLC dba Blue Print Constructs` | — |
 | Proposer DBA (if any) | `[USER TO FILL: any DBA names]` | — |
 | Proposer address | `[USER TO FILL: business address]` | — |
 | Proposer phone | `[USER TO FILL: main business phone]` | — |

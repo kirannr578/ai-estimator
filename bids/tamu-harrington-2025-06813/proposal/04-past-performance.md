@@ -1,12 +1,27 @@
 # 04 — Past performance + references
 
+
+<!-- firm-profile:picks-banner -->
+> **Past-performance picks for this bid** (from `firm/firm-profile.json` → `past_project_selection_rules.tamu-harrington-2025-06813`):
+> 
+> 1. **Hindu Temple of Southlake** — North Texas Hindu Heritage Society (nonprofit religious owner); ≈10,700 SF Assembly A-3 (Place of Religious Worship) renovation at 595 South Kimball Avenue, Southlake, TX 76092; owner-side project # 2024-024; scope: demolition + finishes + phenolic toilet partitions + partition framework; drawings dated 2025-06-20 (PDF), updated 2025-09-12 (Arch + Structural); in execution per material quote 2025-10-30; delivery method: negotiated lump-sum (owner direct); role: GC. Final contract value: [USER TO FILL — not in BPC source files]. Reference contact: [USER TO FILL — North Texas Hindu Heritage Society POC].
+> 2. **Holiday Inn (Hall Park, Frisco)** — Holiday Inn franchisee (hospitality owner); commercial renovation at Hall Park, Frisco, TX; role: GC. Contract value, scope detail, and completion date: [USER TO FILL — cited by name in `BPC/Rocky Business Profile.docx` but no project-folder source on OneDrive; reconstruct from project records]. Reference contact: [USER TO FILL — Holiday Inn Hall Park property POC].
+> 3. **250–500+ single-family-home portfolio (cumulative since 2022)** — executed primarily as a specialty trade sub through GC partners That 1 Painter, Touchmark, Bridge View Build, and Hill Design Build across the DFW metroplex; scope: interior + exterior painting, drywall (tape/bed/texture), flooring, tile, trims, roofing repairs; role: specialty sub. Reference contacts: [USER TO FILL — named contact at each of the four featured GC partners].
+> 
+> The per-project entry templates below have been pre-filled for sections that match the standard TAMU/ASU reference-header shape. Bid workspaces with a different template shape (USACE / federal) still need the user to copy the recommended pick data manually into each Project N section.
+
+
 > **Page target:** 1–2 pages when typeset.
 > **Sourcing rule:** every entry below must reflect actual completed projects with verifiable owner-side references. TAMU evaluators do call references. Do not embellish.
 > **Selection priority:** (1) prior TAMU System / TAMU campus work — strongest signal; (2) other Texas higher-ed (UT System, TTU System, UH System, TSU, etc.); (3) Texas K-12 lab / science classroom work; (4) other institutional renovation of similar dollar value and scope shape.
 
 ---
 
-## A. Reference 1 — `[USER TO FILL: project name]`
+## A. Reference 1 — Hindu Temple of Southlake
+
+**Hindu Temple of Southlake** — North Texas Hindu Heritage Society (nonprofit religious owner); ≈10,700 SF Assembly A-3 (Place of Religious Worship) renovation at 595 South Kimball Avenue, Southlake, TX 76092; owner-side project # 2024-024; scope: demolition + finishes + phenolic toilet partitions + partition framework; drawings dated 2025-06-20 (PDF), updated 2025-09-12 (Arch + Structural); in execution per material quote 2025-10-30; delivery method: negotiated lump-sum (owner direct); role: GC. Final contract value: [USER TO FILL — not in BPC source files]. Reference contact: [USER TO FILL — North Texas Hindu Heritage Society POC].
+
+  Source: `Hindu Temple of South Lake/` on OneDrive.
 
 | Field | Value |
 |---|---|
@@ -27,7 +42,9 @@
 
 ---
 
-## B. Reference 2 — `[USER TO FILL]`
+## B. Reference 2 — Holiday Inn (Hall Park)
+
+**Holiday Inn (Hall Park, Frisco)** — Holiday Inn franchisee (hospitality owner); commercial renovation at Hall Park, Frisco, TX; role: GC. Contract value, scope detail, and completion date: [USER TO FILL — cited by name in `BPC/Rocky Business Profile.docx` but no project-folder source on OneDrive; reconstruct from project records]. Reference contact: [USER TO FILL — Holiday Inn Hall Park property POC].
 
 | Field | Value |
 |---|---|
@@ -46,7 +63,9 @@
 
 ---
 
-## C. Reference 3 — `[USER TO FILL]`
+## C. Reference 3 — 250-500+ single-family-home portfolio
+
+**250–500+ single-family-home portfolio (cumulative since 2022)** — executed primarily as a specialty trade sub through GC partners That 1 Painter, Touchmark, Bridge View Build, and Hill Design Build across the DFW metroplex; scope: interior + exterior painting, drywall (tape/bed/texture), flooring, tile, trims, roofing repairs; role: specialty sub. Reference contacts: [USER TO FILL — named contact at each of the four featured GC partners].
 
 | Field | Value |
 |---|---|

@@ -92,8 +92,8 @@ Per `../05-hsp-plan.md` + `09-attachment-D-hsp-form-guide.md`:
   PROPOSAL — Carr EFA Dressing Room Renovation
   Solicitation 26-007
   Due: 2026-06-05, 2:00 PM CST
-  From: [Firm legal name]
-  [Firm address]
+  From: RK Residential Homes and Commercial Constructions, LLC dba Blue Print Constructs
+  16283 Willowick Ln, Frisco, TX 75033
   ```
 - Tamper-evident seal (signed and dated across the flap).
 

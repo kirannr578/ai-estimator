@@ -18,7 +18,7 @@ NAS JRB Fort Worth, TX 76127
 
 Subject:    Bondability — Solicitation W50S7626QA001
             Alter Command Post and Nondestructive Inspection Room
-            [Firm Name] (Principal)
+            Blue Print Constructs (Principal)
             [Surety name] (Surety)
 
 
@@ -29,7 +29,7 @@ U.S. Department of the Treasury's listing of approved sureties (Treasury
 Department Circular 570), with a current single-bond limit of
 $[___________] and an aggregate-bond limit of $[___________].
 
-We have reviewed the qualifications of [Firm Name] (the "Principal"),
+We have reviewed the qualifications of Blue Print Constructs (the "Principal"),
 including the Principal's financial statements, contract-execution
 history, and management capacity. Based on this review, [Surety name]
 is willing to issue, upon award of the captioned contract, the
@@ -68,7 +68,7 @@ _________________________________________
 [Power of Attorney number, if attached]
 
 cc: [Bonding agent / broker name]
-    [Firm Name (Principal)]
+    RK Residential Homes and Commercial Constructions, LLC dba Blue Print Constructs
 ```
 
 ## B. What to expect from the surety
@@ -86,7 +86,7 @@ cc: [Bonding agent / broker name]
 
 | Method | Notes |
 |---|---|
-| Attach to submission email | Filename: `W50S7626QA001_BondabilityLetter_[Firm Name].pdf` |
+| Attach to submission email | Filename: `W50S7626QA001_BondabilityLetter_Blue Print Constructs.pdf` |
 | Use as supplement to Bid Bond | The bondability letter does NOT replace the bid bond (SF 24); both are submitted with the offer |
 
 ## D. Why include at bid

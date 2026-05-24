@@ -8,7 +8,7 @@
 
 Hi Samuel,
 
-`[USER TO FILL: firm name]` is preparing a proposal in response to Solicitation 26-007 for the Carr EFA Dressing Room Renovation. We have the RFCSP package and Attachments A through F.1 in hand and have started bid preparation.
+`Blue Print Constructs` is preparing a proposal in response to Solicitation 26-007 for the Carr EFA Dressing Room Renovation. We have the RFCSP package and Attachments A through F.1 in hand and have started bid preparation.
 
 A few items I would appreciate your help on before we go further:
 
@@ -18,15 +18,15 @@ A few items I would appreciate your help on before we go further:
 
 3. **Pre-existing hazardous-materials survey.** Carr EFA appears to be older construction. Has ASU EHS conducted a hazardous-materials survey of the dressing-room area that we could review? Knowing whether asbestos VCT, mastic, pipe insulation, or fireproofing has been characterized would let us scope abatement allowance accurately rather than carrying a defensive contingency.
 
-I will plan to follow up by phone in 24 hours if email is too slow. My direct line is `[USER TO FILL: phone]`.
+I will plan to follow up by phone in 24 hours if email is too slow. My direct line is `(469) 213-1838`.
 
 Thank you in advance — we appreciate your help getting the answers we need to put together a responsive and well-priced proposal for ASU.
 
 Best regards,
 `[USER TO FILL: bid-prep lead name]`
 `[USER TO FILL: title]`
-`[USER TO FILL: firm name]`
-`[USER TO FILL: phone] | [USER TO FILL: email]`
+`Blue Print Constructs`
+`(469) 213-1838 | contactus@blueprintconstructs.com`
 
 ---
 

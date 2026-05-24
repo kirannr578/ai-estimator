@@ -31,8 +31,8 @@ If a written list of owner-furnished items is forthcoming with the construction 
 Thank you,
 `[USER TO FILL: bid-prep lead name]`
 `[USER TO FILL: title]`
-`[USER TO FILL: firm name]`
-`[USER TO FILL: phone] | [USER TO FILL: email]`
+`Blue Print Constructs`
+`(469) 213-1838 | contactus@blueprintconstructs.com`
 
 ---
 

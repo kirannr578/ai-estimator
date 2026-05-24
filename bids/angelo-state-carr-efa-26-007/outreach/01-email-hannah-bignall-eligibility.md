@@ -8,7 +8,7 @@
 
 Hi Hannah,
 
-`[USER TO FILL: firm name]` is preparing a proposal in response to Solicitation 26-007 for the Carr EFA Dressing Room Renovation. We have the full document package in hand — the original RFCSP + Attachments A–F.1, plus the **base drawing set** (38 sheets, 2026-03-27, PBK Architects / LEAF Engineers / Lundy & Franke Engineering), **Drawings Addenda 1 and 2** (2026-04-15 and 2026-05-07), **Addendum #1** (the pre-response meeting deck + sign-in sheet from 2026-05-20), and the **796-page Project Manual** (Issue for Construction). Thank you for posting the complete set to the ESBD.
+`Blue Print Constructs` is preparing a proposal in response to Solicitation 26-007 for the Carr EFA Dressing Room Renovation. We have the full document package in hand — the original RFCSP + Attachments A–F.1, plus the **base drawing set** (38 sheets, 2026-03-27, PBK Architects / LEAF Engineers / Lundy & Franke Engineering), **Drawings Addenda 1 and 2** (2026-04-15 and 2026-05-07), **Addendum #1** (the pre-response meeting deck + sign-in sheet from 2026-05-20), and the **796-page Project Manual** (Issue for Construction). Thank you for posting the complete set to the ESBD.
 
 Five items I would appreciate your help on before we finalize our number:
 
@@ -24,15 +24,15 @@ Five items I would appreciate your help on before we finalize our number:
 
 For completeness on the eligibility question that often comes up: we confirmed by reading RFCSP § 00050 II that the 2026-05-20 pre-response meeting was not mandatory and that our firm remains eligible to submit a responsive proposal despite not attending in person — please correct us if that reading is wrong.
 
-I'll plan to follow up by phone in 24 hours if email is too slow. Direct line `[USER TO FILL: phone]`.
+I'll plan to follow up by phone in 24 hours if email is too slow. Direct line `(469) 213-1838`.
 
 Thank you in advance.
 
 Best regards,
 `[USER TO FILL: bid-prep lead name]`
 `[USER TO FILL: title]`
-`[USER TO FILL: firm name]`
-`[USER TO FILL: phone] | [USER TO FILL: email]`
+`Blue Print Constructs`
+`(469) 213-1838 | contactus@blueprintconstructs.com`
 
 ---
 

@@ -7,7 +7,7 @@ This folder is the **submission-side** package: forms, fill guides, narrative sk
 **One email, one set of attachments.**
 
 - **To:** `136.AW.MSC@us.af.mil`
-- **Subject:** `Quote — W50S7626QA001 — Alter Command Post + NDI Room — [Firm Name + UEI]`
+- **Subject:** `Quote — W50S7626QA001 — Alter Command Post + NDI Room — Blue Print Constructs (UEI LM4YHVQ71QG7)`
 - **By:** Thu 2026-06-04, ~1200 CDT (3-hour buffer ahead of the likely 1500 CDT close in SF 1442 Block 13 — \[VERIFY VS BLOCK 13\])
 
 **Required attachments** (Section L (a)(1)–(2) verbatim):

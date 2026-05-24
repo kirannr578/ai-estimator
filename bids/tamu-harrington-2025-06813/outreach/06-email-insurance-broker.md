@@ -92,14 +92,14 @@ TAMU System SGC overlays the 2010 Texas Facilities Commission UGSC. The
 2010 TFC UGSC baseline (which we have from a sister Texas Tech System
 solicitation) carries the limits above as a floor; TAMU may raise them.
 
-Available by phone any time at [USER TO FILL: phone].
+Available by phone any time at (469) 213-1838.
 
 Thank you,
 
 [USER TO FILL: signer name]
 [USER TO FILL: title]
-[USER TO FILL: firm legal name]
-[USER TO FILL: phone | email]
+RK Residential Homes and Commercial Constructions, LLC dba Blue Print Constructs
+(469) 213-1838 | contactus@blueprintconstructs.com
 ```
 
 ---

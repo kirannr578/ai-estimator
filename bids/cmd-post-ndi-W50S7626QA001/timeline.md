@@ -20,7 +20,7 @@ Days remaining: **12 calendar days / ~9 business days** (Memorial Day Mon 5/26 r
 | Mon 2026-06-01 | Mon | **🔴 Site-visit (alternate slot if not done Thu)**. **🔴 RFI cutoff** (per Section L (f) — RFI cutoff date \[VERIFY VS SAM.GOV NOTICE\] — Mon 6/1 EOD is the safest assumption to give CO time to amend if needed). **🔴 Bonding-agent confirms bid-bond ready**. | PM + bonding agent | ☐ |
 | Tue 2026-06-02 | Tue | **🔴 Receive CO RFI responses** (issued as SF 30 amendment if material). Update offer accordingly. **Sub quotes finalized** (last day to incorporate). | PM + estimator | ☐ |
 | Wed 2026-06-03 | Wed | **🔴 Final pricing lock + final SF 1442 + Schedule of Prices** signed by authorized officer. **🔴 Subfactor 1 list final**. **🔴 Subfactor 2 schedule final** (90-day Gantt PDF). **🔴 Bid bond SF 24 (scanned)** in hand. **🔴 Acknowledgment of Amendment 0001** documented in SF 1442 Block 19. | All hands | ☐ |
-| Thu 2026-06-04 | Thu | **🔴 SUBMIT** by **noon CDT** (3-hour buffer before likely 1500 CDT close). One email to `136.AW.MSC@us.af.mil` with subject `Quote — W50S7626QA001 — Alter Command Post + NDI Room — \[Firm Name + UEI\]`. Save sent-email confirmation + delivery receipt. | PM + Auth Signer | ☐ |
+| Thu 2026-06-04 | Thu | **🔴 SUBMIT** by **noon CDT** (3-hour buffer before likely 1500 CDT close). One email to `136.AW.MSC@us.af.mil` with subject `Quote — W50S7626QA001 — Alter Command Post + NDI Room — Blue Print Constructs (UEI LM4YHVQ71QG7)`. Save sent-email confirmation + delivery receipt. | PM + Auth Signer | ☐ |
 
 ## B. Post-submission (window check + standby)
 

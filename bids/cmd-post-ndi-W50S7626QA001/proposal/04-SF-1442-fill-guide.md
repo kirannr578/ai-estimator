@@ -82,7 +82,7 @@ Verify the start clause (e.g., "begin within 10 days after award" + "complete wi
 
 ```
 Block 14 — NAME AND ADDRESS OF OFFEROR
-[Firm legal name as registered in SAM]
+RK Residential Homes and Commercial Constructions, LLC dba Blue Print Constructs
 [Street address]
 [City, State, ZIP]
 
@@ -241,7 +241,7 @@ After fill, the SF 1442 should show:
 2. Type or hand-write Blocks 14, 15, (16), 17, 19, 20a, 20c, 22
 3. Authorized officer signs Block 20b in wet ink
 4. Scan completed form to PDF at ≥ 300 DPI
-5. Save filename: `W50S7626QA001_SF1442_[Firm Name]_[date].pdf`
+5. Save filename: `W50S7626QA001_SF1442_Blue Print Constructs_[date].pdf`
 6. Verify the scan is legible (zoom in on each block)
 7. Attach to submission email (`10-submission-checklist.md`)
 

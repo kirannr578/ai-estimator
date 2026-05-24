@@ -52,7 +52,7 @@ This document is the **form-completion guide**, not a restatement of the strateg
 | Project name | `Harrington Education Center Lab 303 Renovation` |
 | Agency | `Texas A&M University` (Part 02) |
 | Issuing entity | `SSC Services for Education` |
-| Proposer (Prime) | `[USER TO FILL: firm legal name]` |
+| Proposer (Prime) | `RK Residential Homes and Commercial Constructions, LLC dba Blue Print Constructs` |
 | Prime's TX HUB status | `[USER TO FILL: HUB-certified Y/N; if Y, list cert #]` |
 | Total proposal value | `$[USER TO FILL: matches 10-price-proposal.md]` |
 | Total self-performed value | `$[USER TO FILL: from 03-project-team.md § H and self-performing justification]` |

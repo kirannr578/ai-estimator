@@ -53,8 +53,8 @@ the 2026-06-08, 5:00 PM EDT cutoff.
 
 OFFEROR INFORMATION (per L.1.3.a.1, .2):
   Name:             [OFFEROR LEGAL NAME]
-  UEI:              [USER TO FILL]
-  CAGE:             [USER TO FILL]
+  UEI:              LM4YHVQ71QG7
+  CAGE:             9LET0
   Representative:   [USER TO FILL: name + title]
   Email:            [USER TO FILL]
   Phone:            [USER TO FILL]
@@ -257,8 +257,8 @@ ___________________________________
 [USER TO FILL: title]
 [OFFEROR LEGAL NAME]
 
-UEI:   [USER TO FILL]
-CAGE:  [USER TO FILL]
+UEI:   LM4YHVQ71QG7
+CAGE:  9LET0
 Email: [USER TO FILL]
 Phone: [USER TO FILL]
 ```

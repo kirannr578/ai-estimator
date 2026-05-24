@@ -17,7 +17,7 @@ Format: 2–4-page itemized list, CSI-divided. Section L paragraph (a)(1) explic
 ```
 EQUIPMENT, MATERIALS, AND LABOR DISCIPLINES LIST
 Solicitation W50S7626QA001 — Alter Command Post and NDI Room
-[Firm Name]
+Blue Print Constructs
 ─────────────────────────────────────────────────────────────────
 
 CLIN 0001 — B1672 COMMAND POST RELOCATION
@@ -187,7 +187,7 @@ Format: **1-page Gantt PDF** for the 90-day POP, with both CLINs as parallel-or-
 ```
 PROJECT SCHEDULE
 Solicitation W50S7626QA001 — Alter Command Post and NDI Room
-[Firm Name]
+Blue Print Constructs
 Period of performance: 90 calendar days from NTP receipt
 Working calendar: Tuesday through Friday (per SOW §11)
 ─────────────────────────────────────────────────────────────────

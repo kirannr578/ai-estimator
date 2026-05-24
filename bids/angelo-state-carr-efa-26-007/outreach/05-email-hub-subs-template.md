@@ -8,7 +8,7 @@
 
 `[CUSTOMIZE: sub firm name]`,
 
-`[USER TO FILL: firm name]` is bidding on the Carr EFA Dressing Room Renovation at Angelo State University, Solicitation 26-007. We are reaching out to TX HUB-certified subcontractors as part of our good-faith effort to subcontract with HUB firms under 34 TAC §20.285 and TTUS HSP practice. We would welcome a quote from `[CUSTOMIZE: sub firm name]` for the `[CUSTOMIZE: TRADE]` scope on this project.
+`Blue Print Constructs` is bidding on the Carr EFA Dressing Room Renovation at Angelo State University, Solicitation 26-007. We are reaching out to TX HUB-certified subcontractors as part of our good-faith effort to subcontract with HUB firms under 34 TAC §20.285 and TTUS HSP practice. We would welcome a quote from `[CUSTOMIZE: sub firm name]` for the `[CUSTOMIZE: TRADE]` scope on this project.
 
 **Project facts:**
 
@@ -89,15 +89,15 @@
 
 **Drawings + specs:** `[CUSTOMIZE: if drawings have arrived: attach OR provide portal link. If drawings haven't arrived, note: "Drawings are pending from the owner; we will forward as soon as they are received from ASU. Please respond to confirm interest to bid based on the scope summary above; we will send drawings within 24 hours of receipt."]`
 
-**Questions or clarifications:** `[USER TO FILL: bid-prep lead name]` at `[USER TO FILL: phone]` or `[USER TO FILL: email]`.
+**Questions or clarifications:** `[USER TO FILL: bid-prep lead name]` at `(469) 213-1838` or `contactus@blueprintconstructs.com`.
 
 We look forward to working with your firm on this project. Even if you elect not to bid this scope, please respond with that decision so we can document our outreach for the HSP good-faith effort requirement.
 
 Best regards,
 `[USER TO FILL: bid-prep lead name OR HUB compliance lead name — whoever is the trade lead]`
 `[USER TO FILL: title]`
-`[USER TO FILL: firm name]`
-`[USER TO FILL: phone] | [USER TO FILL: email]`
+`Blue Print Constructs`
+`(469) 213-1838 | contactus@blueprintconstructs.com`
 
 ---
 

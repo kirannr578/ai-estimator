@@ -87,8 +87,8 @@ Thank you,
 
 [USER TO FILL: signer name]
 [USER TO FILL: title]
-[USER TO FILL: firm legal name]
-[USER TO FILL: phone | email]
+RK Residential Homes and Commercial Constructions, LLC dba Blue Print Constructs
+(469) 213-1838 | contactus@blueprintconstructs.com
 ```
 
 ---

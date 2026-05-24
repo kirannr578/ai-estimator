@@ -20,17 +20,17 @@ Include a 1-paragraph acknowledgment in the offer (or the Schedule of Prices not
 ```
 Davis-Bacon Wage Determination Acknowledgment:
 
-[Firm Name] acknowledges that this contract is subject to the Davis-Bacon
+Blue Print Constructs acknowledges that this contract is subject to the Davis-Bacon
 Act and that Wage Determination TX20260270 (Modification 0, dated
 01/02/2026, Tarrant County, Building Construction) applies to all on-site
-trade labor under this contract. [Firm Name] commits to:
+trade labor under this contract. Blue Print Constructs commits to:
 
   1. Paying all classifications of laborers and mechanics at not less than
      the wage rates and fringe benefits listed in WD TX20260270.
   2. Posting WD TX20260270 at the jobsite in a conspicuous location
      accessible to laborers and mechanics.
   3. Submitting weekly certified payroll on Form WH-347 for both
-     [Firm Name] and each subcontractor performing work on the contract.
+     Blue Print Constructs and each subcontractor performing work on the contract.
   4. Maintaining payroll records for 3 years from contract completion.
   5. Flowing down DBA requirements via FAR 52.222-11 to each subcontractor
      of any tier.
@@ -42,7 +42,7 @@ trade labor under this contract. [Firm Name] commits to:
   8. Complying with apprentice/trainee ratio requirements (FAR 52.222-9)
      — registered apprenticeship programs only.
 
-In addition, [Firm Name] acknowledges and complies with all related
+In addition, Blue Print Constructs acknowledges and complies with all related
 labor-standards FAR clauses cited in Section I of this solicitation.
 ```
 
@@ -121,7 +121,7 @@ The DBA acknowledgment is **NOT a separate document** — it can be:
 - Included as a paragraph in the Schedule of Prices notes (preferred), OR
 - Included as a standalone 1-page acknowledgment document attached to the offer (also acceptable)
 
-Filename if standalone: `W50S7626QA001_DBA_Acknowledgment_[Firm Name].pdf`
+Filename if standalone: `W50S7626QA001_DBA_Acknowledgment_Blue Print Constructs.pdf`
 
 ## J. Where to access the full WD
 

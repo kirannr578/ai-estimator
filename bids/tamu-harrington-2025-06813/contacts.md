@@ -45,7 +45,7 @@
 - Body (template):
   > Joelle,
   >
-  > [Firm name] is preparing a CSP response for the Harrington Education Center Lab 303 Renovation (project number 2025-06813), due 2026-06-10 at 2:00 PM. We received the Notice of Project from the ESBD post.
+  > Blue Print Constructs is preparing a CSP response for the Harrington Education Center Lab 303 Renovation (project number 2025-06813), due 2026-06-10 at 2:00 PM. We received the Notice of Project from the ESBD post.
   >
   > Two quick asks:
   >
@@ -63,7 +63,7 @@
 - Body (template):
   > Fred,
   >
-  > [Firm name] is preparing a CSP response for the Harrington Education Center Lab 303 Renovation, due 2026-06-10. We are reaching out as a prospective bidder to introduce ourselves and to ask:
+  > Blue Print Constructs is preparing a CSP response for the Harrington Education Center Lab 303 Renovation, due 2026-06-10. We are reaching out as a prospective bidder to introduce ourselves and to ask:
   >
   > 1. Could you confirm the current revision of the architectural and MEP drawing set, and whether any addenda have been issued since the 5/14 pre-proposal meeting?
   >
@@ -79,7 +79,7 @@
 - Body (template):
   > Patty,
   >
-  > [Firm name] is preparing a CSP response for project 2025-06813 (Harrington Education Center Lab 303 Renovation), due 2026-06-10. The Notice confirms HSP is required.
+  > Blue Print Constructs is preparing a CSP response for project 2025-06813 (Harrington Education Center Lab 303 Renovation), due 2026-06-10. The Notice confirms HSP is required.
   >
   > Three questions:
   >

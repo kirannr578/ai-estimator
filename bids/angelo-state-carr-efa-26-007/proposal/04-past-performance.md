@@ -1,5 +1,16 @@
 # Past performance — Carr EFA Dressing Room Renovation
 
+
+<!-- firm-profile:picks-banner -->
+> **Past-performance picks for this bid** (from `firm/firm-profile.json` → `past_project_selection_rules.angelo-state-carr-efa-26-007`):
+> 
+> 1. **Hindu Temple of Southlake** — North Texas Hindu Heritage Society (nonprofit religious owner); ≈10,700 SF Assembly A-3 (Place of Religious Worship) renovation at 595 South Kimball Avenue, Southlake, TX 76092; owner-side project # 2024-024; scope: demolition + finishes + phenolic toilet partitions + partition framework; drawings dated 2025-06-20 (PDF), updated 2025-09-12 (Arch + Structural); in execution per material quote 2025-10-30; delivery method: negotiated lump-sum (owner direct); role: GC. Final contract value: [USER TO FILL — not in BPC source files]. Reference contact: [USER TO FILL — North Texas Hindu Heritage Society POC].
+> 2. **Holiday Inn (Hall Park, Frisco)** — Holiday Inn franchisee (hospitality owner); commercial renovation at Hall Park, Frisco, TX; role: GC. Contract value, scope detail, and completion date: [USER TO FILL — cited by name in `BPC/Rocky Business Profile.docx` but no project-folder source on OneDrive; reconstruct from project records]. Reference contact: [USER TO FILL — Holiday Inn Hall Park property POC].
+> 3. **250–500+ single-family-home portfolio (cumulative since 2022)** — executed primarily as a specialty trade sub through GC partners That 1 Painter, Touchmark, Bridge View Build, and Hill Design Build across the DFW metroplex; scope: interior + exterior painting, drywall (tape/bed/texture), flooring, tile, trims, roofing repairs; role: specialty sub. Reference contacts: [USER TO FILL — named contact at each of the four featured GC partners].
+> 
+> The per-project entry templates below have been pre-filled for sections that match the standard TAMU/ASU reference-header shape. Bid workspaces with a different template shape (USACE / federal) still need the user to copy the recommended pick data manually into each Project N section.
+
+
 > Target length: 1–2 pages. Three project references are the floor; five is typical for a TTUS RFCSP. Each project gets a table header for at-a-glance review plus a 1-paragraph narrative covering relevance to Carr EFA.
 
 > **Project-selection strategy (per `../06-evaluation-strategy.md` § B):** prioritize, in order:
@@ -17,15 +28,19 @@
 
 | # | Project name | Owner | Contract value | Completion year | Same-team? | Why relevant to Carr EFA |
 |---|---|---|---|---|---|---|
-| 1 | `[USER TO FILL]` | `[USER TO FILL]` | `$[USER TO FILL]` | `[USER TO FILL]` | `[USER TO FILL: same PM / same super / same safety lead?]` | `[USER TO FILL: one-line relevance]` |
-| 2 | `[USER TO FILL]` | `[USER TO FILL]` | `$[USER TO FILL]` | `[USER TO FILL]` | `[USER TO FILL]` | `[USER TO FILL]` |
-| 3 | `[USER TO FILL]` | `[USER TO FILL]` | `$[USER TO FILL]` | `[USER TO FILL]` | `[USER TO FILL]` | `[USER TO FILL]` |
+| 1 | Hindu Temple of Southlake — Place of Religious Worship renovation | North Texas Hindu Heritage Society | [NOT FOUND IN BPC] | [NOT FOUND IN BPC] | [USER TO FILL — same-team confirmation] | Selected per firm-profile past_project_selection_rules[angelo-state-carr-efa-26-007] |
+| 2 | Holiday Inn (Hall Park) — hospitality renovation | Holiday Inn franchisee at Hall Park, Frisco, TX | [NOT FOUND IN BPC] | [NOT FOUND IN BPC] | [USER TO FILL — same-team confirmation] | Selected per firm-profile past_project_selection_rules[angelo-state-carr-efa-26-007] |
+| 3 | 250-500+ single-family-home portfolio (cumulative; multiple owners) | Multiple — primarily through GC partners That 1 Painter, Touchmark, Bridge View Build, Hill Design Build | [NOT FOUND IN BPC] | Ongoing 2022–present | [USER TO FILL — same-team confirmation] | Selected per firm-profile past_project_selection_rules[angelo-state-carr-efa-26-007] |
 | 4 (opt) | `[USER TO FILL]` | `[USER TO FILL]` | `$[USER TO FILL]` | `[USER TO FILL]` | `[USER TO FILL]` | `[USER TO FILL]` |
 | 5 (opt) | `[USER TO FILL]` | `[USER TO FILL]` | `$[USER TO FILL]` | `[USER TO FILL]` | `[USER TO FILL]` | `[USER TO FILL]` |
 
 ---
 
-## Project Reference #1 — `[USER TO FILL: project name]`
+## Project Reference #1 — Hindu Temple of Southlake
+
+**Hindu Temple of Southlake** — North Texas Hindu Heritage Society (nonprofit religious owner); ≈10,700 SF Assembly A-3 (Place of Religious Worship) renovation at 595 South Kimball Avenue, Southlake, TX 76092; owner-side project # 2024-024; scope: demolition + finishes + phenolic toilet partitions + partition framework; drawings dated 2025-06-20 (PDF), updated 2025-09-12 (Arch + Structural); in execution per material quote 2025-10-30; delivery method: negotiated lump-sum (owner direct); role: GC. Final contract value: [USER TO FILL — not in BPC source files]. Reference contact: [USER TO FILL — North Texas Hindu Heritage Society POC].
+
+  Source: `Hindu Temple of South Lake/` on OneDrive.
 
 | Field | Value |
 |---|---|
@@ -55,7 +70,9 @@
 
 ---
 
-## Project Reference #2 — `[USER TO FILL: project name]`
+## Project Reference #2 — Holiday Inn (Hall Park)
+
+**Holiday Inn (Hall Park, Frisco)** — Holiday Inn franchisee (hospitality owner); commercial renovation at Hall Park, Frisco, TX; role: GC. Contract value, scope detail, and completion date: [USER TO FILL — cited by name in `BPC/Rocky Business Profile.docx` but no project-folder source on OneDrive; reconstruct from project records]. Reference contact: [USER TO FILL — Holiday Inn Hall Park property POC].
 
 | Field | Value |
 |---|---|
@@ -81,7 +98,9 @@
 
 ---
 
-## Project Reference #3 — `[USER TO FILL: project name]`
+## Project Reference #3 — 250-500+ single-family-home portfolio
+
+**250–500+ single-family-home portfolio (cumulative since 2022)** — executed primarily as a specialty trade sub through GC partners That 1 Painter, Touchmark, Bridge View Build, and Hill Design Build across the DFW metroplex; scope: interior + exterior painting, drywall (tape/bed/texture), flooring, tile, trims, roofing repairs; role: specialty sub. Reference contacts: [USER TO FILL — named contact at each of the four featured GC partners].
 
 | Field | Value |
 |---|---|

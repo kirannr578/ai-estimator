@@ -14,7 +14,7 @@ DATE OF VISIT:        [Date]                  TIME ARRIVED:    [Time]
                                               TIME DEPARTED:   [Time]
 
 GOVT ESCORT:          [136 CES POC name + title]
-ATTENDEES:            [Firm names of attendees]
+ATTENDEES:            Blue Print Constructs representatives (names: [USER TO FILL])
 WEATHER:              [Conditions — sometimes affects access route observations]
 
 ARRIVAL POINT:        NAS JRB Visitor Control Center, [Gate name]

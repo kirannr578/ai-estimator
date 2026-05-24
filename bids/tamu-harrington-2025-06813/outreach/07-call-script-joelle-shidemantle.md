@@ -22,7 +22,7 @@
 
 ## Opening (target: under 30 seconds)
 
-> "Good morning, this is `[USER TO FILL: caller name]` with `[USER TO FILL: firm legal name]`. I sent you an email yesterday morning about the Harrington Education Center Lab 303 Renovation — Solicitation 2025-06813 — and I wanted to follow up briefly to make sure my note didn't get caught in a filter. Do you have 3 minutes to talk through a couple of quick questions, or should I call back later?"
+> "Good morning, this is `[USER TO FILL: caller name]` with `RK Residential Homes and Commercial Constructions, LLC dba Blue Print Constructs`. I sent you an email yesterday morning about the Harrington Education Center Lab 303 Renovation — Solicitation 2025-06813 — and I wanted to follow up briefly to make sure my note didn't get caught in a filter. Do you have 3 minutes to talk through a couple of quick questions, or should I call back later?"
 
 **If she has time:** proceed.
 **If she's slammed:** "Totally understand. Could I get a 10-minute slot on your calendar later today or tomorrow? Or, if it's easier, could you point me to whoever on your team handles the e-Builder portal access question and we'll loop them in directly?"
@@ -100,7 +100,7 @@
 
 **Place the call Tue 2026-05-25 by 3:00 PM CT** (gives Joelle a full business day before the parallel touch).
 
-> "Good afternoon, this is `[USER TO FILL: caller name]` with `[USER TO FILL: firm legal name]`. We're preparing a Competitive Sealed Proposal for the Harrington Education Center Lab 303 Renovation — SSC Solicitation 2025-06813, your file. I'm reaching out because we missed the 5/14 pre-proposal meeting and I have one eligibility question that I haven't been able to confirm through the SSC project manager yet. Do you have 2 minutes, or could you point me to the right person on the TAMU procurement side to confirm whether attendance at the pre-proposal meeting was mandatory for proposers?"
+> "Good afternoon, this is `[USER TO FILL: caller name]` with `RK Residential Homes and Commercial Constructions, LLC dba Blue Print Constructs`. We're preparing a Competitive Sealed Proposal for the Harrington Education Center Lab 303 Renovation — SSC Solicitation 2025-06813, your file. I'm reaching out because we missed the 5/14 pre-proposal meeting and I have one eligibility question that I haven't been able to confirm through the SSC project manager yet. Do you have 2 minutes, or could you point me to the right person on the TAMU procurement side to confirm whether attendance at the pre-proposal meeting was mandatory for proposers?"
 
 **Listen for:**
 - "I can answer that" → ask Question 1 verbatim; capture her answer; confirm by follow-up email

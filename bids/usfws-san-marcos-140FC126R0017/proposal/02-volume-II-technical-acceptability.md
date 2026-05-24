@@ -38,8 +38,8 @@ Paste this on a single page. Sign and date.
 >
 > - Legal entity name: `[USER TO FILL]`
 > - DBA / trade name (if any): `[USER TO FILL]`
-> - Unique Entity ID (UEI): `[USER TO FILL: 12-character SAM UEI]`
-> - CAGE code: `[USER TO FILL]`
+> - Unique Entity ID (UEI): `LM4YHVQ71QG7`
+> - CAGE code: `9LET0`
 > - SAM registration status: Active
 > - SAM registration expiration date: `[USER TO FILL: as shown in SAM "Entity Information"]`
 > - Reps & Certs last updated: `[USER TO FILL: must be within last 12 months]`
@@ -126,9 +126,9 @@ USFWS, Construction A/E Team 1
 
 PART II — TECHNICAL ACCEPTABILITY
 
-Offeror:             [USER TO FILL: legal entity name]
-UEI:                 [USER TO FILL]
-CAGE:                [USER TO FILL]
+Offeror:             RK Residential Homes and Commercial Constructions, LLC dba Blue Print Constructs
+UEI:                 LM4YHVQ71QG7
+CAGE:                9LET0
 NAICS:               236220 (Commercial & Institutional Building Construction)
 Size status:         Small (under $45.0M 3-year average annual receipts)
 Submission date:     June 22, 2026

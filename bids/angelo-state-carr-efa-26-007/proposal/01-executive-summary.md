@@ -22,7 +22,7 @@ cc: Samuel Guevara, ASU FP&C
 
 Dear Director Howell:
 
-`[USER TO FILL: firm legal name]` is pleased to submit this competitive sealed proposal in response to Solicitation 26-007 for the Carr Education and Fine Arts Building Dressing Room Renovation at Angelo State University. We have read the full RFCSP package, Attachments A through F.1, the TTUS-edited 2010 Uniform General Conditions (dated 09.07.2023), the Sample Construction Services Agreement (Attachment B.2), and the Tom Green County Prevailing Wage Determination dated July 2023, and we are responsive to each requirement.
+`RK Residential Homes and Commercial Constructions, LLC dba Blue Print Constructs` is pleased to submit this competitive sealed proposal in response to Solicitation 26-007 for the Carr Education and Fine Arts Building Dressing Room Renovation at Angelo State University. We have read the full RFCSP package, Attachments A through F.1, the TTUS-edited 2010 Uniform General Conditions (dated 09.07.2023), the Sample Construction Services Agreement (Attachment B.2), and the Tom Green County Prevailing Wage Determination dated July 2023, and we are responsive to each requirement.
 
 **Project understanding.** The scope is a complete interior renovation of the Carr EFA dressing rooms: full demolition and replacement of interior finishes, HVAC, plumbing, electrical, lighting, and door hardware, with new IT infrastructure pathway and full ADA compliance under the alterations standard (28 CFR 35.151). Owner-furnished items — technology systems, network/data cabling, equipment install, furniture/FF&E, and fire suppression — are not in our price. We have priced coordination, protection, and rough-ins (including CBORD access-control door prep and low-voltage pathway) for these owner-furnished items, and our technical narrative includes a written demarcation table that clearly identifies where our scope ends and ASU's owner-vendor scope begins.
 
@@ -56,8 +56,8 @@ Respectfully submitted,
 _______________________________
 [USER TO FILL: signer name, printed]
 [USER TO FILL: title]
-[USER TO FILL: firm legal name]
-[USER TO FILL: email + phone]
+RK Residential Homes and Commercial Constructions, LLC dba Blue Print Constructs
+contactus@blueprintconstructs.com
 
 Date: 2026-06-05
 ```

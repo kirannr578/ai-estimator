@@ -27,7 +27,7 @@ RE: Request for Bid Bond + Performance/Payment Bond Commitment
 
 Dear [bonding agent first name],
 
-[Firm legal name] is preparing a Competitive Sealed Proposal for the
+RK Residential Homes and Commercial Constructions, LLC dba Blue Print Constructs is preparing a Competitive Sealed Proposal for the
 Harrington Education Center Lab 303 Renovation at Texas A&M University,
 College Station campus. Proposals are due to SSC Services for Education on
 Wed 2026-06-10 at 2:00 PM CT.
@@ -85,7 +85,7 @@ Thank you,
 
 [Authorized signatory name]
 [Title]
-[Firm legal name]
+RK Residential Homes and Commercial Constructions, LLC dba Blue Print Constructs
 [Phone]
 [Email]
 ```
