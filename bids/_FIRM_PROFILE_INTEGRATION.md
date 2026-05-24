@@ -210,3 +210,4 @@ If you spot any PII in a file the substitution script created or modified, treat
 ## 8. Change log
 
 - **2026-05-23** — SAM.gov status set to active (user-confirmed). Expiration date still TBD.
+- **2026-05-23** — Added `core/proposal_renderer/` (PDF + pitch-deck PPTX builder) and rendered the first set of artifacts under `bids/<slug>/proposal/exports/` for all 4 active workspaces (TAMU, Angelo State, USFWS, TXANG Cmd Post). The 8 deliverables are committed once so they ship with the feature; a follow-up commit adds `bids/*/proposal/exports/` to `.gitignore` so future renders don't churn the diff. To regenerate from source: `python scripts/render_proposals.py --all --format both`.

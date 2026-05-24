@@ -129,6 +129,66 @@ def _build_client_pdf(
     return f"client-pdf written: {out_pdf} ({out_pdf.stat().st_size:,} bytes)"
 
 
+_REPO_ROOT = Path(__file__).resolve().parent
+
+
+def _render_bid_proposal(bid_slug: str, log: logging.Logger) -> str:
+    """Render the PDF + pitch-deck PPTX for `bids/<bid_slug>/proposal/`.
+
+    Independent of the client-quote PDF flow. Failures are logged and
+    returned as a single-line summary; they never break the primary
+    analyze run.
+    """
+    bid_dir = _REPO_ROOT / "bids" / bid_slug
+    if not (bid_dir / "proposal").is_dir():
+        msg = f"render-proposal: no proposal/ subdir under bids/{bid_slug}; skipped."
+        log.error(msg)
+        return msg
+
+    try:
+        from core.proposal_renderer import (
+            build_proposal_pdf,
+            build_proposal_pptx,
+            load_firm_profile,
+        )
+    except ImportError as exc:
+        msg = (
+            f"render-proposal skipped: dependency import failed ({exc}). "
+            "Install: pip install markdown xhtml2pdf python-pptx pypdf."
+        )
+        log.warning(msg)
+        return msg
+
+    try:
+        firm_profile = load_firm_profile()
+    except Exception as exc:
+        msg = f"render-proposal: failed to load firm/firm-profile.json: {exc}"
+        log.error(msg)
+        return msg
+
+    out_dir = bid_dir / "proposal" / "exports"
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    parts: list[str] = []
+    pdf_out = out_dir / "proposal-full.pdf"
+    try:
+        build_proposal_pdf(bid_dir, pdf_out, firm_profile)
+        parts.append(f"PDF {pdf_out} ({pdf_out.stat().st_size:,} bytes)")
+    except Exception as exc:
+        log.error("render-proposal: PDF render failed: %s", exc)
+        parts.append(f"PDF FAILED: {exc}")
+
+    pptx_out = out_dir / "proposal-pitch.pptx"
+    try:
+        build_proposal_pptx(bid_dir, pptx_out, firm_profile, style="pitch_deck")
+        parts.append(f"PPTX {pptx_out} ({pptx_out.stat().st_size:,} bytes)")
+    except Exception as exc:
+        log.error("render-proposal: PPTX render failed: %s", exc)
+        parts.append(f"PPTX FAILED: {exc}")
+
+    return f"render-proposal[{bid_slug}]: " + "; ".join(parts)
+
+
 def main() -> int:
     p = argparse.ArgumentParser(description="Run the Construction Plan Estimator on a folder of PDFs.")
     p.add_argument("path", type=Path, help="A PDF file or a folder containing PDFs.")
@@ -149,6 +209,16 @@ def main() -> int:
                    help="Skip large PDFs (>5 MB) - cheap text-only run.")
     p.add_argument("--client-pdf", action="store_true",
                    help="Also render a client-ready quote.pdf using config/client_quote.json.")
+    p.add_argument(
+        "--render-proposal",
+        metavar="BID_SLUG",
+        default=None,
+        help=(
+            "After analyze finishes, render the proposal package at "
+            "bids/<BID_SLUG>/proposal/ to a PDF + pitch-deck PPTX. Independent of "
+            "--client-pdf (which renders the client-quote PDF for the analyze run)."
+        ),
+    )
     p.add_argument(
         "--cost-db",
         choices=["cwicr", "seed", "both"],
@@ -258,6 +328,10 @@ def main() -> int:
         if pdf_msg:
             log_lines.append(pdf_msg)
 
+    if args.render_proposal:
+        proposal_msg = _render_bid_proposal(args.render_proposal, log)
+        log_lines.append(proposal_msg)
+
     save_to_disk("\n".join(log_lines) + "\n", args.out / "run_log.txt")
 
     print("")
@@ -278,6 +352,12 @@ def main() -> int:
             print(f"Client quote:    {quote_pdf.resolve()}")
         else:
             print("Client quote:    (skipped — see run_log.txt)")
+    if args.render_proposal:
+        bid_dir = _REPO_ROOT / "bids" / args.render_proposal / "proposal" / "exports"
+        if bid_dir.is_dir():
+            print(f"Proposal pkg:    {bid_dir.resolve()}")
+        else:
+            print("Proposal pkg:    (skipped — see run_log.txt)")
     if project.warnings:
         print(f"Warnings:        {len(project.warnings)} (see Warnings sheet in Excel)")
     return 0

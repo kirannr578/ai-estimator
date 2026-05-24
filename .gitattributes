@@ -1,0 +1,11 @@
+# Binary file types — never apply line-ending conversion. Without this,
+# Windows CRLF normalization can corrupt the bytes of PDFs / Office docs /
+# images and produce broken artifacts on checkout.
+*.pdf binary
+*.pptx binary
+*.docx binary
+*.xlsx binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary

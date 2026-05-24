@@ -29,3 +29,11 @@ rapidfuzz>=3.10.0         # fuzzy matching for room/spec dedupe
 scikit-learn>=1.4,<2.0           # TF-IDF first-pass over CWICR descriptions
 sentence-transformers>=2.7,<4.0  # all-MiniLM-L6-v2 semantic re-rank (CPU)
 pyarrow>=15.0                    # parquet reader for the CWICR dataset
+
+# Proposal renderer (core/proposal_renderer/) — bid `proposal/*.md` to
+# submission-quality PDF + pitch-deck PPTX. Pure-Python, Windows-friendly,
+# no system deps (no Cairo / Pango / Chromium).
+markdown>=3.6                    # Markdown -> HTML; tables / fenced_code / attr_list extensions
+xhtml2pdf>=0.2.16                # HTML -> PDF (used for proposal-full.pdf)
+python-pptx>=1.0                 # PPTX builder (pitch-deck + full styles)
+pypdf>=4.0                       # used in renderer tests for round-trip text extraction

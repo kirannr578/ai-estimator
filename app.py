@@ -573,6 +573,149 @@ with st.sidebar:
 
 # --- Main area --------------------------------------------------------------
 
+
+def _render_proposal_panel() -> None:
+    """Render-bid-proposal panel — picks a bid workspace, renders PDF +
+    pitch-deck PPTX (and optionally a full-walkthrough PPTX), and surfaces
+    download buttons. Independent of the analyze flow above; safe to use
+    without an active estimate in session state.
+    """
+    from core.proposal_renderer import (
+        build_proposal_pdf,
+        build_proposal_pptx,
+        load_firm_profile,
+    )
+
+    bids_root = ROOT / "bids"
+    bid_dirs = sorted(
+        p for p in bids_root.iterdir()
+        if p.is_dir() and (p / "proposal").is_dir()
+    ) if bids_root.is_dir() else []
+
+    if not bid_dirs:
+        st.info(
+            "No `bids/<slug>/proposal/` workspaces found. Add a bid workspace "
+            "before using the proposal renderer."
+        )
+        return
+
+    bid_choice = st.selectbox(
+        "Bid workspace",
+        options=[p.name for p in bid_dirs],
+        index=0,
+        help="Each option corresponds to a `bids/<slug>/proposal/` directory.",
+    )
+
+    fc1, fc2, fc3 = st.columns(3)
+    want_pdf = fc1.checkbox("Full PDF", value=True)
+    want_pptx_pitch = fc2.checkbox("Pitch-deck PPTX", value=True)
+    want_pptx_full = fc3.checkbox("Full PPTX (one slide / H1)", value=False)
+
+    render_clicked = st.button(
+        "Render proposal package",
+        type="primary",
+        disabled=not (want_pdf or want_pptx_pitch or want_pptx_full),
+    )
+
+    state_key = f"proposal_render__{bid_choice}"
+    if render_clicked:
+        bid_dir = bids_root / bid_choice
+        out_dir = bid_dir / "proposal" / "exports"
+        out_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            firm_profile = load_firm_profile()
+        except Exception as exc:
+            st.error(f"Could not load firm/firm-profile.json: {exc}")
+            return
+
+        artifacts: dict[str, Path] = {}
+        errors: list[str] = []
+
+        if want_pdf:
+            pdf_out = out_dir / "proposal-full.pdf"
+            try:
+                build_proposal_pdf(bid_dir, pdf_out, firm_profile)
+                artifacts["pdf"] = pdf_out
+            except Exception as exc:
+                errors.append(f"PDF render failed: {exc}")
+
+        if want_pptx_pitch:
+            pptx_out = out_dir / "proposal-pitch.pptx"
+            try:
+                build_proposal_pptx(
+                    bid_dir, pptx_out, firm_profile, style="pitch_deck"
+                )
+                artifacts["pptx_pitch"] = pptx_out
+            except Exception as exc:
+                errors.append(f"Pitch-deck PPTX render failed: {exc}")
+
+        if want_pptx_full:
+            pptx_full_out = out_dir / "proposal-full.pptx"
+            try:
+                build_proposal_pptx(
+                    bid_dir, pptx_full_out, firm_profile, style="full"
+                )
+                artifacts["pptx_full"] = pptx_full_out
+            except Exception as exc:
+                errors.append(f"Full-walkthrough PPTX render failed: {exc}")
+
+        st.session_state[state_key] = {"artifacts": artifacts, "errors": errors}
+
+    rendered = st.session_state.get(state_key)
+    if not rendered:
+        st.caption(
+            "Click **Render proposal package** to generate the selected "
+            "artifacts under `bids/<slug>/proposal/exports/`."
+        )
+        return
+
+    for err in rendered["errors"]:
+        st.error(err)
+
+    artifacts = rendered["artifacts"]
+    if not artifacts:
+        return
+
+    st.success(
+        f"Rendered {len(artifacts)} artifact(s) under "
+        f"`bids/{bid_choice}/proposal/exports/`."
+    )
+
+    label_map = {
+        "pdf": ("Download full PDF", "application/pdf"),
+        "pptx_pitch": (
+            "Download pitch-deck PPTX",
+            "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        ),
+        "pptx_full": (
+            "Download full PPTX",
+            "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        ),
+    }
+    cols = st.columns(len(artifacts))
+    for col, (key, path) in zip(cols, artifacts.items()):
+        label, mime = label_map.get(key, (path.name, "application/octet-stream"))
+        with col:
+            st.download_button(
+                label,
+                data=path.read_bytes(),
+                file_name=path.name,
+                mime=mime,
+                use_container_width=True,
+            )
+            st.caption(f"{path.stat().st_size:,} bytes")
+
+
+with st.expander("Bid Proposals — render PDF + pitch-deck PPTX", expanded=False):
+    st.caption(
+        "Independent of the plan-set analyzer above. Picks a bid workspace "
+        "under `bids/`, reads its `proposal/*.md` files, and produces a "
+        "full PDF + pitch-deck PPTX (and optionally a full-walkthrough PPTX) "
+        "under `bids/<slug>/proposal/exports/`."
+    )
+    _render_proposal_panel()
+
+
 if run_clicked:
     if input_mode == "Upload files":
         pdf_paths = _save_uploaded_pdfs(uploaded_files)
