@@ -39,6 +39,55 @@ This directory holds the **single source of truth** for Blue Print Constructs' (
    - **Re-extract from source.** Edit a source file in `C:\Users\rnuduru1\OneDrive\Blueprint Constructs\BPC\`, then run `firm/_scripts/extract_sources.py` and re-read the dumps under `firm/_scripts/_extracted/`. The script is a one-shot text dumper, **not** a profile builder — you (or a future agent) will need to hand-update `firm-profile.json` from the dumps. The script writes to `_extracted/`; it does not overwrite `firm-profile.json`.
    - **Hand-edit `firm-profile.json` directly.** When values change between bids (renewed COI limits, current EMR, new bonding agent), just edit the JSON, then re-run `apply_firm_profile.py` against `bids/`. Re-render `firm-profile.md` to keep the human-readable companion in sync.
 
+## Capability Library
+
+Beyond the raw firm-profile, this directory hosts a **reusable bid-prep capability library** — playbooks, scope templates, proposal-section library, and a compliance asset registry — built by mining BPC's shipped bids. Combined with the workspace templates in `bids/_TEMPLATES/`, the library is designed to scaffold a new bid response in **minutes instead of hours**.
+
+| Folder | Purpose | Entry point |
+|---|---|---|
+| `firm/playbooks/` | Procurement-type playbooks (federal-SBA-LPTA, TX-state-CSP-HSP). Each playbook covers the procurement archetype, evaluation criteria, BPC's qualification posture, required compliance docs, common pitfalls, and reusable language blocks. | [`firm/playbooks/README.md`](playbooks/README.md) |
+| `firm/scope-templates/` | Standard scope-of-work templates by project archetype (office / lab / classroom refurb, dressing-room reno, steel-building rehab). Each template includes typical scope outline, takeoff-item list, default unit rates, typical sub trades, VE opportunities, and schedule durations. | [`firm/scope-templates/README.md`](scope-templates/README.md) |
+| `firm/proposal-library/` | Paste-ready proposal sections: past-performance writeups, exec-summary archetypes by procurement type, key-personnel bio blocks, and management-plan boilerplate (safety, QA/QC, communication, schedule narrative, sub management, closeout). | [`firm/proposal-library/README.md`](proposal-library/README.md) |
+| `firm/compliance/` | Registry of every BPC compliance asset (federal + state registrations, SBA + small-business certs, trade + GC licenses, insurance, bonding, past-perf, key personnel, safety performance, prevailing-wage cache). For each asset: value, location, expiration / renewal, status, action. | [`firm/compliance/README.md`](compliance/README.md) |
+| `bids/_TEMPLATES/` | Full workspace skeletons (federal-SBA-LPTA, TX-state-CSP-HSP) — copy into `bids/<new-slug>/` to scaffold a new bid in minutes. | [`bids/_TEMPLATES/README.md`](../bids/_TEMPLATES/README.md) |
+
+### Workflow
+
+```
+inbox/opportunities/<new RFP>
+        │
+        ▼
+firm/playbooks/<matching playbook>.md          ← read first
+        │
+        ▼
+bids/_TEMPLATES/<matching type>/  → bids/<new-slug>/   ← copy, rename
+        │
+        ▼
+firm/scope-templates/<matching archetype>.md   ← paste into 04-scope-of-work.md
+        │
+        ▼
+firm/proposal-library/*                        ← paste into proposal sections
+        │
+        ▼
+firm/compliance/README.md                      ← verify no 🔴 blocks the bid
+        │
+        ▼
+firm/_scripts/apply_firm_profile.py            ← fill firm-data placeholders
+        │
+        ▼
+firm/_scripts/scan_placeholders.py             ← triage remaining [USER TO FILL]
+```
+
+### Placeholder convention
+
+The capability library uses one unified placeholder convention:
+
+- `{{UPPER_SNAKE}}` — project-specific fact (search-and-replace per bid)
+- `[USER TO FILL]` — firm-internal data not in `firm-profile.json` (must be supplied before submission)
+- `[TEMPLATE]` — structural skeleton not yet refined by a shipped bid
+
+Full vocabulary list lives in [`firm/playbooks/README.md`](playbooks/README.md).
+
 ## Relationship to the OneDrive submission scaffold
 
 OneDrive has its own pre-templated submission package at `C:\Users\rnuduru1\OneDrive\Blueprint Constructs\BPC-Submission-Package\` (11 sections, 29 markdown templates, tracking sheet `PLACEHOLDERS-TO-FILL.md`). That scaffold is where the firm produces **typeset bid output**.

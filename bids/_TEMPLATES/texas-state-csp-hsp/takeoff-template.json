@@ -1,0 +1,91 @@
+{
+  "$schema_note": "BPC TX-state-CSP-HSP takeoff template. Skeleton — fill rooms[] and scope_items[] from CSP package + drawings. Each scope_item maps to a CSI division + a sub trade + HSP allocation.",
+  "project": {
+    "name": "{{PROJECT_NAME}}",
+    "solicitation_number": "{{SOLICITATION_NUMBER}}",
+    "project_number_owner": "{{PROJECT_NUMBER}}",
+    "agency": "{{AGENCY}}",
+    "agency_short": "{{AGENCY_SHORT}}",
+    "site_address": "{{SITE_ADDRESS}}",
+    "county": "{{COUNTY}}",
+    "naics": "236220",
+    "magnitude_low_usd": "{{MAGNITUDE_LOW}}",
+    "magnitude_high_usd": "{{MAGNITUDE_HIGH}}",
+    "sc_days": "{{SC_DAYS}}",
+    "fc_days": "{{FC_DAYS}}",
+    "evaluation_method": "CSP",
+    "tx_prevailing_wage_file": "{{TX_WAGE_FILE}}",
+    "applicable_hub_goal_label": "{{APPLICABLE_HUB_GOAL_LABEL}}",
+    "applicable_hub_goal_pct": "{{STATEWIDE_HUB_GOAL_PCT}}",
+    "ld_rate_per_day_usd": "{{LD_RATE}}"
+  },
+  "rooms": [
+    {
+      "id": "R-{{NUM}}",
+      "name": "{{ROOM_NAME}}",
+      "sq_ft": 0,
+      "use_type": "office|lab|classroom|dressing|restroom|other",
+      "notes": "[USER TO FILL per room]"
+    }
+  ],
+  "scope_items": [
+    {
+      "id": "S-001",
+      "csi_division": "{{CSI_DIV}}",
+      "description": "{{DESCRIPTION}}",
+      "quantity": 0,
+      "unit": "{{UNIT}}",
+      "self_or_sub": "self|sub",
+      "trade": "{{TRADE}}",
+      "sub_name": "{{SUB_NAME_IF_KNOWN}}",
+      "sub_is_hub": false,
+      "sub_hub_vid": "",
+      "unit_price_usd": 0,
+      "extended_price_usd": 0,
+      "notes": "[Assumptions, source page in spec / drawings, RFI status]"
+    }
+  ],
+  "general_conditions": {
+    "duration_days": 0,
+    "super_rate_per_day": 0,
+    "pm_rate_per_day": 0,
+    "temp_protection_lump_sum": 0,
+    "dumpster_haul_lump_sum": 0,
+    "temp_utilities_lump_sum": 0,
+    "after_hours_weekend_allowance": 0,
+    "site_access_coordination_hours": 0
+  },
+  "markup": {
+    "bond_pct": 2.0,
+    "insurance_pct": 4.0,
+    "contingency_pct": 6.0,
+    "overhead_pct": 10.0,
+    "profit_pct": 6.0,
+    "tx_prevailing_wage_uplift_pct": 0.0
+  },
+  "hsp_rollup": {
+    "subcontracted_total_usd": 0,
+    "hub_committed_total_usd": 0,
+    "hub_committed_pct_of_sub": 0.0,
+    "applicable_goal_pct": "{{STATEWIDE_HUB_GOAL_PCT}}",
+    "meets_goal": false,
+    "self_perform_usd": 0,
+    "self_perform_pct": 0.0
+  },
+  "unit_prices_owner_directed_changes": [
+    {
+      "item": "{{UNIT_PRICE_ITEM}}",
+      "unit": "{{UNIT}}",
+      "unit_price_usd": 0,
+      "notes": "Set at full retail (change-order ceiling)"
+    }
+  ],
+  "alternates": [
+    {
+      "alternate_number": "ALT-001",
+      "description": "{{IF_CSP_REQUESTS}}",
+      "add_or_deduct": "ADD|DEDUCT",
+      "price_usd": 0
+    }
+  ]
+}
