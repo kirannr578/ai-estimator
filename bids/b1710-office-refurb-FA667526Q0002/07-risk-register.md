@@ -1,0 +1,42 @@
+# Risk register — B1710 Office Refurbishment
+
+Risks scored on a 1-5 likelihood × 1-5 impact matrix (range 1-25). Anything ≥ 12 demands an active mitigation tactic this week. Anything < 6 is logged but not actively worked.
+
+| # | Risk | L | I | Score | Mitigation |
+|---|---|---:|---:|---:|---|
+| 1 | **48-hour submission window** — insufficient time to assemble a clean offer (SAM screenshot, COI, payment-bond letter, signed SF 1449, price proposal, technical, past-perf) | 3 | 5 | **15** | See `06-timeline.md` for gate-by-gate plan; Fri 15:00 internal deadline gives 2-hour buffer. Owner: Rocky. |
+| 2 | **No site walk possible in window** — pricing 3,500 SF on SOW figure without field verification; quantity variance is the offeror's risk per SOW §PART III ("Contractor shall field verify all aspects") | 3 | 4 | **12** | Add 5% quantity contingency to the takeoff. Send RFI documenting the attempt to coordinate. Build schedule with field-verify line in week 1. Owner: Estimator. |
+| 3 | **SAM.gov reps & certs lapsed** — if last refresh date is > 12 months, offer is non-responsive on receipt | 2 | 5 | **10** | Verify TODAY (Wed PM) at sam.gov. Refresh propagation is 3-10 business days — if currently lapsed, this risk converts to a pursuit-reversal trigger. Owner: Rocky. |
+| 4 | **Bonding agent not responsive** — payment-bond commitment letter (FAR 52.228-13) not in hand by Fri AM | 2 | 4 | **8** | Email Wed PM with Fri AM deadline. Per Lavon precedent ($1M bond procured), surety capacity exists. Alternative: ILC from BPC's bank in lieu of payment bond. Owner: Rocky. |
+| 5 | **Current COI not renewed** — last GL on file (SBCC-042443-00) expired 2024-09-25 per firm profile | 2 | 4 | **8** | Email broker Wed PM; PDF by Thu PM. Submit COI with offer if AF requires named-insured detail; otherwise reference SAM-posted reps. Owner: Rocky + broker. |
+| 6 | **Carpet dye-lot H6958 no longer in production** — Shaw cycles dye lots; spec is 2 years old | 3 | 2 | **6** | Quote at spec with submittal-time substitution note. Post-award AF IMT 3000 process accommodates color match approval. Disclosure footnote in price proposal. Owner: Estimator. |
+| 7 | **Davis-Bacon wage compliance complexity** — small project, certified payroll burden disproportionate to revenue | 4 | 2 | **8** | Use the firm's existing payroll process; subcontract certified-payroll prep to a service if needed (~$200/wk). Per FAR 52.222-8, weekly certified payrolls required. Owner: Rocky. |
+| 8 | **Base-access lead time for delivery vehicles** — commercial vehicle gate at NAS JRB requires advance coordination (per Section G p.7) | 3 | 2 | **6** | Build base-access logistics into the schedule narrative (mobilization week). Coordinate with `steven.munnell@us.af.mil` post-award for sponsoring escort + temp passes. Same logistics as `bids/cmd-post-ndi-W50S7626QA001/09-nas-jrb-site-access.md` — reuse the playbook. Owner: PM (Rocky). |
+| 9 | **Furniture move-out coordination slip** — Government activity vacating rooms for our crew may slip; SOW §3.1.2 says "Most of the facility will be vacated as necessary" but timing is not contractor-controlled | 3 | 3 | **9** | Schedule narrative breaks the 16 C/B/P rooms into 4 batches of 4 rooms each, so vacancy slips in one batch don't block work in another. Allow 5 cal-day float in week 2. Owner: PM. |
+| 10 | **Buy American non-compliance** — FAR 52.225-9 applies; if any material substituted is foreign-source, must seek determination | 1 | 4 | **4** | All proposed materials are US-made (Shaw carpet — Dalton GA, SW paint — Cleveland OH, Roppe/Johnsonite rubber base — Fostoria OH, USG/National Gypsum drywall — multi-state US). Affirmative statement in technical proposal. Owner: Estimator. |
+| 11 | **Wage Determination changes between offer and award** — TX20260270 dated 02 Jan 2026; if DOL issues a modification before award, the modified rates apply | 2 | 2 | **4** | Per FAR 22.404-6, WD modifications received after offer due date generally don't apply unless the CO incorporates them. Minimal risk; build standard Davis-Bacon overhead. Owner: Estimator. |
+| 12 | **Buy American determination on Shaw carpet** — Shaw is US-made but carpet has imported components (e.g. some backing materials may be sourced internationally) | 1 | 3 | **3** | Shaw's domestic content meets 60% threshold (verified by Shaw's COTS-item domestic-construction-material certification on file with major distributors). Document in cover letter if challenged. Owner: Estimator. |
+| 13 | **CO awards to a lower-priced competitor with weaker past-perf** — comparative evaluation gives CO discretion to pick lowest price | 3 | 3 | **9** | Be top-2 on price. Don't try to win on past-perf alone — the dollar amount on $25K-$100K SAP construction is dominantly weighted in CO discretion. Owner: Estimator + Rocky. |
+| 14 | **Drywall texture mismatch in Rm 1030** — SOW says "texture and paint new surface" but doesn't specify texture (orange peel, knockdown, smooth, etc.) | 3 | 1 | **3** | Field-verify post-award; match existing adjacent wall. RFI item if site walk is offered. Owner: Estimator. |
+| 15 | **Access panel sizing in Rm 1008** — SOW doesn't specify panel size or valve type | 3 | 1 | **3** | Quote allowance for 12"×12" steel-frame plaster-bead panel (Karp DSB-214M, ~$80-150 EA); field-verify exact valve size at NTP. Owner: Estimator. |
+| 16 | **Email delivery failure** — Fri 15:00-17:00 window for transmission, AF .mil filter could reject attachments > 25 MB or specific file types | 2 | 5 | **10** | Pre-compress all PDFs; total packet < 15 MB target. Use single-PDF combined attachment with all components. Test send a "verification of attachments" email Fri AM. Have phone numbers (Lydia 817-782-5190; Todd via WAWF POC) ready to call if attachments don't deliver. Owner: Rocky. |
+| 17 | **MFA / SAM portal access issue blocks SAM screenshot** — if Rocky's SAM login is misconfigured or expired, can't print the entity-status page | 2 | 3 | **6** | Verify SAM login this afternoon (Wed). If blocked, the Help Desk at federalservicedesk.gov can re-issue access. Owner: Rocky. |
+| 18 | **Subcontractor identity reveal post-award** — FAR 52.244-6 (Subcontracts for Commercial Items) requires flow-down of certain clauses; if BPC subs the flooring install, sub-tier compliance is BPC's responsibility | 2 | 2 | **4** | If subcontracting flooring, vet the sub (small-business assertion, OSHA, Davis-Bacon willingness). Owner: PM at NTP. |
+| 19 | **CO's intent to award to a higher-priced offeror** — comparative evaluation regime means the CO could accept higher price if past performance is clearly superior; we may lose on this dimension to a federal-CPARS-experienced competitor | 3 | 3 | **9** | Past-perf 3-pack emphasizes federal-style coordination (Lavon RV Park) and institutional finishes (Hindu Temple) to maximize CO confidence. Owner: Rocky. |
+| 20 | **PII / data classification slip** — base access procedures may require contractor personnel social security numbers for base-pass vetting (typical AFRC); SSNs are PII (Restricted class per 04-data-classification rule) | 2 | 3 | **6** | All personnel-PII collection happens post-award through the 301 LRS sponsor; never put SSNs in the offer email. Document in schedule narrative as "Personnel base-access vetting per AFRC procedure, post-NTP." Owner: PM. |
+
+## Top-3 active mitigations (owner action this week)
+
+1. **R1 (sprint window) → `06-timeline.md`** — gate-by-gate plan locked.
+2. **R3 (SAM lapse) + R4 (bonding) + R5 (COI)** — three Gate-0 items Rocky must close TODAY.
+3. **R2 (no site walk) → field-verify-after-award + 5% contingency** — built into the takeoff and the schedule narrative.
+
+## Reversal triggers (no-go switches)
+
+If any of these fires before Fri 15:00, **STOP submission**:
+
+- R3 fires: SAM reps & certs lapsed AND cannot refresh by Fri AM (3-10 BD propagation makes this very unlikely to recover in 48 hours; if true, pursue the *next* AFRC opportunity instead).
+- R4 fires: bonding agent declines payment-bond capacity (per Lavon precedent very unlikely, but document a no-go memo if it happens — see `bids/_NO_GO/` for the format).
+- R5 fires: insurance broker cannot deliver renewed COI in window (likely workable but if broker is non-responsive, the bid is at material risk).
+
+If we get to Fri AM and any of R3/R4/R5 is still red, escalate to Rocky for go/no-go call.

@@ -11,10 +11,12 @@ The substitution script is `firm/_scripts/apply_firm_profile.py` and is **idempo
 | Workspace | Files in scope | Files changed | Placeholders before | Placeholders after | Filled (L1+L2) | Past-perf fills (L3) | Net delta |
 |---|---:|---:|---:|---:|---:|---:|---:|
 | `angelo-state-carr-efa-26-007/` | 31 | 19 | 464 | 409 | 61 | 7 | -55 |
+| `b1710-office-refurb-FA667526Q0002/` (added 2026-05-27) | 26 | 4 | 53 | 44 | 9 | 0 | -9 |
 | `cmd-post-ndi-W50S7626QA001/` | 23 | 21 | 64 | 70 | 63 | 1 | +6 (see note) |
 | `tamu-harrington-2025-06813/` | 30 | 13 | 422 | 397 | 40 | 4 | -25 |
+| `tamu-wehner-fin-340E-2025-06871/` (added 2026-05-27) | 29 | 1 | 76 | 76 | 1 | 0 | 0 |
 | `usfws-san-marcos-140FC126R0017/` | 32 | 7 | 330 | 319 | 18 | 1 | -11 |
-| **Totals** | **116** | **60** | **1,280** | **1,195** | **182** | **13** | **-85** |
+| **Totals** | **171** | **65** | **1,409** | **1,315** | **192** | **13** | **-94** |
 
 > "Filled" counts the literal placeholder tokens our substitution rules removed and replaced with a real firm-profile value. The "Net delta" can be smaller than "Filled" (or even positive, as in `cmd-post-ndi`) because some Layer-3 past-performance blurbs **intentionally introduce** new annotated placeholders like `[USER TO FILL — Lavon Leisure 78 RV Park LLC owner POC]` to surface the specific data the user still needs to source. Those new annotations are higher-signal than the bare `[USER TO FILL]` they replace.
 
@@ -211,3 +213,4 @@ If you spot any PII in a file the substitution script created or modified, treat
 
 - **2026-05-23** — SAM.gov status set to active (user-confirmed). Expiration date still TBD.
 - **2026-05-23** — Added `core/proposal_renderer/` (PDF + pitch-deck PPTX builder) and rendered the first set of artifacts under `bids/<slug>/proposal/exports/` for all 4 active workspaces (TAMU, Angelo State, USFWS, TXANG Cmd Post). The 8 deliverables are committed once so they ship with the feature; a follow-up commit adds `bids/*/proposal/exports/` to `.gitignore` so future renders don't churn the diff. To regenerate from source: `python scripts/render_proposals.py --all --format both`.
+- **2026-05-27** — Scaffolded 2 new pursuable bid workspaces (`b1710-office-refurb-FA667526Q0002/` — AF Reserve B1710 office refurbishment, 48-hour sprint to Fri May 29 5 PM CDT; and `tamu-wehner-fin-340E-2025-06871/` — TAMU Wehner Finance Rm 340E, 21-day window to Wed Jun 17 2 PM CDT), 3 no-go memos (`bids/_NO_GO/2026-05-22-mcfaddin-nwr-fence-140FC126Q0015.md`, `bids/_NO_GO/2026-05-27-leroy-moore-gym-PV-0749-PV-0753.md` — **note: ESBD addendum revised due date from 5/27 to 6/4, may still be pursuable; flagged for user**, `bids/_NO_GO/2026-05-19-garland-inwood-blvd-REQ00002146.md`), and 1 watchlist entry (`bids/_WATCHLIST/saan-san-juan-restrooms-140P1226Q0025.md` — NPS SAAN San Juan restrooms, expected sol release mid-May 2026 with award mid-June 2026). All scaffolding is stubbed with `[AWAITING SOURCE DOCS]` markers naming exactly which doc unblocks each section. Firm-profile substitution applied to the 2 pursuable workspaces — 10 L1+L2 fills total. Section 1 coverage table updated with the 2 new workspaces. Proposal renderer: 4 artifacts for B1710 (executive summary, full proposal, internal workbook, pitch deck) and 2 for TAMU Wehner (internal workbook, pitch deck) — the 2 TAMU Wehner client PDFs failed on a wide-table layout (PmlTable negative-availWidth in 04-scope-of-work.md); not blocking, will re-render once user trims the scope-of-work table or after source PDFs land and the table is rewritten.

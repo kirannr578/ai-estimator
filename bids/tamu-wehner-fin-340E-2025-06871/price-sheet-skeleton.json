@@ -1,0 +1,188 @@
+{
+  "$schema": "https://blueprintconstructs.com/schemas/csp-price-sheet/v1",
+  "bid_id": "tamu-wehner-fin-340E-2025-06871",
+  "project_name": "Wehner Finance Seminar Rm 340E Expansion",
+  "solicitation_number": "SSC-2025-06871",
+  "form_section": "Section 00 42 13 - Proposal Form (CSP)",
+  "form_format": "CSI-division line-item pricing table per TAMU System CSP standard (same as Harrington)",
+  "submission_method": "Submit completed form in proposal packet by Wed 2026-06-17, 2:00 PM CT",
+  "notes": "Form structure inferred from TAMU Harrington sister sol. Actual form retrieved from CSP package (when available) will dictate exact line items and signing blocks. Mark blank rows for divisions not in scope rather than entering $0.",
+  "csi_divisions": [
+    {
+      "division": "01",
+      "name": "General Requirements",
+      "in_scope": true,
+      "amount": "[AWAITING TAKEOFF]",
+      "notes": "GC overhead + mobilization + closeout"
+    },
+    {
+      "division": "02",
+      "name": "Existing Conditions / Selective Demolition",
+      "in_scope": true,
+      "amount": "[AWAITING TAKEOFF]"
+    },
+    {
+      "division": "03",
+      "name": "Concrete",
+      "in_scope": false,
+      "amount": "BLANK"
+    },
+    {
+      "division": "04",
+      "name": "Masonry",
+      "in_scope": false,
+      "amount": "BLANK"
+    },
+    {
+      "division": "05",
+      "name": "Metals",
+      "in_scope": false,
+      "amount": "BLANK"
+    },
+    {
+      "division": "06",
+      "name": "Wood + Plastics + Composites",
+      "in_scope": true,
+      "amount": "[AWAITING TAKEOFF]",
+      "notes": "Rough carpentry / blocking only"
+    },
+    {
+      "division": "07",
+      "name": "Thermal + Moisture Protection",
+      "in_scope": true,
+      "amount": "[AWAITING TAKEOFF]",
+      "notes": "Caulking / sealants at MARRS perimeter"
+    },
+    {
+      "division": "08",
+      "name": "Openings + Glazing",
+      "in_scope": true,
+      "amount": "[AWAITING TAKEOFF]",
+      "notes": "MARRS glass wall + door"
+    },
+    {
+      "division": "09",
+      "name": "Finishes",
+      "in_scope": true,
+      "amount": "[AWAITING TAKEOFF]",
+      "notes": "Flooring + base + ceiling + drywall + paint"
+    },
+    {
+      "division": "10",
+      "name": "Specialties",
+      "in_scope": true,
+      "amount": "[AWAITING TAKEOFF]",
+      "notes": "Signage"
+    },
+    {
+      "division": "11",
+      "name": "Equipment",
+      "in_scope": false,
+      "amount": "BLANK"
+    },
+    {
+      "division": "12",
+      "name": "Furnishings",
+      "in_scope": false,
+      "amount": "BLANK",
+      "notes": "Furniture is TAMU-provided (NIC)"
+    },
+    {
+      "division": "13",
+      "name": "Special Construction",
+      "in_scope": false,
+      "amount": "BLANK"
+    },
+    {
+      "division": "14",
+      "name": "Conveying Equipment",
+      "in_scope": false,
+      "amount": "BLANK"
+    },
+    {
+      "division": "21",
+      "name": "Fire Suppression",
+      "in_scope": false,
+      "amount": "BLANK"
+    },
+    {
+      "division": "22",
+      "name": "Plumbing",
+      "in_scope": true,
+      "amount": "[AWAITING TAKEOFF]",
+      "notes": "Sink cap-in-place only"
+    },
+    {
+      "division": "23",
+      "name": "HVAC",
+      "in_scope": true,
+      "amount": "[AWAITING TAKEOFF]",
+      "notes": "Re-balance + new diffusers"
+    },
+    {
+      "division": "26",
+      "name": "Electrical",
+      "in_scope": true,
+      "amount": "[AWAITING TAKEOFF]",
+      "notes": "Circuit removal + new lighting + outlets"
+    },
+    {
+      "division": "27",
+      "name": "Communications",
+      "in_scope": true,
+      "amount": "[AWAITING TAKEOFF]",
+      "notes": "Low-voltage rough-in for AV/data"
+    },
+    {
+      "division": "28",
+      "name": "Electronic Safety + Security",
+      "in_scope": false,
+      "amount": "BLANK",
+      "notes": "Likely NIC; confirm from spec"
+    },
+    {
+      "division": "31",
+      "name": "Earthwork",
+      "in_scope": false,
+      "amount": "BLANK"
+    },
+    {
+      "division": "32",
+      "name": "Exterior Improvements",
+      "in_scope": false,
+      "amount": "BLANK"
+    },
+    {
+      "division": "33",
+      "name": "Utilities",
+      "in_scope": false,
+      "amount": "BLANK"
+    }
+  ],
+  "summary": {
+    "subtotal_direct_costs": "[AWAITING TAKEOFF]",
+    "gc_overhead_pct": 8,
+    "gc_overhead_amount": "[CALC]",
+    "gc_profit_pct": 7,
+    "gc_profit_amount": "[CALC]",
+    "contingency_pct": 10,
+    "contingency_amount": "[CALC]",
+    "performance_bond_pct": 1.0,
+    "performance_bond_amount": "[CALC]",
+    "payment_bond_pct": 1.0,
+    "payment_bond_amount": "[CALC]",
+    "insurance_pct": 0.5,
+    "insurance_amount": "[CALC]",
+    "total_lump_sum": "[AWAITING ALL CALCS]"
+  },
+  "signing_block": {
+    "company_name": "RK Residential Homes and Commercial Constructions, LLC dba Blue Print Constructs",
+    "uei": "LM4YHVQ71QG7",
+    "cage": "9LET0",
+    "signer_name": "Ravikiran (Rocky) Nudurupati",
+    "signer_title": "Founder & Managing Director",
+    "phone": "(469) 213-1838",
+    "email": "rocky@blueprintconstructs.com",
+    "date": "[AWAITING SUBMISSION DATE]"
+  }
+}
