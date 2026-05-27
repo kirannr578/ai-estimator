@@ -1,0 +1,15 @@
+# Dev / test-only dependencies. Not required to run the app.
+# Install with: `pip install -r requirements.txt -r requirements-dev.txt`
+
+# Pytest is already widely-used in the repo and assumed present on dev
+# machines (`pip install pytest`). Pinning here for reproducibility.
+pytest>=9.0,<10.0
+
+# `respx` is a popular httpx-mocking library. We do NOT depend on it for
+# the existing test suite — every adapter in `core/pricing/sources/` is
+# tested via `httpx.MockTransport`, which is built into httpx and needs no
+# extra install (this keeps `pytest -x` working in environments where
+# `respx` can't be installed for any reason). It's pinned here as a
+# CONVENIENCE so contributors who prefer the `respx` DSL for new tests
+# can `pip install -r requirements-dev.txt` and have it available.
+respx==0.22.0

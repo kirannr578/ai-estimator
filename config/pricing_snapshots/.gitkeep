@@ -1,0 +1,7 @@
+# Pricing-data snapshots root. Sub-directories per source:
+#   bls_ppi/<series_id>/<period>.json
+#   bls_oews/<series_id>/<period>.json
+#   fred/<series_id>/<period>.json
+#   eia/<series_id>/<period>.json
+#   davis_bacon/<state>_<county>/<wd_number>.json
+# Plus `_http_cache/` (gitignored) for 24h response caching.

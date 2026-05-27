@@ -52,6 +52,15 @@ firm/_scripts/_apply_report.json
 # files under bids/<opportunity>/ list what was downloaded and where it lives.
 inbox/
 
+# Pricing-data integrations (Tier 1)
+# `config/pricing_snapshots/` IS committed (.gitkeep + the per-period
+# snapshot JSON files form the historical record we escalate against).
+# The HTTP-response cache underneath is local-only and gitignored.
+config/pricing_snapshots/_http_cache/
+# Escalated cost DB is a derived artifact regenerable from cost_database.json
+# plus snapshots; do not commit so the diff doesn't churn on each refresh.
+config/cost_database_escalated.json
+
 # IDE
 .idea/
 .vscode/

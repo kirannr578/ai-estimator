@@ -1,0 +1,526 @@
+# Roadmap — Construction Quantity Takeoff Automation
+
+**Audience:** Estimator project owner and contributors.
+**Status:** Planning draft. Calibrated against `HEAD` as of `5c40365` (post-F1 CWICR + F3 prepass).
+**Scope frame:** USA residential + commercial (light commercial, TI, single & multi-family, K-12 and similar institutional). Explicit non-goals are listed in Section 4.
+
+This document is a phased plan for getting the Estimator from "AI-assisted first-pass takeoff that an estimator must review line-by-line" to "automated takeoff with confidence-banded line items where the estimator only audits the lower-confidence bands". It is intentionally honest about what is and is not achievable, and explicit about which phases pay for themselves.
+
+---
+
+## 1. Current-state honest assessment
+
+### 1.1 What the pipeline does today
+
+Document routing (`core/pdf_processor.py`):
+- Cheap filename + first-3-pages-text classifier (`_classify_document`) routes each PDF to either a per-page **Sheet** pipeline (drawings) or a whole-PDF **DocumentBundle** pipeline (bid packages, project manuals, blank bid forms).
+- Drawing-set veto via `_DRAWING_FILENAME_RES` keeps a 1000-page drawing PDF from being bundle-routed because of a stray "SOLICITATION" hit on page 1.
+- Government solicitation filename signals (`Sol_*`, `ESBD_*`, `RFCSP`, `_Solicitation_`) route correctly.
+
+Sheet classification (`core/sheet_classifier.py`):
+- Two-stage. If the title-block heuristic in `pdf_processor._guess_sheet_number_and_discipline` already gave us a discipline AND `_heuristic_classify` finds a sheet-type keyword in the title, we skip the LLM. Otherwise the classifier prompt (`prompts/classifier.txt`) runs against the rendered PNG.
+
+Deterministic drawing pre-pass — **F3, fully deterministic, no LLM** (`core/extraction/drawing_prepass.py`):
+- Title block: `project_name`, `project_number`, `sheet_number`, `sheet_title`, `discipline` (inferred from sheet-number prefix), `scale`, `scale_factor`, `date`, `revision`, `drawn_by`, `checked_by`. Pattern-matched against the page's vector text. Scale strings parsed into a numeric paper-inches-per-real-world-inch factor.
+- Dimensions: feet-inches with fractions, decimal feet, plain inches, metric (mm / cm / m), all normalized to inches. Filtered to `0 < inches <= 5000` to drop OCR garbage.
+- Schedule tables: detected via `page.find_tables()`. Each table is classified as door / window / room / finish / unknown by header-keyword overlap, then emitted as a `Schedule` with `headers: list[str]` + `rows: list[ScheduleRow]` where each row is a `dict[str, str]` keyed by column header.
+- Confidence rubric (`_score`): sheet_number + discipline (0.30), project_name (0.20), parseable scale (0.15), ≥ 1 schedule (0.20), ≥ 5 dimensions (0.15). Confidence ≥ 0.65 means the LLM call is skipped entirely.
+
+Vision-LLM extraction (`core/extractors.py`, `prompts/architectural.txt`, `prompts/mep.txt`, etc.):
+- Dispatched by `_select_prompt(sheet)` based on discipline + sheet_type.
+- Prompts return JSON conforming to `SheetExtraction` shape — `rooms`, `doors`, `windows`, `structural`, `mep`, `spec_sections`, `site`, `raw_takeoffs`, `warnings`.
+- F3 result is injected as a "DETERMINISTIC CONTEXT" block in the prompt when the confidence is below threshold but non-zero, so the LLM doesn't re-extract what we already know.
+- `raw_takeoffs` is the LLM's own first-pass quantity guess (used as a supplement to the entity-derived takeoffs).
+
+Bundle (text-only) extraction (`core/extractors.py: extract_bid_package`, `extract_project_manual`, `extract_bid_form`):
+- One LLM call per whole PDF using a text prompt — much cheaper than per-page vision.
+- `BidPackage` carries the trade scope: owner / GC, csi_divisions, csi_sections, inclusions, exclusions, alternates, unit_prices, referenced_drawings, referenced_specs.
+- Supporting-document heuristic (`_supporting_doc_hint`) cheaply classifies wage determinations, sample CSAs, tax certs, HSP forms, UGSC, etc. before the LLM call and seeds the prompt with a classification hint.
+
+Reconciliation (`core/takeoff.py: reconcile`):
+- Domain entities deduped: rooms by (number, name) with fuzzy name fallback; doors by `mark`; windows by `mark`; structural by (kind, mark, size); MEP by (discipline, category, normalized description); specs by `csi_section`; site by max-of-numeric-field across sheets.
+- `_derive_takeoffs` synthesizes `TakeoffItem`s from the deduped entities: slab on grade from gross room area, rough carpentry, floor-finish buckets, painted walls, gypsum board, resilient base, door / hardware EA, windows EA, structural by material, MEP by category, site lines.
+- `_merge_takeoffs` merges takeoffs that share `(csi_section or csi_division, normalized description, unit)` — this is the only cross-sheet dedup for TakeoffItems.
+
+Pricing (`core/estimator.py: price_takeoff`):
+- Lookup order: CWICR (TF-IDF first pass + MiniLM re-rank against 55k rows) → seed `config/cost_database.json` (47 entries) → `(no match)` placeholder at $0.
+- Unit-mismatch detection on both layers: if takeoff unit != cost-DB unit, the line is `suppressed=True` and excluded from totals (calibration v2's $34,608 phantom-line bug).
+- Waste factor applied per CSI division (`_WASTE_BY_DIVISION`) when CWICR wins.
+
+Export (`core/exporter.py`, `core/exporter_pdf.py`):
+- Excel with 8 sheets: Project Info, Bid Packages, Scope Matrix, Line Items, Rooms, Doors, Windows, Sheets, Warnings.
+- Client-ready quote PDF with payment schedule and signature block.
+
+### 1.2 What is fully deterministic versus LLM-assisted
+
+| Layer | Module | LLM involvement |
+|---|---|---|
+| Document type routing | `core/pdf_processor.py:_classify_document` | None (filename + regex) |
+| Sheet number + discipline from title-block text | `pdf_processor._guess_sheet_number_and_discipline` | None |
+| Sheet type from title keyword | `sheet_classifier._heuristic_classify` | None (when title hits a keyword) |
+| Sheet type from image | `sheet_classifier.classify_sheet` stage 2 | Vision LLM (`prompts/classifier.txt`) |
+| **Title block extraction (drawings)** | `drawing_prepass._extract_title_block` | **None** |
+| **Dimension extraction (drawings)** | `drawing_prepass._extract_dimensions` | **None** |
+| **Schedule table detection** | `drawing_prepass._extract_schedules` via `page.find_tables()` | **None** |
+| Schedule semantic classification | `drawing_prepass._classify_schedule` | None (header-keyword overlap) |
+| Door / window / room rows from prepass schedules | `extractors._build_from_prepass` | None |
+| Sheet-level rooms / doors / windows / MEP / structural / spec / raw_takeoffs (when prepass confidence < 0.65) | `extractors.extract_sheet` → discipline-specific prompts | Vision LLM |
+| Bid-package scope (inclusions, exclusions, alternates, unit prices, owner/GC, project info) | `extractors.extract_bid_package` | Text LLM |
+| Project-manual summary + project-info pull | `extractors.extract_project_manual` | Text LLM |
+| Bid-form unit-price extraction | `extractors.extract_bid_form` | Text LLM |
+| Cross-sheet dedup of domain entities | `takeoff.reconcile` (`_dedupe_rooms`, `_dedupe_by_key`) | None (rapidfuzz) |
+| Synthesizing `TakeoffItem`s from entities | `takeoff._derive_takeoffs` | None |
+| Cross-sheet `TakeoffItem` merge | `takeoff._merge_takeoffs` | None |
+| CWICR cost matching | `core/pricing/cwicr_matcher.py` | None (TF-IDF + MiniLM) |
+| Seed-DB cost lookup | `estimator.CostDatabase.lookup` | None |
+
+### 1.3 What we explicitly do NOT extract today
+
+Mapping each gap to the scope category it lives in:
+
+| Gap | Affected category | Concrete consequence |
+|---|---|---|
+| Schedule rows do not flow to typed `TakeoffItem`s — only to `doors / windows / rooms` lists, then to `_derive_takeoffs` heuristics | Schedules | A door schedule with 47 marks gets summarized as one "Hollow metal doors" line + one "Solid-core wood doors" line based on the LLM's textual classification of `door.type`. The schedule's full structure (fire rating, hardware set, frame type, glazing) is recorded but not used to drive pricing variation. |
+| No geometric measurement from the drawings | LF wall, SF flooring/ceiling/paint, perimeter, polygon area | `TitleBlockData.scale_factor` is parsed but **never used downstream**. There is no module that converts a measured pixel distance on a rendered page back to real-world feet. Room.area_sqft and Room.perimeter_ft are populated only when the LLM happens to read a label from the drawing or the schedule. |
+| No per-room finish takeoff | SF flooring / ceiling / paint by finish | `_derive_takeoffs` buckets finishes only when both `Room.area_sqft` AND `Room.floor_finish` are set on the same Room object. In practice the floor plan often only has room number / name, while the finish schedule has the finish — the reconciliation merges them by number, but if either side is missing the line drops. There is no explicit "for each room, take floor SF × floor finish, wall LF × ceiling height × wall finish, ceiling SF × ceiling finish" walker. |
+| Schedule extractor is generic, not specialized | Schedules | Door schedule, finish schedule, fixture schedule, panel schedule, RTU schedule, plumbing fixture schedule all hit the same `find_tables()` path. The `_classify_schedule` step picks `door / window / room / finish / unknown` but specialized fields (rating, hardware set, glazing, manufacturer, electrical load, CFM, GPM, kW) are stuffed into a generic `cols: dict[str, str]`. |
+| No cross-sheet de-duplication of typed entities at the **TakeoffItem level** beyond `(csi_section, normalized description, unit)` collision | All categories | If the door schedule on `A-601` says 47 doors, and the architectural floor plan extraction estimates "42 doors" as a `raw_takeoff` line, both lines survive `_merge_takeoffs` because the descriptions and confidences differ enough that the normalized key doesn't match. Today's only safety net is rapidfuzz dedup on `DoorEntry.mark`, which only fires when both sources emit a mark string. |
+| No symbol detection on plans | Countable MEP devices (receptacles, fixtures, sprinkler heads, fire alarm devices) | The MEP prompt asks the LLM to count fixture symbols from the image. There is no vision pipeline that detects, locates, and counts symbol instances against a known symbol legend. |
+| No OCR for scanned drawings | Everything on scanned pages | `Sheet.is_scanned = len(embedded_text.strip()) < 20` is computed but only used as a flag. The prepass returns confidence 0 on a scan because there's no vector text; the LLM still runs against the rendered PNG, but PyMuPDF's `find_tables()` returns nothing, so no deterministic schedule extraction is possible. There is no `tesseract` or `paddleocr` dependency. |
+| No CAD / IFC import | Everything | The pipeline only consumes PDFs. Native `.dwg`, `.dxf`, or `.ifc` files (when the owner makes them available) would be a much higher-fidelity source for geometric quantities. No `ezdxf` dependency. |
+| No spec → drawing cross-reference | Schedule disambiguation, MEP rough-in | Spec sections (e.g. "Section 08 11 13 — Hollow Metal Doors") are extracted but not cross-walked to door schedule rows. Doing so would let us upgrade a "DOOR D01" with `type=null` from the schedule into a definite "hollow metal door, 20-min rated, lever lockset HW-1" using the spec. |
+| No confidence-aware pricing | All | `TakeoffItem.confidence` is stored and surfaced in exports, but `price_takeoff` does not use it. A 0.40-confidence takeoff and a 0.90-confidence takeoff produce the same priced line. There is no "below confidence X, flag for human review" gate. |
+| No human-verification UI workflow for line-level review | All | The Streamlit UI surfaces the priced lines and lets the user re-edit unit costs, but there is no first-class "approve / reject / correct quantity" workflow that captures the correction back into the schema for the next run. |
+
+### 1.4 Calibration v3 evidence
+
+The `exports/calibration_v3/CALIBRATION_REPORT.md` artifact (17-PDF run against real Texas government solicitations, `gpt-4o`, `--no-drawings` to skip the heavy drawing extraction) gives us a real datapoint on the bundle path:
+
+- 16 / 16 bundles extracted successfully (after F3 and the retry-aware LLM client landed).
+- Bid-form extraction now produces 9 unit-price lines across the run (was 0 silently).
+- Project-info voter picks a coherent record across one opportunity instead of a Frankenstein.
+- The **drawing extractor was not exercised** in v3 (`--no-drawings`). A v4 with drawings on is the next calibration milestone.
+
+A documented gap from v3: the drawing extractor emits `unit: "LS"` for every wood-framing item, which collides with the unit-mismatch suppressor in `06 10 00` (priced per SF). This is a prompt-engineering issue on `prompts/architectural.txt`, addressed implicitly by Phase T2 below.
+
+---
+
+## 2. Target end-state
+
+Realistic accuracy bands by scope category. These are calibrated against the codebase: schedules and counts are tractable because the data is already tabular or pre-counted; LF and area takeoffs require geometric measurement and live in a fundamentally harder band; MEP rough-in is spec-driven and only as good as the spec is structured.
+
+| Scope category | Realistic accuracy | Effort | What's needed |
+|---|---|---|---|
+| Schedules — door, window, finish, equipment, panel, fixture, RTU | 85–95% | Medium | Specialized schedule extractors keyed on header pattern; spec cross-ref to fill in nulls; OCR for the scanned-schedule edge case |
+| Countable items — doors, windows, plumbing fixtures, electrical devices, panels, RTUs, sprinkler heads | 80–90% | Medium | Vision LLM with disciplined prompts + cross-sheet dedup at the TakeoffItem level + symbol-legend detection for higher-volume devices |
+| Area-based — SF flooring / ceiling / paint by finish per room | 70–85% | Medium-High | Room schedule × finish schedule × floor plan walker; per-room SF wall = perimeter × ceiling height; per-room SF floor = area; per-room SF ceiling = area; openings deducted from wall area |
+| Linear — LF wall partition, LF baseboard, LF chair rail, LF pipe runs, LF conduit runs | 55–75% | High | Scale-aware geometric measurement (paper-pixel distance × scale_factor); polyline extraction from PDF vector layers; reconciliation against schedule + spec hints |
+| MEP rough-in — branch wiring, conduit, fittings, pipe routing | 30–50% | Very High | Spec-driven allowance per fixture / device, not drawing-driven. Pipe / conduit routing from drawings is unreliable; rough-in factors per CSI section are more accurate |
+| Custom assemblies — millwork, casework, custom storefronts, complex stairs, ornamental metal | < 30% | N/A | Always human. The variation between projects is wider than any reasonable training set covers. |
+| Hidden / below-grade — existing foundations, existing utility lines, asbestos, soil conditions | 0% | N/A | Site visit + geotech report + selective demolition contingency |
+
+Targets above are **steady-state per-line accuracy** on a real bid set after all phases below ship, NOT total-bid accuracy. Total-bid accuracy is bounded by the weakest category and by site-visit findings; a tool that gets schedules at 90% and LF wall at 65% will produce a total at maybe 75% accuracy on a typical light-commercial TI.
+
+---
+
+## 3. Phased plan
+
+Six phases. Phases T1–T5 follow the suggested ordering from the brief, with one addition (T6: confidence-aware pricing and a human-verification workflow) because we already store `TakeoffItem.confidence` and the estimator currently ignores it, and we'd benefit from closing that loop before throwing more extraction at the pipeline.
+
+### Phase T1 — Specialized schedule extraction
+
+**1-line goal:** Convert F3's already-detected schedule tables into typed `TakeoffItem`s, with per-schedule-kind fields and spec cross-reference, deterministically.
+
+**Deliverables:**
+- New `core/extraction/schedule_extractor.py` with:
+  - `extract_door_schedule(schedule: Schedule, specs: list[SpecSection]) -> list[TakeoffItem]` — produces one `TakeoffItem` per door + one aggregated hardware-set line. Pulls type, rating, frame, hardware-set columns. Cross-references CSI 08 11 13 / 08 14 16 spec sections when present to default the type if the schedule has `type=null`.
+  - `extract_window_schedule(schedule: Schedule, specs: list[SpecSection]) -> list[TakeoffItem]`
+  - `extract_finish_schedule(schedule: Schedule, rooms: list[Room]) -> list[TakeoffItem]` — joins finish-schedule rows to rooms by `room.number`, emits per-finish SF lines.
+  - `extract_equipment_schedule(schedule: Schedule) -> list[TakeoffItem]` — RTUs, ERUs, exhaust fans (Division 23).
+  - `extract_panel_schedule(schedule: Schedule) -> list[TakeoffItem]` — electrical panels (CSI 26 24 16).
+  - `extract_fixture_schedule(schedule: Schedule) -> list[TakeoffItem]` — plumbing fixtures (CSI 22 40 00).
+  - A `register_extractor(kind: str, fn)` registry so adding a new schedule kind is one file change.
+- New `core/extraction/schedule_classifier.py` (or fold into `drawing_prepass._classify_schedule`) — extend the keyword sets and recognize "equipment", "panel", "fixture", "MEP" headers. Today the classifier collapses everything that isn't door / window / room / finish to `"unknown"`.
+- Hook into `extractors._build_from_prepass`: after building `doors / windows / rooms`, run the schedule-extractor dispatcher to ALSO emit `raw_takeoffs` from the schedules. These are higher-confidence (≥ 0.90) than the LLM-derived takeoffs and should win in `_merge_takeoffs`.
+- Tests:
+  - `tests/test_schedule_extractor.py` — table-driven, ~12 tests. Synthesized `Schedule` objects of each kind; assert the resulting `TakeoffItem`s carry the right `csi_section`, `unit`, and `confidence`.
+  - One end-to-end test that builds a PDF with a door schedule + finish schedule, runs `prepass_drawing_page` → `_build_from_prepass`, and asserts both the entity rows and the typed takeoff rows land.
+- Documentation: add a "Schedule extraction" section to `README.md` under "Deterministic drawing pre-pass".
+
+**Scope:** Schedules category, plus the door / window / fixture / panel slice of the Countable Items category.
+
+**Expected accuracy uplift:**
+- Schedules: from ~70% (current LLM-with-prepass-context) to **85–92%** on schedule-bearing sheets. The uplift is "if the schedule table was detected by `find_tables()`, every row is captured with the right CSI section."
+- Countable items (the door / window / fixture / panel subset): from ~75% (LLM-only on plan sheets) to **85–90%**. Schedules are the most reliable source for these counts; once we lift them deterministically, the LLM-only sheet path becomes a backup.
+
+**Effort estimate:** M (3–5 days).
+
+**Dependencies:**
+- Already done: F3 prepass detection of schedule tables; rapidfuzz; PyMuPDF.
+- New: none. This phase intentionally adds no new runtime dependency.
+
+**Risk / pitfalls:**
+- Schedules with merged cells confuse `page.find_tables()`. Mitigation: on detection failure, fall back to the existing LLM-with-prepass-context path; the LLM still gets to see the deterministic dimensions and title block.
+- Office-specific column naming. The `_pick` helper in `extractors._build_from_prepass` already tolerates `"MARK" | "DOOR" | "NO" | "NUMBER" | "ID"`; extend the candidate lists per schedule kind.
+- Schedule on a scanned PDF: `find_tables()` returns nothing. T1 silently no-ops in that case (the LLM path still runs). Real fix is T7 (OCR), called out below.
+- Spec cross-reference is fuzzy. A door schedule with `type=null` and a spec section "08 11 13 — Hollow Metal Doors and Frames" plausibly maps to HM, but the spec might document multiple types. Mitigation: do the cross-ref only when there's exactly one matching spec section per door type, and only set `confidence = 0.85` (not 0.95) on inferred values.
+
+**Validation strategy:**
+- Hand-count a gold set from one of the three drawing sets already on disk: `inbox/opportunities/attachments/2026-05-21/26-007 Carr EFA Dressing Room Renovation Project Manual.pdf`, the Carr EFA drawings addendum, and the Cmd Post + NDI drawings (`DDPM262101_Alter CP and NDI_Plans (20260512).pdf`). Hand-counted: door count, window count, plumbing fixture count, panel count. Expected to fall inside ±2 on each, or 95% accuracy by EA.
+- Synthetic-PDF unit tests in `tests/test_schedule_extractor.py` cover the column-naming variations.
+
+**No-go signal:**
+- `find_tables()` detects < 50% of the door schedules in the gold set when manually inspected. That would mean the deterministic table detection isn't reliable enough to specialize, and we'd need to back off to LLM-augmented schedule extraction (Phase T2 would absorb the work).
+- Hand-count accuracy on the gold set lands below 80%. Indicates the column-mapping logic needs more office-standard variants than is tractable; revisit with an LLM-fallback for schedule rows the deterministic path can't classify.
+
+---
+
+### Phase T2 — Sheet-type-specialized item extraction
+
+**1-line goal:** Tighter, per-sheet-class prompts that boost recall on plumbing, electrical, HVAC, and life-safety counts, with prompt-engineering specifically against the `LS` unit-default issue.
+
+**Deliverables:**
+- Split `prompts/mep.txt` into four prompts:
+  - `prompts/plumbing.txt` — fixture counts, hose bibbs, floor drains, cleanouts, hot/cold water rough-in allowance per fixture.
+  - `prompts/electrical.txt` — receptacles, switches, light fixtures, panels, transformers, EV chargers, branch-wiring SF allowance.
+  - `prompts/hvac.txt` — RTUs, AHUs, ERVs, exhaust fans, VAV boxes, ductwork SF served, refrigerant line LF (low confidence).
+  - `prompts/fire_protection.txt` — sprinkler heads (EA), wet-pipe sprinkler system (SF served).
+- Update `core/extractors._select_prompt` to dispatch by `Discipline` instead of collapsing to "mep".
+- Rewrite the `UNIT SELECTION RULES` section in `prompts/architectural.txt` to default to dimensional units (EA, LF, SF, BF) and use `LS` ONLY for genuine lump-sum scopes. Calibration v3 documented that every wood-framing item came back as `LS`, which then collided with the unit-mismatch suppressor. The current `prompts/architectural.txt` already has a draft of these rules — Phase T2 tightens them with worked examples drawn from the calibration v4 run (see Validation Strategy below).
+- Add a per-prompt few-shot example block at the bottom of each new MEP prompt. Three real schedule rows in JSON form, drawn from a permissive-license public bid set or hand-crafted from the existing bid workspaces.
+- Tests:
+  - `tests/test_extractor_unit_defaults.py` — exercises `extract_sheet` with a mocked LLM that returns hand-crafted `raw_takeoffs` for each unit-selection edge case in the new prompts. Asserts the resulting `TakeoffItem`s use the right unit and would not be suppressed downstream.
+  - `tests/test_prompt_loading.py` — confirms each new prompt file loads via `prompts.load()` and parses to a string.
+
+**Scope:** Countable Items, especially the MEP slice. Indirect uplift on Schedules where the schedule sheet is dispatched to one of the new MEP prompts because it's a discipline-specific schedule (panel schedule, fixture schedule, RTU schedule).
+
+**Expected accuracy uplift:**
+- Countable items (MEP subset): from ~70% to **80–88%** on plumbing / electrical / HVAC sheets.
+- Indirect: removes the `unit: LS` issue documented in v3, which is a precondition for any priced output on rough-carpentry items.
+
+**Effort estimate:** S (1–2 days for the prompt-engineering work, plus another 1–2 days for the v4 calibration loop).
+
+**Dependencies:**
+- Phase T1 strongly preferred (so deterministic schedule rows already win and the LLM is only filling gaps).
+- LLM provider with vision (already wired — `core/llm_client.py` supports both Anthropic and OpenAI).
+
+**Risk / pitfalls:**
+- Prompt engineering is iterative. Budget 2 calibration runs against the existing drawing sets.
+- Splitting the MEP prompt 4-way increases the maintenance surface. Mitigation: a shared header section emitted by `prompts.load_mep_common()` that all four import, so unit rules and discipline tags are edited in one place.
+- Per-prompt few-shot examples are a known prompt-injection risk if any of the examples were ever fetched from the inbox. Mitigation: all examples are hand-crafted from existing internal bid workspaces, never auto-fetched.
+
+**Validation strategy:**
+- Calibration v4 with `--drawings` on (the v3 run was `--no-drawings`). Compare line-item EA counts against a hand-count on the same three drawing sets used in T1's validation.
+- Specific regression-style check: zero `TakeoffItem.unit == "LS"` rows for any csi_division in `{06, 08, 09, 22, 23, 26}` on the Carr EFA run.
+
+**No-go signal:**
+- v4 calibration shows < 5 percentage-point uplift on Countable Items on a fair comparison vs v3 baseline. Indicates the LLM is the wrong tool for the per-sheet specialization and the work should be reabsorbed into T1 (schedule extraction) and T7 (OCR) instead.
+
+---
+
+### Phase T3 — Cross-sheet TakeoffItem dedup and reconciliation
+
+**1-line goal:** A given real-world item (a single door, a single RTU) ends up as exactly one priced line, even when it appears on architectural + life-safety + hardware + spec sheets.
+
+**Deliverables:**
+- New `core/takeoff/dedup.py`. (Note: today `core/takeoff.py` is a single file. This is a good moment to split it into `core/takeoff/__init__.py`, `core/takeoff/reconcile.py`, `core/takeoff/derive.py`, `core/takeoff/dedup.py`. Backwards-compatible re-exports preserved at `core.takeoff`.)
+- `dedup_takeoff_items(items: list[TakeoffItem], rooms, doors, windows, structural, mep, schedule_extractor_rows) -> list[TakeoffItem]`:
+  - Pre-pass: bucket by `csi_division`.
+  - Within bucket, build a similarity graph: edges between items with `rapidfuzz.fuzz.token_set_ratio(_norm(desc_a), _norm(desc_b)) >= 88` AND identical `unit` AND `quantity` within 10% of each other.
+  - For each connected component, the surviving row is the one with the highest `confidence`. The merged row's `source_sheet_ids` is the union; the merged row's `notes` is concatenated with a `"deduped across <N> sheets"` suffix.
+  - Schedule-derived rows (from T1) win against LLM-only `raw_takeoffs`, regardless of confidence delta — schedules are authoritative for the items they cover.
+- Update `core/takeoff/reconcile.py: reconcile()` to call `dedup_takeoff_items()` after `_merge_takeoffs()` and before constructing `ProjectModel`.
+- New schema field `TakeoffItem.dedup_origin: Optional[str] = None` (values: `"schedule"`, `"derived"`, `"llm"`, `"deduped"`, `None`). Used by the exporter to surface origin in Excel.
+- Tests:
+  - `tests/test_takeoff_dedup.py` — ~8 tests. Synthesized `TakeoffItem` lists with overlapping descriptions / units / quantities. Assert the dedup graph collapses correctly. Edge cases: zero items, one item, items in different divisions.
+  - One regression test based on the Cmd Post NDI bid set: confirm that "Hollow metal doors" appears exactly once, not three times, after reconcile.
+
+**Scope:** All categories — this is a cross-cutting cleanup phase, not new extraction.
+
+**Expected accuracy uplift:**
+- Total-bid accuracy: removes systematic over-counting on bid sets where the same item appears on multiple drawing sheets. Typical effect on a 50-sheet commercial set is on the order of 8–15% total dollar reduction toward truth.
+- No category sees its single-line accuracy improve, but the headline number stops being inflated.
+
+**Effort estimate:** M (3–5 days). The dedup graph itself is straightforward; the calibration to tune the rapidfuzz threshold and the quantity-tolerance is the bulk of the time.
+
+**Dependencies:**
+- Phase T1 strongly preferred (schedule rows give us authoritative ground truth to anchor the dedup against).
+- `rapidfuzz` (already vendored).
+
+**Risk / pitfalls:**
+- False-positive dedup. Two genuinely-different lines with similar descriptions (e.g. "Hollow metal door 3'-0" x 7'-0"" vs "Hollow metal door 3'-6" x 7'-0"") could collapse. Mitigation: include size / type fields in the normalization key when present; default threshold to 92 (high), tune down only if recall is poor.
+- Dedup decisions are hard to audit after the fact. Mitigation: persist the dedup graph as a side-output (`exports/<run>/dedup_report.json`) for every run.
+
+**Validation strategy:**
+- On the Carr EFA Project Manual + drawings + addendum 1 run: confirm hand-count of total doors matches the deduped line. Repeat for fixtures and panels.
+- Internal consistency check: `dedup_takeoff_items` is idempotent on its own output.
+
+**No-go signal:**
+- False-positive rate > 5% on the gold set, i.e. more than 1-in-20 dedup decisions collapses two genuinely-distinct lines. At that point the dedup is doing more harm than the over-counting it fixes.
+
+---
+
+### Phase T4 — Scale detection and geometric measurement
+
+**1-line goal:** Turn the `TitleBlockData.scale_factor` we already parse into real-world quantities for LF and SF takeoffs, using the PDF's vector geometry rather than vision.
+
+**Deliverables:**
+- New `core/extraction/vector_geometry.py`:
+  - `extract_polylines(pdf_path: Path, page_index: int) -> list[Polyline]` — uses `page.get_drawings()` (PyMuPDF) to walk the page's vector drawing operators and rebuild closed polygons + open polylines as a list of `(x, y)` points in page coordinates.
+  - `extract_text_with_position(pdf_path: Path, page_index: int) -> list[PositionedText]` — uses `page.get_text("dict")` to attach a bounding box to every text span. Needed because room names need to be associated with the polygon they label.
+  - `measure_polyline(p: Polyline, scale_factor: float) -> Measurement` — returns `(length_inches, area_sqin, area_sqft, perimeter_ft)`. `length_inches = sum_of_segment_lengths * (1/scale_factor)`, where `scale_factor` is the paper-inches-per-real-world-inch from F3.
+  - `associate_label_to_polygon(text_spans, polygons) -> dict[polygon_id, label_text]` — point-in-polygon test to attach room-name / room-number text to the polygon enclosing them.
+- New `core/extraction/room_geometry.py`:
+  - `extract_room_polygons(pdf_path: Path, page_index: int, scale_factor: float) -> list[Room]` — combines `extract_polylines` + `associate_label_to_polygon` to emit `Room(name=..., number=..., area_sqft=..., perimeter_ft=...)` populated from geometry. Used as a deterministic fallback for any `Room` produced by F3 or the LLM with `area_sqft is None`.
+- Update `extractors._build_from_prepass` to invoke `room_geometry.extract_room_polygons` when `prepass.title_block.scale_factor is not None`, and merge the geometric-derived areas into the prepass rooms (highest confidence wins on overlap).
+- New schema field `Room.area_source: Optional[Literal["schedule", "label", "geometry", "llm"]] = None` so exports can show provenance.
+- Tests:
+  - `tests/test_vector_geometry.py` — synthesized 1-page PDFs with known-size rectangles. Assert measurement accuracy within 0.5%. Cover the four common architectural scales: 1/4" = 1'-0", 1/8" = 1'-0", 3/16" = 1'-0", 1" = 10'.
+  - `tests/test_room_geometry.py` — synthesized floor plan with two adjacent rooms, each with a room-number label inside. Assert both rooms are extracted with correct number, area_sqft (within 0.5%), perimeter_ft (within 0.5%).
+  - One end-to-end test on a single page extracted from the Carr EFA drawings (a representative architectural floor plan saved as a 1-page fixture PDF in `tests/fixtures/`).
+
+**Scope:** Linear category (LF wall / partition / baseboard), Area-based category (SF flooring / ceiling / paint when paired with a room finish from the schedule).
+
+**Expected accuracy uplift:**
+- Area-based (SF) when a vector floor plan exists: from ~50% (today's value-or-null state from `Room.area_sqft` populated by LLM) to **75–85%**. Below the 80% target band because labeling and polygon-segmentation errors are a real source of misses.
+- Linear (LF wall) when a vector floor plan exists: from essentially 0% (today no LF wall takeoff exists) to **55–70%**. Wall lines on a PDF aren't always topologically connected polylines — sometimes they're individual line segments — so a polyline reconstructor needs care.
+
+**Effort estimate:** L (1–2 weeks). The PyMuPDF `get_drawings()` API is well-documented but the polygon reconstruction (closing open polylines, removing nested duplicates, handling text-cut walls) is genuinely fiddly.
+
+**Dependencies:**
+- F3 (already done).
+- PyMuPDF `page.get_drawings()` (already in our PyMuPDF version; no new dep).
+- For point-in-polygon: `shapely` would be the natural choice, but adds 6 MB. Mitigation: implement a small `point_in_polygon` helper (~30 LOC, ray-casting) in `core/extraction/geometry_util.py` to avoid the dependency. Revisit shapely if we hit edge cases.
+
+**Risk / pitfalls:**
+- Many architectural PDFs are "rasterized vector" — i.e. the line art is still vector but it's been flattened so wall pen-strokes are independent line segments rather than a single polyline. The polygon reconstructor has to walk a topology, not just collect polylines.
+- Floor plans with hatched fills, dimensions overlaid on walls, and dimension extension lines confuse the polyline extraction. Need a filter pass to drop dimensions (short colored thin lines with arrowheads).
+- Scanned drawings are out of scope for this phase; they remain at today's accuracy. Real fix is T7 (OCR + raster vectorization).
+- Scale could vary within a single sheet (multiple details with their own scales). Today's `TitleBlockData.scale` is single-valued; geometric measurement on a sheet with multiple scales would produce nonsense.
+
+**Validation strategy:**
+- Build a fixture set of 5–10 representative floor plans (the three drawing sets we have, plus a couple of public-domain ones) and hand-measure 3 walls + 3 rooms per sheet. Compare `extract_room_polygons` output. Success bar: median error < 5%, max error < 15% on rooms; median error < 8%, max error < 25% on linear walls.
+
+**No-go signal:**
+- Median room-area error > 10% on the fixture set after one iteration. Indicates the polygon reconstruction isn't reliable on real architectural PDFs, and we should partner with a commercial OCR/CV provider for this category instead (Section 5: Buy).
+- More than 30% of the fixture sheets fail to produce ANY polygons because the vector layer has been flattened to raster. Indicates we need to introduce raster vectorization (potrace / pix2shape) — a much bigger scope; this should bounce to backlog and be revisited as a separate phase.
+
+---
+
+### Phase T5 — Per-room finish takeoff
+
+**1-line goal:** For each room, produce SF of floor finish + SF of wall finish + SF of ceiling finish, by finish type, end-to-end automatically.
+
+**Deliverables:**
+- New `core/extraction/finish_takeoff.py`:
+  - `build_per_room_finish_takeoffs(rooms: list[Room], finish_schedule: Schedule | None, doors: list[DoorEntry], windows: list[WindowEntry]) -> list[TakeoffItem]`:
+    - For each room with `area_sqft` set (from T4 or from the schedule): emit floor-finish SF, ceiling-finish SF.
+    - For each room with `perimeter_ft` + `ceiling_height_ft` set: emit wall-finish SF = `perimeter_ft * ceiling_height_ft - opening_deduction`. Opening deduction: for each door associated with the room, subtract `door.width_in / 12 * door.height_in / 12` (default 21 SF when nulls); for each window associated with the room, subtract `window.width_in / 12 * window.height_in / 12` (default 12 SF when nulls).
+  - Group resulting takeoffs by `(csi_section, finish_name)` for the exporter.
+- Update `core/takeoff/derive.py: _derive_takeoffs` to delegate the finish portion to `build_per_room_finish_takeoffs` and remove the bucket-based heuristic. Preserve the existing wood-vs-tile-vs-carpet csi-mapping logic.
+- New schema field `Room.opening_count: int = 0` and a method on `Room` to estimate opening-deduction SF (used by the wall-finish builder).
+- Door↔Room association: today doors do not carry a `room_id`. Add `DoorEntry.room_number: Optional[str] = None` and populate it from the door-schedule "room from / room to" columns when present (T1 extracts those).
+- Tests:
+  - `tests/test_finish_takeoff.py` — ~10 tests. Tabulated rooms + finishes + doors + windows; assert finish takeoffs balance against hand-calc.
+  - One end-to-end test on the Carr EFA fixture sheet (post-T4).
+
+**Scope:** Area-based category, specifically per-room finish.
+
+**Expected accuracy uplift:**
+- Area-based (finish SF): from ~50% (intermittent — only fires when both `area_sqft` and `floor_finish` happen to land on the same Room) to **75–85%** (fires whenever T4 gives us a room area and the finish schedule gives us a finish). Door / window opening deductions in walls bring wall-paint accuracy down by 2-3 points (it's tuned conservatively).
+
+**Effort estimate:** S (1–2 days), assuming T4 has shipped. Without T4, this phase has nothing to multiply against and should not start.
+
+**Dependencies:**
+- T1 (finish schedule extraction).
+- T4 (room area from geometry).
+- Door↔Room association needs the door-schedule's "from-room / to-room" columns extracted by T1.
+
+**Risk / pitfalls:**
+- The finish schedule sometimes lists finishes per surface, sometimes per material. Same data, different layouts. T1's finish schedule extractor needs to handle both.
+- Wall-finish SF is sensitive to ceiling-height assumption when not in the room schedule. Default to 9.0 ft and warn (today's `_avg_room_height` default). Add a `Room.ceiling_height_ft` source field so we can prefer the schedule, fall back to the average, and last-resort to 9.0.
+
+**Validation strategy:**
+- On the Carr EFA gold set: per-room SF floor and SF wall paint compared against hand-calc from the same finish schedule and room schedule.
+- Internal balance check: sum of per-room floor SF == sum of room areas (no overlaps, no missed rooms) for any room with `area_sqft` set.
+
+**No-go signal:**
+- Door / window association rate < 50% across the gold set. Indicates the door-schedule "room-from / room-to" columns aren't reliably present, and we need an additional door↔room association step from plan geometry — bounces back to T4.
+
+---
+
+### Phase T6 — Confidence-aware pricing and human-verification UI workflow
+
+**1-line goal:** Use the `TakeoffItem.confidence` we already store to band line items into "automated", "auto with review", and "human required"; build the Streamlit UI loop that lets a human approve or correct a row and persist the correction.
+
+**Deliverables:**
+- New schema field `Estimate.review_status: dict[str, Literal["approved", "rejected", "edited", None]] = {}` keyed by a stable `CostLine.line_id` (hash of csi_section + description + unit + first-source-sheet-id).
+- New `core/estimator.py: bin_by_confidence(estimate: Estimate) -> dict[str, list[CostLine]]` returns `{"automated": [...], "review": [...], "human": [...]}` based on bands `>= 0.85`, `>= 0.65`, `< 0.65`.
+- Streamlit Estimate tab gains three filter chips (Automated / Review / Human required) and a per-row approve / reject / edit-and-approve affordance.
+- Edits write back to `Estimate.line_items` and the override is persisted in a per-project `corrections.jsonl` under `uploads/<project>/`.
+- New `tests/test_confidence_binning.py` — verifies the bin thresholds and that edited lines round-trip.
+- One end-to-end test: load a fixture estimate, edit one row in-memory, persist, reload, verify the override sticks.
+
+**Scope:** Cross-cutting. Doesn't improve extraction accuracy, but materially improves the per-bid usefulness of the tool by focusing human time on the rows that need it.
+
+**Expected accuracy uplift:**
+- No per-category line accuracy uplift. Improves the *effective* total-bid accuracy because a human can correct the lower-confidence rows in seconds instead of having to audit all 200 lines.
+
+**Effort estimate:** M (3–5 days).
+
+**Dependencies:**
+- None beyond the existing schemas and Streamlit UI.
+
+**Risk / pitfalls:**
+- Persisting corrections per-project but not yet using them to train / fine-tune anything. That's a deliberate scope choice — corrections are only logged in T6; using them as feedback to the extractor is a future phase.
+
+**Validation strategy:**
+- Manual workflow walkthrough on a real Carr EFA estimate: bin the lines, edit two rows in the UI, close and reopen, verify the edits persist.
+
+**No-go signal:**
+- Users do not interact with the review UI more than 1–2 lines per estimate, indicating the confidence bands aren't discriminating useful from useless rows. Mitigation: adjust bin thresholds, or rethink the workflow before investing more.
+
+---
+
+### Pricing data pipeline (Tier 1 shipped)
+
+Separate from the takeoff phases above, the **pricing-data layer** is what produces the unit costs each `TakeoffItem` gets multiplied by. BPC has no internal cost / sub / supplier data, so the pipeline is built around free external public sources.
+
+**Tier 1 — shipped (this commit).** Five source adapters under `core/pricing/sources/`:
+
+- **BLS PPI** (15 curated commodity series — wood / plywood / gypsum / steel / copper wire / diesel / ready-mix / asphalt / paint / PVC / fab steel / plumbing fittings).
+- **BLS OEWS** (10 SOC construction trades × 6 TX metros = 60 wage series).
+- **FRED** (8 series — WTI crude, construction inputs PPI, national construction earnings, industrial commodities PPI, TX CPI, construction loan rate, Case-Shiller, sand & gravel PPI).
+- **EIA** (weekly retail diesel + regular gas, PADD3 / Gulf Coast).
+- **Davis-Bacon** (SAM.gov WD lookup for any state + county + project type).
+
+Plus:
+
+- `core/pricing/snapshots.py` — file-system snapshot persistence (`config/pricing_snapshots/<source>/<series>/<period>.json`).
+- `core/pricing/escalation.py` — CSI-aware escalation engine. Maps `cost_database.json` entries to PPI series and writes a new escalated cost DB.
+- `scripts/refresh_pricing.py` — CLI refresh runner (gracefully skips sources with missing API keys).
+- `firm/playbooks/pricing-data-sources.md` — full operator-facing playbook.
+- `firm/compliance/material-suppliers.md` — registry skeleton for the eventual internal-supplier track.
+
+**Tier 1 Phase B — partial.** TWC TX prevailing wage + GSA Schedule adapters ship as parsers (offline-tested on synthetic text / CSV); auto-download from upstream is TODO.
+
+**Tier 1 Phase C — stubs.** TX SmartBuy / ESBD, HD Pro / Lowe's catalog, ENR CCI, AGC Inflation Alert, Turner BCI, NAHB Cost of Constructing a Home all ship as importable stubs with documented license + ToS posture and clear `[NOT YET IMPLEMENTED]` markers.
+
+**Tier 2 — deferred.** RSMeans / Gordian commercial cost DB. Decision gated on Tier 1 calibration data demonstrating a measurable gap. See Section 5 (Build / Buy / Partner) above.
+
+**Tier 3 — long-horizon.** BPC internal cost DB + supplier discount tracking. Started when BPC has > 12 months of internal cost capture flowing through committed supplier accounts. See `firm/compliance/material-suppliers.md`.
+
+---
+
+### Phase T7 — (Backlog) OCR for scanned-drawing recovery
+
+**1-line goal:** Restore deterministic extraction on PDFs where the vector text layer has been flattened, by adding a `paddleocr` or `tesseract` OCR pass to `drawing_prepass`.
+
+**Deliverables (sketch):**
+- New `core/extraction/ocr.py` wrapping `paddleocr.PaddleOCR(lang="en", show_log=False)` (preferred over tesseract for its better performance on rotated text in title blocks).
+- `prepass_drawing_page` gains a `force_ocr: bool = False` argument plus an auto-detection that triggers OCR when `len(page.get_text("text").strip()) < 100`.
+- OCR output feeds the same `_extract_title_block`, `_extract_dimensions`, `_extract_schedules` paths.
+
+**Scope:** Schedules + Counts + Area + Linear on scanned drawings.
+
+**Effort estimate:** L (1–2 weeks), driven by deployment / packaging — paddleocr pulls a large model bundle and adds 200+ MB to the install.
+
+**Note:** Phase T7 is explicitly behind T1–T6 because the existing real bid sets we get from Texas state procurement portals are vector PDFs, not scans, and the marginal value of OCR on a small minority of inputs doesn't justify the install-weight cost until the rest of the deterministic stack is solid.
+
+---
+
+## 4. Non-goals — what we will explicitly NOT build
+
+- **Heavy civil, road, bridge, rail.** Different design conventions (plan + profile + cross-section), different unit systems, different cost drivers (stations, cubic-yards of fill at depth). Out of stated user scope.
+- **High-rise structural / tall-building.** Steel takeoff for a 40-story building requires per-floor decomposition we don't model; specialized estimating packages (Tekla, RAM) already do this well.
+- **Full BIM authoring or modification.** We are a takeoff and estimating tool, not a CAD / BIM platform. We will *ingest* IFC if it's offered (potential future phase), but we will not author or modify.
+- **CAD-quality drafting back-out.** When the only source is a low-fidelity PDF, we will not attempt to reconstruct a clean CAD model from it.
+- **Live cost-feed from RSMeans / Gordian.** Mentioned in the README "easy adds" list but explicitly punted: the CWICR open dataset (CC-BY-4.0, 55 K rows) plus the seed DB gives us enough coverage for residential and light commercial. A commercial-cost-DB connector requires a paid license per seat and is a sales / procurement decision, not a code decision.
+- **Bid-leveling across multiple subs.** Out of scope for this roadmap (mentioned as a future README item but solving the *takeoff* side first is the higher-leverage move).
+- **Predictive bid-win modeling.** Not part of takeoff.
+- **Live document-set ingestion via API.** Bids arrive as PDFs in an inbox folder today; that workflow is sufficient.
+
+---
+
+## 5. Build / buy / partner analysis
+
+### Build
+
+The core of T1–T6 is straightforward build. The schedule extractor (T1), prompt specialization (T2), dedup (T3), and finish-takeoff walker (T5) are 1–5-day code projects each, on top of dependencies we already vendor (`pymupdf`, `rapidfuzz`, `pydantic`, `scikit-learn`, `sentence-transformers`). T4 is the most novel build but it's still a "use PyMuPDF's `get_drawings()` + a small polygon reconstructor" exercise rather than a research project. Total build budget for T1–T6 is **6–10 weeks of one engineer**.
+
+### Buy
+
+The commercial space worth surveying when (and only when) T1–T5 calibration plateaus:
+
+- **Togal.AI** — vision model trained specifically on construction drawings; emits room polygons, finish takeoffs, count-based items. Subscription model, $300–600 / user / month typical. Would replace most of T4 + T5 if it works on our drawing sets. Real consideration if our polygon reconstruction in T4 doesn't clear the 70% area-accuracy bar.
+- **Bluebeam Revu** — desktop, $200–400 / user / year; not an API but has scripted markups and a paid "Revu AI" add-on for measurements. Probably the worst fit (desktop tool, no headless / batch story).
+- **STACK** — cloud takeoff platform, $1,800+ / user / year. Has APIs for project + drawing management; underlying takeoff is operator-driven not automated. Wrong category.
+- **Hyperestimate / Beam.ai / Trunk.ai** — newer entrants. Pricing and API maturity vary; revisit when commercially relevant.
+
+The decision rule: **buy** only if a vendor moves a specific accuracy band by ≥ 15 percentage points and the per-month cost is < 0.5% of a typical bid value we'd produce with the tool. Today we have no signal that T4 / T5 will fall short — start build, set go / no-go gates, revisit at T4 calibration.
+
+### Partner (open-source ecosystem)
+
+- **PaddleOCR** (Apache-2.0). Best-in-class for English + rotated text. Path-forward for T7.
+- **layoutlmv3 / docling** (MIT / Apache). Document layout analysis. Useful for schedule-table detection on PDFs where PyMuPDF `find_tables()` misses (T1 fallback).
+- **opencv-python** (Apache-2.0). Symbol detection on rendered plan pages — template-matching for fixture / receptacle / sprinkler-head symbols. Plausible path forward for the symbol-detection gap noted in Section 1.3, but out of scope until T6 ships.
+- **GroundingDINO + SAM** (Apache-2.0). Vision-language object detection — could segment doors / fixtures from a rendered plan PNG with no fine-tuning. Compute-heavy (GPU desirable); revisit once T1–T5 establish the deterministic baseline they would augment.
+- **ezdxf** (MIT). Read native AutoCAD DXF files. Would be the natural ingest path if the owner ever provides DXFs (see Open Question 1).
+
+---
+
+## 6. Recommended next step
+
+**Start Phase T1 — Specialized schedule extraction.**
+
+Why this phase:
+- F3 already detects schedule tables deterministically (`page.find_tables()`); we're not building detection, we're building the typed extractor on top.
+- Schedules are the highest-yield-per-effort category in the accuracy table (85–95%, Medium effort). Doors, fixtures, equipment, and panels are typically 60–80% of the count-based line items on a light-commercial bid.
+- The codebase already has the right seams: `_build_from_prepass` is the obvious dispatch point, `TakeoffItem` is the right output schema, `_merge_takeoffs` is the right downstream consumer.
+- No new runtime dependency. No new prompt to engineer. No new compute cost.
+- It's the prerequisite for T3 (dedup needs schedule rows as ground truth), T5 (finish takeoff needs the finish schedule), and provides immediate value even if T2 / T3 / T4 don't ship.
+
+Minimum viable shippable slice:
+1. **Door schedules only.** Implement `extract_door_schedule(schedule: Schedule, specs: list[SpecSection]) -> list[TakeoffItem]` in `core/extraction/schedule_extractor.py`.
+2. **Hook into `_build_from_prepass`.** When the prepass returns a schedule of kind `"door"`, run the door extractor and emit per-mark TakeoffItems plus an aggregated hardware-set line. Set `confidence = 0.92` on rows that have both `mark` and `type`; `0.80` when only `mark` is present (type inferred from spec cross-ref or defaulted).
+3. **8 tests in `tests/test_schedule_extractor.py`.** Synthesized `Schedule` objects covering: standard door schedule, schedule with merged "WIDTH x HEIGHT" column, schedule with rating column, schedule with fire-protection notes, schedule referencing hardware sets HW-1..HW-N, schedule where `type` is null and spec cross-ref fills it, schedule with no spec available (defaults to "Door (type unspecified)"), schedule with > 100 rows for performance.
+4. **One end-to-end calibration.** Run the slice against the Carr EFA Project Manual + drawings addendum (already in `inbox/opportunities/attachments/2026-05-21/`). Hand-count doors on the source PDF. Success bar: > 92% accuracy on the door-count, > 85% on the type breakdown (HM vs SC vs ALUM).
+5. **Ship behind a feature flag.** `CORE_EXTRACTION_SCHEDULE_TAKEOFF_ENABLED=true` in `.env`, default `false` for one release. Flip to default-true after the calibration is clean.
+
+Why door schedules first (and not finish or fixture):
+- Highest single-category dollar value on a typical commercial TI bid (doors + hardware + frames often $30–80K on a $1M bid).
+- Most schema-stable across offices (door schedule layout is the most standardized of all the architectural schedules).
+- Has a clean spec cross-reference target (CSI 08 11 13, 08 14 16, 08 71 00 are well-defined and rarely conflated).
+
+After the slice ships, fan out to window / finish / fixture / panel / equipment schedules in the same pattern — each is a 4-8 hour addition once the door-schedule pattern is in place.
+
+---
+
+## 7. Open questions for the user
+
+These are the questions whose answers materially shift the roadmap. Five-to-eight, ordered by impact:
+
+1. **Source-file mix.** In a typical month, what fraction of bids arrive as:
+   - vector PDFs (text + lines, the happy path),
+   - scanned PDFs ("scan of a scan", no text layer),
+   - native CAD (`.dwg`, `.dxf`),
+   - native BIM (`.ifc`, `.rvt`)?
+   This sets the priority of Phase T7 (OCR), and whether an `ezdxf` ingest is worth adding earlier than backlog.
+
+2. **Drawing-set quality.** When you do receive CAD-quality PDFs, how often are they "rasterized vector" (line art is vector but flattened to independent segments) vs "true vector" (clean polylines, layers)? This is the central risk on Phase T4 — `get_drawings()` only helps on the latter.
+
+3. **Quantity provenance.** On a typical bid you submit, roughly what fraction of priced quantities ultimately come from schedules vs measured-off-the-plan? This bounds the maximum value of Phase T4 + T5 (geometric measurement) vs Phase T1 (schedule extraction). If schedules drive 80%+ of dollars, prioritize T1; if measured-off-the-plan drives 50%+, accelerate T4.
+
+4. **Commercial OCR / CV budget.** What's your tolerance for a $300–600 / month per-seat subscription to a vendor (e.g. Togal.AI) if it materially raises Area or Linear accuracy? This is the decision rule for the build / buy gates after Phase T4.
+
+5. **Human-in-the-loop tolerance.** When you review an estimate today, how many minutes per $100K of bid value do you spend reviewing line items? This calibrates the confidence bands in Phase T6 and tells us how aggressive the "auto-approve" threshold should be.
+
+6. **Project type mix.** Of the bids you submitted in the last 12 months: what % were residential, light commercial / TI, K-12, government solicitations (USFWS / state / federal), other? The roadmap is calibrated against your stated USA-residential-plus-commercial scope, but the schedule extractor's per-office variants depend on which design firms you see most often.
+
+7. **Estimator-correction round-trip.** Are you comfortable having your line-item corrections logged to `uploads/<project>/corrections.jsonl` for future reference (and eventually for fine-tuning), or is per-correction logging a confidentiality concern? This shapes Phase T6's persistence story.
+
+8. **Native-file ingest from owners.** If the federal / state procurement portal can hand you `.ifc` or `.dxf` alongside the PDF (some can, some can't), would you prefer the tool to silently prefer the higher-fidelity file, or to keep the PDF as the canonical input for traceability with the bid documents? This shapes whether `ezdxf` / `ifcopenshell` are worth bringing into the dep tree.
+
+---
+
+**End of roadmap.**

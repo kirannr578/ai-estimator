@@ -37,3 +37,12 @@ markdown>=3.6                    # Markdown -> HTML; tables / fenced_code / attr
 xhtml2pdf>=0.2.16                # HTML -> PDF (used for proposal-full.pdf)
 python-pptx>=1.0                 # PPTX builder (pitch-deck + full styles)
 pypdf>=4.0                       # used in renderer tests for round-trip text extraction
+
+# Tier 1 pricing-data integrations (core/pricing/sources/, scripts/refresh_pricing.py)
+# httpx is the HTTP client used by every public-source adapter (BLS / FRED /
+# EIA / Davis-Bacon). Pinning a baseline of 0.28+ so `httpx.MockTransport` is
+# available for offline unit tests (we use it instead of a separate
+# `respx` / `pytest-httpx` dependency).
+httpx>=0.28,<1.0
+# python-dotenv is already declared above (used to load BLS/FRED/EIA API keys
+# from .env into scripts/refresh_pricing.py).
