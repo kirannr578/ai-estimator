@@ -33,7 +33,8 @@ This playbook documents:
 | TX state-agency prevailing wage (per-project WD parser) | `core/pricing/sources/tx_prevailing_wage.py` | State of Texas public record | None (PDF arrives with solicitation) | Per-solicitation | Trade × hourly rate parsed from the per-project WD PDF attached to each TX state-agency solicitation | **Shipped** (per-project parser; see "Structural Note — Texas Prevailing Wage" below) |
 | GSA Schedule price lists | `core/pricing/sources/gsa_schedule.py` | U.S. Public Domain — GSA | None | Quarterly | Construction materials catalogs (56V, 03FAC, 23V) | **Phase B — partial** (parser ships; auto-download TODO) |
 | TX SmartBuy / ESBD historical awards | `core/pricing/sources/tx_smartbuy_awards.py` (`TXSmartBuyAwardsSource`) | State of Texas public record | None | Continuous (per-solicitation as they award) | Per-(solicitation, vendor) award amounts + NAICS + agency + period — REAL competitive intel for TX state contracts | **Shipped (Phase C)** — anchor-proximity regex parse over ESBD HTML; one snapshot per awarded vendor; 24h HTTP cache |
-| Home Depot Pro / Lowe's for Pros catalogs | `core/pricing/sources/hd_pro_catalog.py` | Retailer-proprietary (public prices only) | None for public pages | On-demand | ~50 high-volume building-material SKUs | **Phase C — stub** |
+| Home Depot Pro retail catalog | `core/pricing/sources/hd_pro.py` (`HomeDepotProSource`) | Home Depot retailer-proprietary; public prices only | None | Daily (prices fluctuate hourly during promo seasons) | Per-SKU (Item ID, title, brand, price, UoM, MFR number) — retail floor for spot-checks | **Shipped (Phase C closure)** — schema.org-microdata regex parse; 10-SKU starter list; degrades to graceful empty on Akamai/CAPTCHA |
+| Lowe's Pro retail catalog | `core/pricing/sources/lowes_pro.py` (`LowesProSource`) | Lowe's retailer-proprietary; public prices only | None | Daily (prices fluctuate hourly during promo seasons) | Per-SKU (Item Number, title, brand, price, UoM, model number) — retail floor for spot-checks | **Shipped (Phase C closure)** — mirror of `hd_pro`; same Akamai/CAPTCHA fragility posture |
 | ENR Construction Cost Index | `core/pricing/sources/enr_cci.py` (`ENRCCISource`) | ENR — attribution required, no redistribution | None | Monthly | National 20-city composite cost index | **Shipped (Phase C)** — headline value only; full history requires ENR subscription |
 | AGC PPI-based Construction Cost Index | `core/pricing/sources/agc_cci.py` (`AGCCCISource`) | AGC — attribution required, no redistribution | None | Monthly (underlying PPI) / Quarterly (Inflation Alert) | National PPI-based inflation roll-up | **Shipped (Phase C)** — landing-page headline only; Inflation Alert PDF parser is future work |
 | Turner Building Cost Index | `core/pricing/sources/turner_cci.py` (`TurnerCCISource`) | Turner — attribution required, no redistribution | None | Quarterly | National TBCI composite | **Shipped (Phase C)** — latest quarter only; per-quarter article archive parser is future work |
@@ -164,7 +165,7 @@ Place keys in `.env` at the repo root (gitignored). NEVER commit keys to the rep
 | TX TWC prevailing wage | State of Texas public record | https://www.twc.texas.gov/twc-website-privacy-and-security-policy — attribution recommended |
 | GSA Schedule catalogs | U.S. Public Domain — GSA | https://www.gsaadvantage.gov/advantage/text/footer/disclaimer.do — attribution recommended |
 | TX SmartBuy / ESBD | State of Texas public record | Comptroller website terms apply |
-| HD Pro / Lowe's for Pros | **Retailer-proprietary; public prices only** | Each retailer's ToS forbids automated scraping of logged-in content — non-negotiable. Phase C implementation MUST honor robots.txt and rate limits. |
+| HD Pro / Lowe's for Pros | **Retailer-proprietary; public prices only** | Each retailer's ToS prohibits automated scraping of the catalog at scale. Phase C closure ships the adapters with bounded per-call SKU lists and a 24h disk cache; **degrade-to-empty on Akamai/CAPTCHA is the documented posture, not a bug**. See "Home Depot Pro / Lowe's Pro retail catalog" section below for the full license / fragility / future-Phase-D-pivot writeup. Low-volume estimating spot-check use only — never bulk redistribution. |
 | ENR CCI / AGC / Turner BCI / NAHB | Publisher-proprietary; attribution required, redistribution forbidden | Cite source URL in every snapshot |
 
 ---
@@ -239,7 +240,8 @@ A skeleton placeholder for this work lives at `core/pricing/sources/tx_agency_wd
 | Per-agency TX WD harvester (TxDOT, TFC, TWDB, university systems, large municipalities) | Pull per-project WD PDFs from major TX procuring agencies' active-solicitation pages | Future — placeholder at `core/pricing/sources/tx_agency_wd.py`; pursue when > 3 active TX state-agency bids/quarter warrant it |
 | Phase B-full: GSA Advantage CSV auto-download | Pulls catalog without manual step | Highest-value next step |
 | ~~Phase C: TX SmartBuy / ESBD scraper~~ | **Shipped** — see "TX SmartBuy Historical Awards" section below | n/a (closed; shipped 2026-05-28) |
-| Phase C: HD Pro / Lowe's pro catalog | Spot-check single-SKU pricing | After GSA Advantage; **only if ToS posture clear** |
+| ~~Phase C: HD Pro / Lowe's pro catalog~~ | **Shipped** — see "Home Depot Pro / Lowe's Pro retail catalog" section below | n/a (closed; shipped 2026-05-28; ships behind documented Akamai/CAPTCHA fragility) |
+| Phase D: 3rd-party catalog aggregator | Replace direct retailer scraping with a license-clean aggregator (Datalink, Build.com, similar) so retail-floor pricing is reliable at refresh time without anti-bot fragility | After confirming bid-team demand for retail-floor signal AND securing a redistribution-licensed data feed |
 | ~~Phase C: ENR / AGC / Turner PDF parsers~~ | **Shipped** — see Construction Cost Index section below | n/a (closed; CCI adapters shipped 2026-05-28) |
 | Phase C-full: NAHB Cost of Constructing a Home annual PDF | Residential cost breakdown cross-check | Deferred — annual cadence + low marginal vs BLS PPI |
 | Phase C-full: ENR / AGC / Turner historical archive parsers | Backfill full historical series (currently only latest headline) | After more bid-pricing demand confirms the marginal value vs BLS PPI |
@@ -527,6 +529,152 @@ raw:           {vendor, award_amount_usd, award_amount_raw, award_date_raw,
 - **Multi-page pagination.** Walk past the first listing page to backfill > 25 awards per refresh. Today `fetch_recent_awards(limit=50)` honors the limit at the parsing layer but only sees one page; raising the listing throughput is a follow-up slice.
 - **CSI-section mapping from solicitation title.** Today `csi_division` is left null. A future enhancement could keyword-map common scopes (e.g. "Office Renovation" → CSI Division 09 finishes; "Roof Replacement" → CSI 07 thermal & moisture protection) so the awards become directly comparable to BPC's per-CSI cost database. Out of scope for the initial shipping slice because the mapping is judgment-heavy and easier reviewed manually at bid prep time.
 - **Per-agency harvester integration.** The future TX agency WD harvester (`tx_agency_wd.py` placeholder) overlaps with the TX SmartBuy data shape; if both ship, deduplicate at the snapshot layer rather than the source layer.
+
+---
+
+## Home Depot Pro / Lowe's Pro retail catalog (Phase C closure — shipped 2026-05-28)
+
+The macro CCI/PPI escalators tell you **trend** (commercial input inflation YoY). The TX SmartBuy adapter tells you **level** for TX state-agency awards. The HD Pro / Lowe's Pro catalog adapters fill in the third axis: **the user-actionable retail floor** — what a project manager or estimator can walk into a store and pay today for a specific SKU.
+
+This is complementary to PPI (broad market index) and CWICR (open contractor cost DB) — neither of those tells you that a 5 gal bucket of joint compound is $19.99 at the Carrollton HD this week.
+
+### What these adapters provide
+
+For each SKU in the configured starter list, one `PricingSnapshot` per successful parse carrying:
+
+- **Item ID / Item Number** — the retailer's product key (`series_id`).
+- **Title** — product description (`label`).
+- **Brand** — manufacturer / private label.
+- **Price** — current public catalog price in USD (`value`).
+- **Unit-of-measure** — verbatim from the catalog (`unit`); e.g. `"each"`, `"box of 100"`, `"case of 50"`, `"1 lb"`, `"gallon"`. Falls back to `"each"` when not parseable.
+- **Model / MFR Number** — manufacturer part number (`raw["mpn"]`).
+- **Zip code** — store-availability scope (`region` + `raw["zip_code"]`); defaults to `75001` (Carrollton, TX / Dallas-Fort Worth metro).
+- **Source URL** — direct link to the public PDP for re-verification.
+
+Snapshots are persisted under `config/pricing_snapshots/hd_pro/<sku>/<YYYY-MM-DD>.json` and `config/pricing_snapshots/lowes_pro/<sku>/<YYYY-MM-DD>.json`. Period is the **scrape date** (full ISO date, not just the month) because retail prices fluctuate hourly during promo seasons and a daily snapshot cadence is the right grain.
+
+### URL patterns
+
+| Retailer | URL pattern | Notes |
+|---|---|---|
+| Home Depot | `https://www.homedepot.com/p/<sku>` | Real PDP URLs include a marketing slug between `/p/` and the SKU; the bare-SKU form redirects to the canonical page. We use the bare form so we don't need to pre-know the slug. |
+| Lowe's | `https://www.lowes.com/pd/<item-number>` | Same posture as HD; bare-Item-Number redirects to the canonical slug page. |
+
+### SKU sourcing strategy
+
+The starter SKU lists live in two places (intentionally — see "Where future SKU lists should be sourced" below for the migration plan):
+
+1. **Module-level `DEFAULT_SKUS`** in each adapter (`core/pricing/sources/hd_pro.py`, `core/pricing/sources/lowes_pro.py`). These are the "everyone gets these by default" lists — 10 SKUs each covering door hardware, paint, drywall, framing lumber, plywood, fasteners, joint compound, gypsum board, roofing felt.
+2. **CLI-level `HD_PRO_STARTER_SKUS` / `LOWES_PRO_STARTER_SKUS`** in `scripts/refresh_pricing.py` — same 10 SKUs, but with explicit CSI-section comments so the refresh-runner policy is greppable from the CLI side rather than buried inside the adapter module.
+
+When the refresh runner is invoked the CLI list is what's used; the module-level list is the fallback for ad-hoc scripts that instantiate the adapter directly.
+
+#### Where future SKU lists SHOULD be sourced (NOT YET IMPLEMENTED)
+
+Three migration paths, in rough preference order:
+
+1. **Per-bid CSV** under `bids/<slug>/catalog-skus.csv`. The estimator drops a printed Pro-counter quote into the bid workspace and the refresh runner reads the bid-specific list when running inside the bid context. Natural extension: a `--bid <slug>` flag on `scripts/refresh_pricing.py`.
+2. **Per-firm config** under `firm/catalog/hd_pro_skus.csv` and `firm/catalog/lowes_pro_skus.csv` — a curated list of "always refresh these" SKUs that the firm tracks across all bids. Updated by the estimating lead at the start of each fiscal quarter.
+3. **Per-CSI mapping** under `firm/catalog/csi_to_skus.json` — links each CSI section (e.g. `08 71 00` Door Hardware) to a list of exemplar SKUs, so a bid takeoff that touches a CSI section automatically pulls fresh prices for the exemplars. Depends on the per-CSI keyword catalog in `core/pricing/escalation.py` being externalized first.
+
+Until those land, the CLI module-level list is the source of truth and is overridable per-call by `HomeDepotProSource(sku_list=[...])` / `LowesProSource(sku_list=[...])`.
+
+### Structural fragility — the elephant in the room
+
+**Both retailers serve product pages behind Akamai-fronted JavaScript shells with bot protection.** A polite `httpx` GET (no JavaScript engine, no cookie / fingerprint mimicry) will most often land on one of:
+
+- A **"Pardon Our Interruption"** CAPTCHA / interstitial page (Distil Networks).
+- An **HTTP 403** from Akamai's edge.
+- A **200** with the JavaScript shell that, when rendered in a browser, populates from a private GraphQL endpoint we are NOT authorized to call programmatically.
+- An **"Access Denied"** page citing an Akamai reference number.
+
+**This is the biggest known limitation of these adapters and is not bypassed.** Honoring `00-global-security.mdc` and the retailer ToS, the adapter **degrades to graceful empty** on any of the above:
+
+1. `fetch()` and `fetch_recent()` swallow per-SKU HTTP errors and anti-bot intercepts, log a warning, and return whatever they could parse (often `[]`). The refresh runner is never crashed.
+2. `fetch_one()` raises `PricingSourceUnavailable` on a 4xx / 5xx so a one-off CLI lookup can detect failure.
+3. When the response *is* a CAPTCHA / anti-bot page (200-OK HTML carrying one of the known interstitial markers), the adapter logs a warning and skips that SKU rather than emitting a misleading snapshot.
+
+The CAPTCHA marker list lives at module scope (`CAPTCHA_MARKERS`) in each adapter and matches Akamai / Distil / Imperva / generic block pages: `pardon our interruption`, `/_incapsula_resource`, `as you were browsing`, `request unsuccessful. incapsula`, `access denied`, `bot detected`, `captcha verification`, `akamai-edgesuite`, `we want to make sure you're a real person`, `are you a robot`. When a structural change moves the markers, operators look up the latest one manually and extend the list.
+
+### Recommended remediation paths (none implemented in this slice)
+
+In preference order:
+
+1. **Use HD's / Lowe's official supplier or B2B Pro account API.** Both retailers offer Pro-account programs (HD's Pro Xtra, LowesForPros.com) which include a commercial supplier portal in some configurations. Requires a signed Pro account agreement + a documented redistribution clause for estimating use.
+2. **Use a 3rd-party catalog aggregator** (Datalink, Build.com, similar) with an explicit license to redistribute pricing for estimating use. This is the cleanest long-term answer and is captured in the "Future work" table above as the Phase D pivot.
+3. **Curate a manual SKU CSV per bid.** A project manager walks the Pro counter for the bid scope, exports a printed quote, and the estimator imports it into the bid workspace under `bids/<slug>/catalog-skus.csv`. This is the lowest-tech fallback and is the most realistic posture for current bid volume.
+
+### License + ToS — non-negotiable caveat
+
+The Home Depot Customer Agreement and Lowe's Terms and Conditions of Use both prohibit automated scraping of the catalog at scale. This adapter is intended for **low-volume estimating spot-checks**, NOT for commercial redistribution of the catalog. Concretely:
+
+- **No bulk download.** The SKU list is bounded at construction time (10 SKUs in the starter list). The refresh runner walks them sequentially, each behind a 24h disk cache (`config/pricing_snapshots/_http_cache/hd_pro/`, `.../lowes_pro/`).
+- **No re-publish.** Each snapshot persists the canonical product URL so a downstream consumer must follow the link to view the price; the snapshot is an internal estimating record, not a syndicated catalog feed.
+- **Polite User-Agent.** Inherited from `core/pricing/sources/base.py::build_client` — same identity as every other Phase A/B/C adapter.
+- **No login wall bypass.** Pro-account-gated prices are not scraped; only the public catalog floor is.
+
+If retail catalog use ever moves beyond per-bid spot-check (e.g. into syndicated bid-prep automation), **stop and renegotiate the license posture** before doing so. The Phase D 3rd-party-aggregator pivot is the clean answer; direct scraping at scale is not.
+
+### Snapshot shape
+
+```
+source:        hd_pro | lowes_pro
+series_id:     "<Item ID | Item Number>"
+label:         "<Product title>"
+unit:          "<UoM verbatim>"     # "each" / "box of 100" / "1 lb" / ...
+value:         <price USD>
+region:        "<zip_code>"         # store-availability scope
+csi_division:  null
+naics:         null
+period:        "YYYY-MM-DD"         # scrape date (NOT month)
+license:       <retailer>-proprietary; public catalog prices only — low-volume
+               estimating use, not commercial redistribution
+source_url:    https://www.homedepot.com/p/<sku>  | https://www.lowes.com/pd/<sku>
+raw:           {sku_requested, sku_parsed, title, brand, mpn,
+                price_raw, price_value_usd, unit_of_measure, zip_code,
+                fetched_at}
+```
+
+### CLI
+
+```powershell
+# Refresh both retail catalogs (uses the starter SKU lists).
+.venv\Scripts\python.exe scripts\refresh_pricing.py --sources hd_pro,lowes_pro
+
+# Or via the Phase C shortcut (includes CCI + NAHB + TX SmartBuy + retail).
+.venv\Scripts\python.exe scripts\refresh_pricing.py --phase c
+
+# Single-SKU spot check from Python (raises PricingSourceUnavailable on failure).
+.venv\Scripts\python.exe -c "from core.pricing.sources.hd_pro import HomeDepotProSource; \
+print(HomeDepotProSource().fetch_one('100120362').value)"
+```
+
+In production usage today the live fetch will most often return the documented anti-bot intercept and the refresh-runner summary will read `[hd_pro] 0 snapshots returned` / `[lowes_pro] 0 snapshots returned`. **This is expected** — see "Structural fragility" above. The adapter ships its full interface, parsing logic, and tests; production utility unlocks when the Phase D 3rd-party aggregator pivot lands or a per-bid manual SKU CSV is supplied.
+
+### Source-of-truth references
+
+- `core/pricing/sources/hd_pro.py` — Home Depot Pro adapter, parsing helpers, anchor lists, default SKU list.
+- `core/pricing/sources/lowes_pro.py` — Lowe's Pro adapter (mirror of `hd_pro`).
+- `core/pricing/sources/_cci_common.py::http_get_text` — shared 24h HTTP-text cache.
+- `tests/test_pricing_sources_hd_pro.py` — offline tests via `httpx.MockTransport` (47 tests).
+- `tests/test_pricing_sources_lowes_pro.py` — offline tests via `httpx.MockTransport` (46 tests).
+- `scripts/refresh_pricing.py` — `HD_PRO_STARTER_SKUS` / `LOWES_PRO_STARTER_SKUS` CLI-level constants + elif wiring in `_run_source`.
+
+### Future-refactor note — `_catalog_common.py`
+
+The HTML-parsing helpers in `hd_pro.py` and `lowes_pro.py` are near-identical clones because both retailers use the same `schema.org` `itemprop` microdata vocabulary on their PDPs. A future `core/pricing/sources/_catalog_common.py` could DRY out the meta / itemprop / price / UoM helpers behind a single `parse_product_page(html, *, adapter_name, source_url, ...)` entry point. **Intentionally NOT extracted in this slice** — both adapters ship as self-contained modules so the fragility surface, the per-retailer license / ToS docstring, and the adapter-specific anchor lists stay collocated. **Promote to shared helpers when a third catalog source is added** (most likely: Build.com or another aggregator).
+
+### Phase C completion status
+
+With these two adapters shipped, **Phase C is closed**. The pricing layer now covers:
+
+- **Labor** — BLS OEWS (Phase A) + Davis-Bacon (Phase B) + TX per-project WD parser (Phase B).
+- **Materials / PPI** — BLS PPI (Phase A) + FRED (Phase A) + EIA fuel (Phase A).
+- **Construction cost indexes** — ENR + AGC + Turner + NAHB (Phase C).
+- **Competitive intel** — TX SmartBuy historical awards (Phase C).
+- **End-user retail catalog** — HD Pro + Lowe's Pro (Phase C closure).
+
+No remaining Phase C stubs. The next move on the pricing roadmap is Phase D (3rd-party catalog aggregator pivot) or Tier 2 (RSMeans / Gordian commercial license decision) — both gated on demonstrated bid-team demand for the additional signal.
 
 ---
 

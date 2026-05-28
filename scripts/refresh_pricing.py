@@ -44,6 +44,8 @@ from core.pricing.sources.davis_bacon import DavisBaconSource  # noqa: E402
 from core.pricing.sources.eia import EIAFuelSource  # noqa: E402
 from core.pricing.sources.enr_cci import ENRCCISource  # noqa: E402
 from core.pricing.sources.fred import FREDSource  # noqa: E402
+from core.pricing.sources.hd_pro import HomeDepotProSource  # noqa: E402
+from core.pricing.sources.lowes_pro import LowesProSource  # noqa: E402
 from core.pricing.sources.nahb_construction_cost import (  # noqa: E402
     NAHBCostOfConstructingAHomeSource,
 )
@@ -75,6 +77,17 @@ ALL_SOURCES = {
     # posture as the CCI adapters (HTML scrape, not JSON API) — opt in
     # explicitly via `--sources tx_smartbuy_awards` or `--phase c`.
     "tx_smartbuy_awards": TXSmartBuyAwardsSource,
+    # Phase C closure — Home Depot Pro + Lowe's Pro catalog scrapers.
+    # Public retail catalog prices only. Both retailers serve product
+    # pages behind Akamai bot protection — see the per-adapter module
+    # docstring for the structural fragility, and the playbook section
+    # "Home Depot Pro / Lowe's Pro retail catalog" for the license
+    # caveat. Default starter SKU lists live in ``HD_PRO_STARTER_SKUS``
+    # / ``LOWES_PRO_STARTER_SKUS`` below so the per-bid SKU policy is
+    # greppable from the CLI side. Opt in explicitly via
+    # ``--sources hd_pro,lowes_pro`` or ``--phase c``.
+    "hd_pro": HomeDepotProSource,
+    "lowes_pro": LowesProSource,
 }
 
 # Source bundles by phase, used by the `--phase` shortcut flag.
@@ -83,7 +96,7 @@ PHASE_SOURCES: dict[str, list[str]] = {
     "b": ["davis_bacon"],
     "c": [
         "enr_cci", "agc_cci", "turner_cci", "nahb_construction_cost",
-        "tx_smartbuy_awards",
+        "tx_smartbuy_awards", "hd_pro", "lowes_pro",
     ],
 }
 
@@ -92,6 +105,61 @@ PHASE_SOURCES: dict[str, list[str]] = {
 # ``TXSmartBuyAwardsSource.DEFAULT_RECENT_LIMIT`` per the brief; kept
 # here as a module constant so it is greppable from the CLI side.
 TX_SMARTBUY_REFRESH_LIMIT = 50
+
+# Starter SKU lists for the HD Pro / Lowe's Pro catalog scrapers.
+# Curated 2026-05-28 from the most-frequently-quoted line items across
+# recent BPC bids. These are deliberately broad — door hardware, paint,
+# drywall screws, framing lumber, plywood, fasteners, joint compound,
+# gypsum board, roofing felt — to give a Phase C closure a meaningful
+# spot-check surface area without committing to per-bid SKU curation
+# (which is the right long-term home for these lists).
+#
+# Where future SKU lists SHOULD be sourced from
+# ---------------------------------------------
+# - **Per-bid CSV** under ``bids/<slug>/catalog-skus.csv`` — the
+#   estimator drops a printed Pro-counter quote into the bid workspace
+#   and the refresh runner picks the bid-specific list when running
+#   inside the bid context. NOT YET IMPLEMENTED — `--bid <slug>` flag
+#   is the natural extension.
+# - **Per-firm config** under ``firm/catalog/hd_pro_skus.csv`` and
+#   ``firm/catalog/lowes_pro_skus.csv`` — a curated list of "always
+#   refresh these" SKUs that the firm tracks across all bids. NOT YET
+#   IMPLEMENTED.
+# - **Per-CSI mapping** under ``firm/catalog/csi_to_skus.json`` — links
+#   each CSI section (e.g. ``08 71 00`` Door Hardware) to a list of
+#   exemplar SKUs, so a bid takeoff that touches a CSI section
+#   automatically pulls fresh prices for the exemplars. NOT YET
+#   IMPLEMENTED — depends on the per-CSI keyword catalog in
+#   ``core/pricing/escalation.py`` being externalized.
+#
+# Until those are built, this module-level constant is the source of
+# truth and is overridable by passing an explicit list via
+# ``HomeDepotProSource(sku_list=[...])`` / ``LowesProSource(...)``.
+HD_PRO_STARTER_SKUS: list[str] = [
+    "100120362",   # 3/4 in. PVC pipe — plumbing rough-in (CSI 22 11)
+    "100133104",   # 2x4x8 SPF framing lumber — rough carpentry (CSI 06 10)
+    "202079922",   # drywall screws, 1 lb box — fasteners (CSI 06 09)
+    "202519319",   # 1/2 in. sheathing plywood — sheathing (CSI 06 16)
+    "203083697",   # interior latex paint, 1 gal — paints (CSI 09 91)
+    "100195918",   # passage door knob — door hardware (CSI 08 71)
+    "203070515",   # exterior door hinge — door hardware (CSI 08 71)
+    "100129040",   # 5 gal joint compound — gypsum board finish (CSI 09 29)
+    "200032100",   # 4x8 gypsum board — gypsum board (CSI 09 29)
+    "100107516",   # 30 lb roofing felt — underlayment (CSI 07 31)
+]
+
+LOWES_PRO_STARTER_SKUS: list[str] = [
+    "1099113",   # 3/4 in. PVC pipe — plumbing rough-in (CSI 22 11)
+    "12533",     # 2x4x8 SPF framing lumber — rough carpentry (CSI 06 10)
+    "73268",     # drywall screws, 1 lb box — fasteners (CSI 06 09)
+    "12174",     # 1/2 in. sheathing plywood — sheathing (CSI 06 16)
+    "1003356",   # interior latex paint, 1 gal — paints (CSI 09 91)
+    "47546",     # passage door knob — door hardware (CSI 08 71)
+    "303116",    # exterior door hinge — door hardware (CSI 08 71)
+    "23005",     # 5 gal joint compound — gypsum board finish (CSI 09 29)
+    "10243",     # 4x8 gypsum board — gypsum board (CSI 09 29)
+    "12553",     # 30 lb roofing felt — underlayment (CSI 07 31)
+]
 
 
 def _parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
@@ -115,7 +183,8 @@ def _parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
         help="Shortcut for refreshing every source in a given phase "
              "bundle (a = BLS PPI/OEWS + FRED + EIA; b = Davis-Bacon; "
              "c = ENR/AGC/Turner CCI + NAHB cost-of-constructing-a-home "
-             "+ TX SmartBuy historical-awards). "
+             "+ TX SmartBuy historical-awards + HD Pro / Lowe's Pro "
+             "catalogs). "
              "Overrides --sources when given.",
     )
     p.add_argument(
@@ -165,7 +234,17 @@ def _run_source(
 ) -> tuple[int, int, str]:
     """Run one source. Returns (snapshots_written, errors, status_msg)."""
     cls = ALL_SOURCES[name]
-    src = cls()
+    # The HD Pro / Lowe's Pro catalog adapters take a starter SKU list
+    # at construction time; everyone else takes no kwargs. Keeping the
+    # construction site greppable here so the per-source policy is
+    # discoverable from the CLI entry point rather than buried inside
+    # the adapter module's DEFAULT_SKUS constant.
+    if name == "hd_pro":
+        src = cls(sku_list=HD_PRO_STARTER_SKUS)
+    elif name == "lowes_pro":
+        src = cls(sku_list=LOWES_PRO_STARTER_SKUS)
+    else:
+        src = cls()
     if not src.is_ready():
         missing = ",".join(src.missing_env())
         msg = f"[{name}] missing env: {missing} — skipped"
@@ -189,6 +268,13 @@ def _run_source(
             # scan finds the most-recent N awarded solicitations and
             # emits one snapshot per (solicitation, vendor) pair.
             snaps = src.fetch([], limit=TX_SMARTBUY_REFRESH_LIMIT)
+        elif name in ("hd_pro", "lowes_pro"):
+            # Catalog scrapers iterate the configured starter SKU list.
+            # Per-SKU HTTP errors and Akamai/CAPTCHA intercepts are
+            # swallowed inside ``fetch()`` and surface as "0 snapshots
+            # returned" + warnings in the per-SKU log lines, mirroring
+            # the structural fragility documented in the playbook.
+            snaps = src.fetch([])
         else:
             series = src.default_series()
             filters: dict[str, str] = {}

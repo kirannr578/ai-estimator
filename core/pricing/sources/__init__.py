@@ -13,7 +13,11 @@ Each module exports a `PricingSource` subclass. Public adapters today:
 - ``tx_smartbuy_awards`` (Phase C) — TX SmartBuy / ESBD historical-awards
                                        scraper (competitive intel: vendor,
                                        amount, NAICS, period per award)
-- ``hd_pro_catalog`` (Phase C, stub) — Pro-catalog scraper (public prices only)
+- ``hd_pro``        (Phase C) — Home Depot Pro catalog scraper (public
+                                  prices only; degrades to graceful empty
+                                  on Akamai / CAPTCHA blocks)
+- ``lowes_pro``     (Phase C) — Lowe's Pro catalog scraper (mirror of
+                                  ``hd_pro``; same anti-bot fragility)
 - ``enr_cci``       (Phase C) — ENR 20-City Construction Cost Index
 - ``agc_cci``       (Phase C) — AGC PPI-based Construction Cost Index
 - ``turner_cci``    (Phase C) — Turner Building Cost Index
