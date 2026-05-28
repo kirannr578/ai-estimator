@@ -36,10 +36,23 @@
 - **Office:** AFRC/PKO, 555 Robins Parkway, Suite 263, Robins AFB GA 31098
 - **Role:** AFRC-level ombudsman; per the RFQ p.7, *"Do not contact the ombudsman to request copies of the solicitation, verify offer due date, or clarify technical requirements. Such inquiries shall be directed to the contracting officer."*
 
+### Air Force-level ombudsman (escalation above AFRC, if AFRC cannot resolve)
+
+- **Role / office:** Associate Deputy Assistant Secretary (ADAS) (Contracting), SAF/AQC
+- **Address:** 1060 Air Force Pentagon, Washington DC 20330-1060
+- **Phone:** (571) 256-2395 · **Fax:** (571) 256-2431
+- **Source:** RFQ Section G p.7-8 (verbatim transcription from re-extraction 2026-05-27 21:30 CDT)
+
 ### WAWF Help Desk (post-award)
 
 - **Phone:** 866-618-5988
 - **Role:** Post-award invoice / payment-request submission troubleshooting.
+
+### RFI form routing — note on office-symbol inconsistency
+
+The RFI form template (Attachment 05, `Request For Information Form.pdf`) has a pre-populated **"TO (Contracting Officer): 301 CONF/PK"** header. This is the office symbol for the **301st Contracting Squadron** (CONF) at NAS JRB Fort Worth, which is **different from the issuing office on this SF 1449** (**301 LRS LGC** — 301st Logistics Readiness Squadron, Logistics Contracting flight). The RFI form appears to be a base-wide template inherited from the 301 CONF organization.
+
+**Practical implication for submission:** When using the RFI form for this RFQ, **address it to Lydia Carlton at 301 LRS/LGC** (the actual CO on this solicitation), not to 301 CONF/PK. The pre-printed header on the form is template inheritance, not a routing instruction.
 
 ## 2. Base access — NAS JRB Fort Worth
 

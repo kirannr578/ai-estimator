@@ -15,7 +15,9 @@ Status legend: `[have]` in hand · `[need]` blocking · `[soft]` nice-to-have bu
 - [have] **`AF3000 Material Submission Form.pdf`** — Post-award submittal form. Unblocks: `proposal/02-technical-acceptability.md` (submittal-cycle reference).
 - [have] **`Request For Information Form.pdf`** — RFI template. Unblocks: `proposal/11-rfi-cover-letter.md`.
 
-All 6 files are in `C:\Users\rnuduru1\OneDrive\Blueprint Constructs\Landmark\05072026\B1710+Office+Refurbish.zip` (957 KB ZIP, downloaded 2026-05-27 13:22 CDT). See `source-files-manifest.md`.
+All 6 files are in `C:\Users\rnuduru1\OneDrive\Blueprint Constructs\Landmark\05072026\B1710+Office+Refurbish.zip` (957 KB ZIP, downloaded 2026-05-27 13:22 CDT). See `source-files-manifest.md` for the re-extraction confirmation (2026-05-27 21:30 CDT) and per-file extraction status.
+
+> **Per-trade Davis-Bacon rates** from Attachment 03 (WD TX20260270) remain a known `[AWAITING]` — the PDF uses Type3 fonts with a custom CMap that pymupdf cannot decode and OCR (Tesseract) is not installed on the workstation. The trade-rate **ranges** documented in `10-prevailing-wages.md` are sufficient for the Gate-4 price build. Exact per-trade Base + Fringe rates must be transcribed by eye from the PDF (or pulled from `sam.gov/wage-determinations` by WD number) before certified payroll begins post-NTP — see `10-prevailing-wages.md` §B for the unblock procedure.
 
 ---
 

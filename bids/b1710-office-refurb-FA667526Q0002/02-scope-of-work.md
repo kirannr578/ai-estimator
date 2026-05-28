@@ -164,7 +164,7 @@ These reference publications are available via `http://www.e-publishing.af.mil/`
 
 - Contractor submits detailed list of **manufacturer's data** for all CFM to CO for approval.
 - CO may request drawings + descriptions indicating quality + fitness for intended application.
-- **AF IMT 3000 (Material Submission Form)** is the form template (Attachment 04).
+- **AF IMT 3000 (Material Submission Form)** is the form template (Attachment 04). Form identity per the source PDF: **AF IMT 3000, 20030901, V1**; OMB approval **9000-0062** (note: the OMB-approval expiration printed on the form is May 31, 2005 — the Air Force continues to use this legacy form; not a defect on the offeror's part). Form is prepared in **4 copies, signed**, and provided to the CO with attachments per the form's instructions §2. Submittals requiring priority handling are submitted separately and marked across the face of the form (§4). The form is **not valid until signed by the Contracting Officer** (§5).
 
 ### Submittals — government selection
 

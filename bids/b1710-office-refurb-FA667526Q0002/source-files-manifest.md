@@ -42,6 +42,21 @@ During scaffold creation on 2026-05-27, the 6 source files were text-extracted t
 
 The extracted text files are referenced inline in the scaffold (e.g. SOW §3.1.2 quoted in `02-scope-of-work.md`) so the user can verify any quote against the source PDF.
 
+## Re-extraction confirmation — 2026-05-27 21:30 CDT
+
+Re-extracted the zip into `%TEMP%\b1710_extract\` and re-parsed all 6 source files with `pymupdf` 1.27.2.3 (PDFs) and `xml.etree` on `word/document.xml` (DOCX). Results:
+
+| File | Extraction | Note |
+|---|---|---|
+| `Solicitation - FA667526Q0002.pdf` | ✓ clean (68,773 chars / 25 pages) | All Section A–M plain-text extractable |
+| `SOW for B1710 Office Refurbish.docx` | ✓ clean (10,550 chars) | DOCX → XML walk |
+| `B1710 Floorplan for Refresh Project.pdf` | ⚠ partial (850 chars) | Vector floor-plan; room numbers + C/B/P labels extract, geometry does not |
+| `Construction WD Building TX20260270 02Jan2026.pdf` | ✗ encoding-locked | Type3 font with custom CMap; OCR not available (no Tesseract on Windows). WD trade rates remain `[AWAITING SOURCE-DOC PULL]` in `10-prevailing-wages.md` |
+| `AF3000 Material Submission Form.pdf` | ✓ clean (4,321 chars) | Form template; metadata (AF IMT 3000, 20030901, V1; OMB 9000-0062) folded into `02-scope-of-work.md` §7 |
+| `Request For Information Form.pdf` | ✓ clean (1,528 chars) | Pre-routes "TO (Contracting Officer): 301 CONF/PK" — note added to `08-contacts.md` |
+
+No new source-doc surprises. All previously-captured facts in the workspace markdown cross-check against the re-extracted text. The `[AWAITING …]` markers remaining in the workspace are all legitimately pending (per-trade DBA rates, price builds, firm-side documents) and not addressable from the source zip alone.
+
 ## Files NOT in the package
 
 The following are typically present in larger federal construction RFQs but are **absent** from this 25-page SAP RFQ — flagged here so the user doesn't search for them:
