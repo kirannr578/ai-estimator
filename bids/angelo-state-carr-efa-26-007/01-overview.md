@@ -147,3 +147,21 @@ Known v3 extraction quirks worth noting:
 - The HSP commitment in the sample CSA is **30%** (boilerplate placeholder) whereas the statewide special-trade-construction HUB goal is **21.1%**. The 30% in the sample is a TTUS preference, not the regulatory floor. See `05-hsp-plan.md` § A for the resolution.
 - The v3 extract did not pull the submission address, evaluation weights, page-count limits, or pre-response meeting mandatory-vs-not — backlog items for the NOP/RFCSP extractor.
 - The "5 wood-framing items" in `estimate.json.line_items` came from `A1` (a stray drawing in the same inbox folder, NOT a Carr EFA drawing). They are flagged `suppressed=True` and contribute $0 to the subtotal. Ignore for this bid.
+
+---
+
+## 9. Refresh log
+
+### 2026-05-28 — Re-verification pass (no new ESBD content)
+
+A coordinator-initiated incremental refresh was attempted today (T-8 days to the 2026-06-05 proposal deadline) targeting the same "5 new ESBD attachments" already pulled on 2026-05-23. Findings:
+
+- **All 5 attachments (drawings 3.27.26, Drawings Add 1 of 2026-04-15, Drawings Add 2 of 2026-05-07, 796-page Project Manual, Addendum #1 with sign-in sheet) were already pulled, read, and reflected across the workspace on 2026-05-23.** See § 6 above and `source-files-manifest.md` § A files 8–12.
+- **Local PDFs no longer on disk.** The `inbox/opportunities/attachments/2026-05-21/` tree is empty / removed. The `inbox/` path is gitignored and was not re-hydrated on this machine. No copies were found under `C:\Users\rnuduru1\OneDrive\Blueprint Constructs\Landmark\` either. Any further drawing-level takeoff work (sheet-by-sheet door counts, LF measurements on A-401, etc.) requires re-downloading the 5 PDFs from the ESBD posting first.
+- **Live ESBD re-check blocked.** `WebFetch https://www.txsmartbuy.gov/esbd/26-007RFCSP` returned `403 Forbidden`. Unable to confirm via this channel whether a 4th drawings addendum or a Q&A document has posted since 2026-05-23. Recommend a manual browser check of the posting at next sign-in (also verify daily through 2026-06-04 per `03-missing-documents.md` item #20).
+- **R-01 status:** ✅ already CLOSED on 2026-05-23. The sign-in sheet observations (6 outside attendees, "PAGE 1 OF 2" note) are captured in `07-risk-register.md` § R-01. No new evidence to change that resolution today. Outstanding asks against Hannah Bignall (page 2 of sign-in sheet, Q&A transcript) remain open per § R-01's "What we didn't get from the meeting" bullets.
+- **Primary procurement POC:** ✅ already Hannah Bignall per `contacts.md` § A as of the 2026-05-23 refresh. Samuel Guevara retained as secondary on procurement / primary on site-walk & RFI workflows. No change today.
+- **Missing-documents list:** ✅ items 1–6 already crossed off on 2026-05-23. Items 1A (site walk) + 1B (Sec 00 31 00 hazmat survey) + 1C (addenda acknowledgment) remain the live top-priority gaps; surface to Hannah Bignall in the next outreach email per `contacts.md` Draft #1.
+- **Takeoff template:** ✅ already refreshed against the AF100 finish schedule (3,115 SF verified) + project manual CSI sections on 2026-05-23 — see `takeoff-template.json` `_meta.refresh_history`. A deterministic re-pass with the actual PDFs in hand is deferred until the inbox is rehydrated (no LLM extraction this round per coordinator brief; no fresh drawing reads available today).
+
+**Net result of today's pass:** zero substantive content changes — only this dated log entry. Workspace is current as of 2026-05-23 and remains submission-ready against the proposal-side checklist; the open items remain process / site-walk / clarification asks tracked against Hannah Bignall, not document pulls.
