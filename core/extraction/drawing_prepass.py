@@ -33,7 +33,7 @@ import logging
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Iterable
+from typing import Any, Iterable
 
 import fitz  # PyMuPDF
 
@@ -89,6 +89,11 @@ class DrawingPrepassResult:
     schedules: list[Schedule] = field(default_factory=list)
     quality_issues: list[str] = field(default_factory=list)
     confidence: float = 0.0                # 0..1
+    # T1 — typed door-schedule pre-pass (populated alongside `schedules`
+    # whenever a door schedule was detected on this page; None otherwise).
+    # Typed `Any` here to avoid a circular import; concretely a
+    # ``core.extraction.door_schedule.DoorScheduleResult`` or ``None``.
+    door_schedule: Any = None
 
 
 # ---------------------------------------------------------------------------
@@ -469,6 +474,32 @@ def _page_text(page: "fitz.Page") -> str:
     return page.get_text("text") or ""
 
 
+def _maybe_extract_door_schedule(page: "fitz.Page", page_index: int,
+                                    schedules: list[Schedule]):
+    """T1 hook: run the door-schedule extractor when this page may have one.
+
+    Imported lazily so the door-schedule module is optional at load time —
+    keeps the existing prepass independent of T1's extraction path.
+    Returns a ``DoorScheduleResult`` dataclass or ``None``.
+    """
+    has_door_schedule = any(s.kind == "door" for s in schedules)
+    text_has_phrase = "DOOR SCHEDULE" in (page.get_text("text") or "").upper()
+    if not (has_door_schedule or text_has_phrase):
+        return None
+    try:
+        from .door_schedule import extract_door_schedule_from_page
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.debug("door_schedule import failed: %s", exc)
+        return None
+    try:
+        result = extract_door_schedule_from_page(page, page_index)
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.warning("door_schedule extraction failed on page %d: %s",
+                       page_index, exc)
+        return None
+    return result if result.doors else None
+
+
 def prepass_drawing_page(pdf_path: Path, page_index: int) -> DrawingPrepassResult:
     """Run the deterministic pre-pass on a single page of a drawing PDF."""
     pdf_path = Path(pdf_path)
@@ -483,6 +514,7 @@ def prepass_drawing_page(pdf_path: Path, page_index: int) -> DrawingPrepassResul
         title_block, quality_issues = _extract_title_block(text)
         dimensions = _extract_dimensions(text)
         schedules = _extract_schedules(page, page_index)
+        door_schedule = _maybe_extract_door_schedule(page, page_index, schedules)
 
     if not text.strip():
         quality_issues.append("page has no embedded text (likely scanned)")
@@ -493,6 +525,7 @@ def prepass_drawing_page(pdf_path: Path, page_index: int) -> DrawingPrepassResul
         schedules=schedules,
         quality_issues=quality_issues,
         confidence=0.0,
+        door_schedule=door_schedule,
     )
     result.confidence = round(_score(result), 4)
     return result
@@ -509,6 +542,7 @@ def prepass_drawing_pdf(pdf_path: Path) -> list[DrawingPrepassResult]:
             title_block, quality_issues = _extract_title_block(text)
             dimensions = _extract_dimensions(text)
             schedules = _extract_schedules(page, i)
+            door_schedule = _maybe_extract_door_schedule(page, i, schedules)
             if not text.strip():
                 quality_issues.append("page has no embedded text (likely scanned)")
 
@@ -518,6 +552,7 @@ def prepass_drawing_pdf(pdf_path: Path) -> list[DrawingPrepassResult]:
                 schedules=schedules,
                 quality_issues=quality_issues,
                 confidence=0.0,
+                door_schedule=door_schedule,
             )
             r.confidence = round(_score(r), 4)
             results.append(r)
@@ -548,6 +583,10 @@ def to_schema(result: DrawingPrepassResult):
         )
         for s in result.schedules
     ]
+    door_schedule = None
+    if result.door_schedule is not None:
+        from .door_schedule import to_schema as door_to_schema
+        door_schedule = door_to_schema(result.door_schedule)
     return S.DrawingPrepassResult(
         title_block=S.TitleBlockData(
             project_name=tb.project_name,
@@ -569,6 +608,7 @@ def to_schema(result: DrawingPrepassResult):
         schedules=schedules,
         quality_issues=list(result.quality_issues),
         confidence=result.confidence,
+        door_schedule=door_schedule,
     )
 
 

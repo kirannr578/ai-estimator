@@ -339,6 +339,46 @@ class Schedule(BaseModel):
     source_page: int = 0
 
 
+class DoorRecord(BaseModel):
+    """One door extracted from a door-schedule table (Phase T1).
+
+    Door schedules are the most schema-stable tabular artefact in any
+    drawing set, so this record carries door-specific fields directly
+    rather than the loose ``columns: dict[str, str]`` of generic
+    :class:`ScheduleRow`. Raw cell text is preserved alongside parsed
+    inches so a downstream auditor can confirm a unit conversion.
+    """
+
+    mark: str                                  # "101A", "D-101", ...
+    type: Optional[str] = None                 # "HM", "WD", "ALUM", ...
+    width_in: Optional[float] = None
+    height_in: Optional[float] = None
+    thickness_in: Optional[float] = None
+    width_raw: Optional[str] = None
+    height_raw: Optional[str] = None
+    material: Optional[str] = None
+    frame: Optional[str] = None
+    hardware_set: Optional[str] = None
+    fire_rating: Optional[str] = None
+    remarks: Optional[str] = None
+    source_page: int = 0
+
+
+class DoorScheduleResult(BaseModel):
+    """Aggregate door-schedule pre-pass result for a drawing page (Phase T1).
+
+    Attached alongside (not replacing) the generic :class:`Schedule` rows
+    on :class:`DrawingPrepassResult` so the existing prepass surface keeps
+    working while downstream takeoff (Phase T2) consumes the richer typed
+    records.
+    """
+
+    pages: list[int] = Field(default_factory=list)
+    doors: list[DoorRecord] = Field(default_factory=list)
+    confidence: float = 0.0                    # 0..1
+    raw_table_text: str = ""                   # joined-headers debug string
+
+
 class DrawingPrepassResult(BaseModel):
     """Snapshot of everything the deterministic pre-pass could pull off
     a single drawing page without invoking the vision LLM."""
@@ -348,6 +388,7 @@ class DrawingPrepassResult(BaseModel):
     schedules: list[Schedule] = Field(default_factory=list)
     quality_issues: list[str] = Field(default_factory=list)
     confidence: float = 0.0                    # 0..1
+    door_schedule: Optional[DoorScheduleResult] = None  # T1 typed door records
 
 
 class SheetExtraction(BaseModel):

@@ -129,6 +129,8 @@ Six phases. Phases T1–T5 follow the suggested ordering from the brief, with on
 
 ### Phase T1 — Specialized schedule extraction
 
+**Status:** IN PROGRESS — door-schedule slice landed (deterministic pre-pass only; downstream `TakeoffItem` synthesis is deferred to Phase T2).
+
 **1-line goal:** Convert F3's already-detected schedule tables into typed `TakeoffItem`s, with per-schedule-kind fields and spec cross-reference, deterministically.
 
 **Deliverables:**
@@ -172,6 +174,26 @@ Six phases. Phases T1–T5 follow the suggested ordering from the brief, with on
 **No-go signal:**
 - `find_tables()` detects < 50% of the door schedules in the gold set when manually inspected. That would mean the deterministic table detection isn't reliable enough to specialize, and we'd need to back off to LLM-augmented schedule extraction (Phase T2 would absorb the work).
 - Hand-count accuracy on the gold set lands below 80%. Indicates the column-mapping logic needs more office-standard variants than is tractable; revisit with an LLM-fallback for schedule rows the deterministic path can't classify.
+
+**Implementation notes (door-schedule slice, this commit):**
+- **New typed result** rather than re-purposing the loose `Schedule`/`ScheduleRow` pair. `DoorScheduleResult` + `DoorRecord` (Pydantic in `core/schemas.py`, mirror dataclasses in `core/extraction/door_schedule.py`) carry door-specific fields (`width_in`, `height_in`, `thickness_in`, `hardware_set`, `fire_rating`, `frame`, ...) directly, alongside raw cell text for audit. `DrawingPrepassResult.door_schedule` is the new optional attachment on the existing pre-pass result; the generic `schedules` list is unchanged.
+- **Detection** is two-signal: literal `"DOOR SCHEDULE"` text on the page OR a `find_tables()` header row that has a tag column (MARK/NO/NUMBER/...) plus at least one door-specific column (FRAME/HARDWARE/HDW/RATING/FIRE) plus at least one dimensional column. The door-specific requirement disambiguates from neighbouring window schedules that share `MARK/TYPE/WIDTH/HEIGHT` headers.
+- **Dimension parsing** in `parse_dimension()` handles `3'0"`, `3'-0"`, `3' - 0 1/2"`, `36"`, `3 ft 0 in`, and bare `3'`; combined `SIZE` cells like `3'-0" x 7'-0"` are split via `_parse_size_cell`. Plain bare integers (no unit) intentionally return `None` because they're too ambiguous in a schedule context.
+- **Fallback path**: if `find_tables()` yields no door table, a y-coordinate clustering over `page.get_text("dict")` spans rebuilds a header + data-rows shape. Kept conservative (requires a header row that matches the same heuristic) to avoid false positives.
+- **Integration** is via `_maybe_extract_door_schedule()` inside `drawing_prepass.py`, called from both `prepass_drawing_page()` and `prepass_drawing_pdf()`. No new flag, no new dependency, no change to `extractors._build_from_prepass()` — the typed result rides along on the existing prepass surface. Downstream `core/takeoff.py` consumption is deferred to a subsequent T1 follow-up / T2 slice as called out in the brief.
+- **Tests** in `tests/test_door_schedule_extraction.py` build synthetic 1-page PDFs with real grid tables (`fitz.draw_line` + `insert_text`) so `find_tables()` exercises the same code path as the production drawing sets — no binary fixtures shipped.
+
+**Known limitations of this slice:**
+- Multi-column door schedules (e.g. one office's layout that wraps the schedule into two side-by-side blocks on a single sheet) collapse into one row each; `find_tables()` doesn't reconstruct the second block separately.
+- Scanned PDFs still no-op here (no vector text → `find_tables()` returns nothing → fallback yields no spans). Real fix lives in Phase T7 (OCR).
+- Door↔room association (the `room_from` / `room_to` columns called out in Phase T5's deliverables) is not yet extracted; only `mark`, type, dimensions, frame, hardware, rating, remarks are pulled. Adding it is a small follow-up.
+- `DoorRecord` does not yet flow into `TakeoffItem` — that's the explicit T2 work item.
+
+**Suggested next slices** (good candidates for the next T1 follow-up):
+- Window schedule (same pattern, swap `FRAME/HARDWARE` for `GLAZING/OPERATION`).
+- Room-finish matrix (joins room schedule × finish schedule by `room_number`; pairs naturally with Phase T5's per-room finish takeoff).
+- Plumbing fixture schedule (typically on `P-001`; columns: MARK / DESCRIPTION / MFR / MODEL / HW / CW / WASTE / VENT).
+- Panel schedule and equipment / RTU schedules (Division 26 / 23) — same dispatch pattern as door, different keyword set.
 
 ---
 
