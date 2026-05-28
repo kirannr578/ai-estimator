@@ -45,6 +45,8 @@ from typing import Iterable
 
 import fitz  # PyMuPDF
 
+from .door_schedule import _header_index_excluding
+
 logger = logging.getLogger(__name__)
 
 
@@ -315,15 +317,54 @@ def _cell(row: list[str], idx: int | None) -> str | None:
 
 def _records_from_table(headers: list[str], data_rows: list[list[str]],
                           page_index: int) -> list[FinishRecord]:
-    """Convert one table's rows to :class:`FinishRecord` instances."""
+    """Convert one table's rows to :class:`FinishRecord` instances.
+
+    Phase T5.1 propagation: two known substring-collision classes are
+    fixed here using the :func:`_header_index_excluding` helper Worker
+    U introduced in :mod:`core.extraction.door_schedule`:
+
+    1. ``CEILING HEIGHT`` (or ``CLG HT``) carries both the substring
+       ``CEILING`` (a candidate of ``_HEADERS["ceiling"]``) and the
+       substring ``HEIGHT`` (a candidate of
+       ``_HEADERS["ceiling_height"]``). Without the fix the
+       substring-tolerant matcher landed ``ceiling`` on the
+       ceiling-height column whenever it appeared first in the row.
+       Fix: pin ``ceiling_height`` first; re-pick ``ceiling`` with the
+       ceiling-height column excluded.
+
+    2. ``ROOM NAME`` ordered BEFORE ``ROOM NUMBER`` used to land
+       ``room_number`` on the ``ROOM NAME`` column because the
+       substring ``ROOM`` (a candidate of ``_HEADERS["room_number"]``)
+       matched both. Fix: pin ``room_name`` first; re-pick
+       ``room_number`` with the room-name column excluded.
+    """
+    # 1. Pin the columns whose names provide their own discriminator
+    # word (``NAME``, ``HEIGHT``/``HT``) — these are the ones that
+    # could later "steal" their column via substring match by the
+    # less-specific candidates.
+    room_name_idx = _header_index(headers, _HEADERS["room_name"])
+    ceiling_height_idx = _header_index(headers, _HEADERS["ceiling_height"])
+
+    # 2. Pick everything else with the collision-prone columns excluded
+    # so the room/ceiling candidates don't accidentally land on the
+    # name/height columns they were already pinned to.
+    room_number_idx = _header_index_excluding(
+        headers, _HEADERS["room_number"],
+        exclude={i for i in (room_name_idx, ceiling_height_idx) if i is not None},
+    )
+    ceiling_idx = _header_index_excluding(
+        headers, _HEADERS["ceiling"],
+        exclude={i for i in (ceiling_height_idx,) if i is not None},
+    )
+
     idx = {
-        "room_number": _header_index(headers, _HEADERS["room_number"]),
-        "room_name":   _header_index(headers, _HEADERS["room_name"]),
+        "room_number": room_number_idx,
+        "room_name":   room_name_idx,
         "floor":       _header_index(headers, _HEADERS["floor"]),
         "base":        _header_index(headers, _HEADERS["base"]),
         "wall":        _header_index(headers, _HEADERS["wall"]),
-        "ceiling":     _header_index(headers, _HEADERS["ceiling"]),
-        "ceiling_height": _header_index(headers, _HEADERS["ceiling_height"]),
+        "ceiling":     ceiling_idx,
+        "ceiling_height": ceiling_height_idx,
         "remarks":     _header_index(headers, _HEADERS["remarks"]),
     }
     compass = _wall_compass_indices(headers)

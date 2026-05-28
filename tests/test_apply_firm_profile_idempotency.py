@@ -209,3 +209,182 @@ def test_force_flag_refills_optional_slots(apply_module) -> None:
         f"--force did not refill Optional #5 with picks[1]={picks[1]!r}: "
         f"{opt5_body[:400]!r}"
     )
+
+
+# ---------------------------------------------------------------------------
+# Pair-12 cleanup: additional regression tests covering edge cases of the
+# idempotency guard that the original 3 tests don't exercise.
+# ---------------------------------------------------------------------------
+
+
+def test_five_picks_fill_all_five_slots_then_rerun_is_noop(
+    apply_module, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """When the workspace's pick list has 5 entries (vs. the 3 we ship by
+    default in `firm-profile.json`), slots #1-#5 all fill on the first
+    run and a second run is a no-op.
+
+    The selection dict is monkeypatched onto the loaded module rather
+    than touching the live `firm-profile.json`, so the test is hermetic.
+    """
+    mod, workspace = apply_module
+    pp_path = workspace / "proposal" / "04-past-performance.md"
+    pp_path.write_text(_empty_past_perf_template(), encoding="utf-8")
+
+    extra_picks = [
+        "Hindu Temple of Southlake",
+        "Holiday Inn (Hall Park)",
+        "250-500+ single-family-home portfolio",
+        "Lavon RV Park",
+        "Test Project X (synthetic)",
+    ]
+    monkeypatch.setitem(
+        mod.SELECTION, workspace.name,
+        {"rationale": "test", "picks": extra_picks},
+    )
+    monkeypatch.setitem(
+        mod.PAST_PROJECT_BLURBS,
+        "Test Project X (synthetic)",
+        "**Test Project X (synthetic)** \u2014 synthesised for the "
+        "5-picks regression test; never appears in production picks.",
+    )
+
+    result = mod.process_file(pp_path, workspace.name)
+    assert result["changed"] is True
+    rendered = pp_path.read_text(encoding="utf-8")
+
+    for i, project in enumerate(extra_picks, start=1):
+        marker = f"Project Reference #{i} {EM_DASH} {project}"
+        assert marker in rendered, (
+            f"slot #{i} did not get pick {project!r}; first 2k:\n"
+            f"{rendered[:2000]}"
+        )
+
+    rerun_snapshot = rendered
+    rerun_result = mod.process_file(pp_path, workspace.name)
+    rerun_rendered = pp_path.read_text(encoding="utf-8")
+    assert rerun_rendered == rerun_snapshot, (
+        "second run on a fully-filled doc must be a no-op."
+    )
+    assert rerun_result["changed"] is False
+
+
+def test_pick_list_evolves_between_runs_no_duplicates(
+    apply_module, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """When a slot-1-3 default is removed AND a new pick is appended
+    between two runs, the second run must:
+
+    1. Leave the already-filled primary slots untouched (they reference
+       projects that are still on the live `picks` list).
+    2. NOT re-fill optional slots #4 / #5 with picks that are already
+       on the doc (the idempotency guard).
+    3. Only newly-introduced picks land in still-open `[USER TO FILL]`
+       optional slots.
+    """
+    mod, workspace = apply_module
+    pp_path = workspace / "proposal" / "04-past-performance.md"
+    pp_path.write_text(_empty_past_perf_template(), encoding="utf-8")
+
+    initial_picks = [
+        "Hindu Temple of Southlake",
+        "Holiday Inn (Hall Park)",
+        "250-500+ single-family-home portfolio",
+    ]
+    monkeypatch.setitem(
+        mod.SELECTION, workspace.name,
+        {"rationale": "test", "picks": list(initial_picks)},
+    )
+    mod.process_file(pp_path, workspace.name)
+    after_first = pp_path.read_text(encoding="utf-8")
+    for project in initial_picks:
+        assert project in after_first
+
+    evolved_picks = [
+        "Hindu Temple of Southlake",
+        "250-500+ single-family-home portfolio",
+        "Lavon RV Park",
+        "Test Project Y (synthetic)",
+    ]
+    monkeypatch.setitem(
+        mod.SELECTION, workspace.name,
+        {"rationale": "test", "picks": list(evolved_picks)},
+    )
+    monkeypatch.setitem(
+        mod.PAST_PROJECT_BLURBS,
+        "Test Project Y (synthetic)",
+        "**Test Project Y (synthetic)** \u2014 synthesised for the "
+        "evolved-picks regression test.",
+    )
+
+    mod.process_file(pp_path, workspace.name)
+    after_second = pp_path.read_text(encoding="utf-8")
+
+    primary_block = after_second.split(
+        "## Optional Project Reference #4", 1
+    )[0]
+    for project in initial_picks:
+        assert primary_block.count(
+            f"Project Reference #{1 if project == initial_picks[0] else 2 if project == initial_picks[1] else 3} {EM_DASH} {project}"
+        ) >= 1, (
+            f"primary slot for {project!r} was disturbed by the second "
+            f"run; primary block tail:\n{primary_block[-1500:]}"
+        )
+
+    optional_block = after_second.split(
+        "## Optional Project Reference #4", 1
+    )[1]
+    assert "Hindu Temple of Southlake" not in optional_block.split(
+        "## Optional Project Reference #5", 1
+    )[0], (
+        "pick already on the document leaked into Optional #4 on the "
+        "evolved-picks rerun."
+    )
+    assert "Lavon RV Park" in optional_block, (
+        "newly-added pick 'Lavon RV Park' did not land in any optional "
+        "slot on the evolved-picks rerun."
+    )
+
+
+def test_already_filled_doc_skips_picks_that_appear_in_blurb_body(
+    apply_module,
+) -> None:
+    """Defense-in-depth: if a pick name appears verbatim in the body
+    of an already-filled section header (the blurb), the idempotency
+    guard must recognise it as already-present and skip re-filling
+    that pick into a later optional slot \u2014 even when the prior fill
+    came from a different code path (e.g. a manual paste by the user).
+
+    This pins the `_pick_already_present` substring scan: it sees the
+    pick name anywhere in the document outside the picks-banner block,
+    not just on the header line itself.
+    """
+    mod, workspace = apply_module
+    pp_path = workspace / "proposal" / "04-past-performance.md"
+
+    picks = mod.picks_for(workspace.name)
+    assert picks, "fixture workspace must have non-empty picks"
+
+    template = _empty_past_perf_template()
+    template = template.replace(
+        "## Project Reference #1 \u2014 `[USER TO FILL: project name]`\n"
+        "\n"
+        "`[USER TO FILL: full template if 1st project surfaced]`",
+        f"## Project Reference #1 \u2014 {picks[0]}\n"
+        f"\n"
+        f"User-pasted blurb describing **{picks[0]}** with relevant "
+        f"context already in place.",
+    )
+    pp_path.write_text(template, encoding="utf-8")
+
+    mod.process_file(pp_path, workspace.name)
+    rendered = pp_path.read_text(encoding="utf-8")
+
+    optional_4 = rendered.split(
+        "## Optional Project Reference #4", 1
+    )[1].split("## ", 1)[0]
+    assert picks[0] not in optional_4, (
+        f"pick {picks[0]!r} (already in body of Reference #1 from a "
+        f"manual paste) leaked into Optional #4 \u2014 the idempotency "
+        f"guard's substring scan should have caught it."
+    )

@@ -626,3 +626,95 @@ def test_merge_room_schedules_accepts_pydantic_inputs() -> None:
     merged = merge_room_schedules([a])
     assert len(merged.rooms) == 1
     assert merged.rooms[0].area_sf == 180.0
+
+
+# ---------------------------------------------------------------------------
+# 7. Header-index substring-collision regressions (Phase T5.1 propagation)
+#
+# Same class of bug Worker U fixed in `door_schedule.py` via the
+# `_header_index_excluding()` helper. The substring-tolerant
+# `_header_index()` matcher can grab the wrong column when ``ROOM`` (a
+# `room_number` candidate) is a substring of ``ROOM NAME`` (the room_name
+# column). Without the exclude-aware fix, both fields land on the same
+# column.
+# ---------------------------------------------------------------------------
+
+
+def test_room_schedule_room_number_does_not_collide_with_room_name(
+    tmp_path: Path,
+) -> None:
+    """Regression: when ``ROOM NAME`` is published BEFORE the room-number
+    column the substring ``ROOM`` candidate used to land
+    ``room_number`` on the ROOM NAME column."""
+    pdf = _build_pdf(
+        tmp_path,
+        title_lines=["ROOM SCHEDULE"],
+        table=[
+            ["ROOM NAME", "ROOM NO", "AREA",   "HEIGHT"],
+            ["Office",    "101",     "180 SF", "9'-0\""],
+            ["Lobby",     "102",     "320 SF", "10'-0\""],
+        ],
+        name="room_name_number_swap.pdf",
+    )
+    result = extract_room_schedule(pdf, 0)
+    by_num = {r.room_number: r for r in result.rooms}
+    assert set(by_num) == {"101", "102"}, (
+        f"room_number must come from ROOM NO column; got "
+        f"{[r.room_number for r in result.rooms]!r}."
+    )
+    assert by_num["101"].room_name == "Office"
+    assert by_num["102"].room_name == "Lobby"
+    assert by_num["101"].area_sf == pytest.approx(180.0)
+    assert by_num["102"].area_sf == pytest.approx(320.0)
+
+
+def test_room_schedule_room_number_label_room_number_header(
+    tmp_path: Path,
+) -> None:
+    """Regression: header literally labelled ``ROOM NUMBER`` (rather
+    than the shorter ``ROOM #`` / ``ROOM NO``). The ``NUMBER``
+    candidate must match this column, and the ``ROOM`` candidate
+    must NOT also drag ``room_name`` onto it.
+    """
+    pdf = _build_pdf(
+        tmp_path,
+        title_lines=["ROOM SCHEDULE"],
+        table=[
+            ["ROOM NUMBER", "ROOM NAME", "AREA",   "HEIGHT"],
+            ["101",         "Office",    "180 SF", "9'-0\""],
+        ],
+        name="room_number_label.pdf",
+    )
+    result = extract_room_schedule(pdf, 0)
+    assert len(result.rooms) == 1
+    r = result.rooms[0]
+    assert r.room_number == "101"
+    assert r.room_name == "Office"
+    assert r.area_sf == pytest.approx(180.0)
+
+
+def test_room_schedule_preserves_correct_columns_in_creative_order(
+    tmp_path: Path,
+) -> None:
+    """Regression: a creative header ordering that puts ``ROOM NAME``
+    in the FIRST column and the ``NUMBER`` column SECOND must not
+    cross-pollute area / height parsing either."""
+    pdf = _build_pdf(
+        tmp_path,
+        title_lines=["ROOM FINISH SCHEDULE"],
+        table=[
+            ["ROOM NAME", "ROOM NO", "AREA SF", "CLG HT"],
+            ["Conf Rm",   "201",     "240",     "9.5"],
+            ["Storage",   "B100",    "60",      "8.0"],
+        ],
+        name="creative_order.pdf",
+    )
+    result = extract_room_schedule(pdf, 0)
+    by_num = {r.room_number: r for r in result.rooms}
+    assert set(by_num) == {"201", "B100"}
+    assert by_num["201"].room_name == "Conf Rm"
+    assert by_num["B100"].room_name == "Storage"
+    assert by_num["201"].area_sf == pytest.approx(240.0)
+    assert by_num["B100"].area_sf == pytest.approx(60.0)
+    assert by_num["201"].ceiling_height_ft == pytest.approx(9.5)
+    assert by_num["B100"].ceiling_height_ft == pytest.approx(8.0)

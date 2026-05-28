@@ -86,19 +86,31 @@ Free-tier access posture (verified 2026-05-28)
   Parsing is regex over the rendered HTML, mirroring the ``hd_pro``,
   ``tx_smartbuy_awards`` and ``_cci_common`` parsers.
 
-Future-refactor note — shared catalog parser
---------------------------------------------
+Shared catalog parser (Pair-12 refactor)
+----------------------------------------
 
-The HTML-parsing helpers in this module are near-identical clones of
-their ``hd_pro`` counterparts because both retailers use the same
-``schema.org`` ``itemprop`` microdata vocabulary on their product
-detail pages. A future ``_catalog_common.py`` could DRY out the meta /
-itemprop / price / UoM helpers behind a single ``parse_product_page``
-entry point taking adapter_name + URL. **Intentionally NOT extracted
-in this slice** — both adapters ship as self-contained modules so the
-fragility surface and the adapter-specific anchor lists stay
-collocated with the per-retailer license / ToS docstring. Promote to
-shared helpers when a third catalog source is added.
+The HTML-parsing helpers used by this module — meta / itemprop / price
+/ UoM extraction + CAPTCHA detection + the composed
+``parse_product_page`` — live in
+:mod:`core.pricing.sources._catalog_common` and are shared with the
+matching ``hd_pro`` adapter. Both retailers use the same
+``schema.org`` ``itemprop`` microdata vocabulary and the same Akamai
+bot-manager interstitial markers, so a single low-level dict-returning
+parser does the work for both.
+
+This module keeps:
+
+- The per-retailer license / ToS docstring above (legal text, not
+  parsing).
+- ``_TITLE_SUFFIXES`` (Lowe's storefront branding to strip).
+- ``CAPTCHA_MARKERS`` (re-exported from the shared default for the
+  test surface; can diverge if Lowe's flips to a non-Akamai bot
+  manager).
+- ``DEFAULT_SKUS`` / ``DEFAULT_ZIP_CODE`` (per-retailer starter values).
+- ``product_url()`` (Lowe's-specific URL shape).
+- A thin ``parse_product_page()`` wrapper that calls the common parser
+  and wraps the returned dict into a ``PricingSnapshot`` carrying the
+  Lowe's license string and source URL.
 
 Snapshot shape
 --------------
@@ -124,11 +136,19 @@ Snapshot shape
 from __future__ import annotations
 
 import logging
-import re
 from datetime import datetime, timezone
 from typing import Any, Optional
 
 from core.pricing.snapshots import PricingSnapshot
+from core.pricing.sources._catalog_common import (
+    DEFAULT_CAPTCHA_MARKERS,
+    MAX_PLAUSIBLE_PRICE,
+    MIN_PLAUSIBLE_PRICE,
+    looks_like_captcha,
+    parse_price,
+    parse_product_page as _common_parse_product_page,
+    parse_unit_of_measure,
+)
 from core.pricing.sources._cci_common import (
     PricingSourceUnavailable,
     http_get_text,
@@ -136,6 +156,27 @@ from core.pricing.sources._cci_common import (
 from core.pricing.sources.base import PricingSource
 
 LOG = logging.getLogger(__name__)
+
+# Re-exports (kept at module top so the test surface remains stable
+# with the public-name imports the existing test module relies on:
+# ``parse_price`` and ``parse_unit_of_measure`` are imported via
+# ``from core.pricing.sources.lowes_pro import ...`` in
+# ``tests/test_pricing_sources_lowes_pro.py``).
+__all__ = [
+    "CAPTCHA_MARKERS",
+    "DEFAULT_SKUS",
+    "DEFAULT_ZIP_CODE",
+    "LOWES_BASE_URL",
+    "LOWES_PRO_HOMEPAGE",
+    "LowesProSource",
+    "MAX_PLAUSIBLE_PRICE",
+    "MIN_PLAUSIBLE_PRICE",
+    "is_captcha_page",
+    "parse_price",
+    "parse_product_page",
+    "parse_unit_of_measure",
+    "product_url",
+]
 
 # --- URLs --------------------------------------------------------------
 
@@ -187,59 +228,24 @@ def product_url(sku: str, slug: Optional[str] = None) -> str:
 
 # --- Anti-bot / CAPTCHA markers ---------------------------------------
 
-# Conservative list — matches Akamai / Distil / Imperva / generic block
-# pages without false-positiving on legitimate product copy. We
-# normalize to lowercase before matching. Same set as ``hd_pro`` —
-# both retailers use Akamai's bot manager, which exposes the same
-# interstitial markers.
-CAPTCHA_MARKERS: list[str] = [
-    "pardon our interruption",
-    "/_incapsula_resource",
-    "as you were browsing, something about your browser",
-    "request unsuccessful. incapsula",
-    "access denied",
-    "bot detected",
-    "captcha verification",
-    "akamai-edgesuite",
-    "we want to make sure you're a real person",
-    "are you a robot",
-]
+# Per-adapter copy of the shared marker list. Currently identical to
+# :data:`core.pricing.sources._catalog_common.DEFAULT_CAPTCHA_MARKERS`
+# — both Lowe's and HD run on Akamai's bot manager — but kept as a
+# module-level constant so Lowe's-specific markers can be added here
+# without touching the shared list (or the HD adapter).
+CAPTCHA_MARKERS: list[str] = list(DEFAULT_CAPTCHA_MARKERS)
 
 
 def is_captcha_page(html: str) -> bool:
-    """True iff ``html`` looks like an anti-bot interstitial."""
-    if not html:
-        return False
-    lower = html.lower()
-    return any(marker in lower for marker in CAPTCHA_MARKERS)
+    """True iff ``html`` looks like a Lowe's anti-bot interstitial.
+
+    Thin wrapper around :func:`_catalog_common.looks_like_captcha` that
+    pins the Lowe's-specific marker list.
+    """
+    return looks_like_captcha(html, CAPTCHA_MARKERS)
 
 
-# --- HTML parsing helpers ---------------------------------------------
-
-_TAG_RE = re.compile(r"<[^>]+>")
-
-_ENTITY_MAP = {
-    "&amp;": "&", "&lt;": "<", "&gt;": ">", "&quot;": '"',
-    "&apos;": "'", "&#39;": "'", "&nbsp;": " ", "&#34;": '"',
-}
-_ENTITY_RE = re.compile(r"&(?:amp|lt|gt|quot|apos|nbsp|#34|#39);")
-
-
-def _decode_html(text: str) -> str:
-    return _ENTITY_RE.sub(
-        lambda m: _ENTITY_MAP.get(m.group(0), m.group(0)),
-        text or "",
-    )
-
-
-def _strip_tags(html: str) -> str:
-    if not html:
-        return ""
-    return _TAG_RE.sub(" ", html).strip()
-
-
-_TITLE_RE = re.compile(r"<title[^>]*>([^<]*)</title>", re.IGNORECASE | re.DOTALL)
-_H1_RE = re.compile(r"<h1\b[^>]*>(.*?)</h1>", re.IGNORECASE | re.DOTALL)
+# --- Title suffixes (Lowe's-specific storefront branding) -------------
 
 _TITLE_SUFFIXES = (
     " | Lowe's",
@@ -249,169 +255,8 @@ _TITLE_SUFFIXES = (
 )
 
 
-def _extract_title(html: str) -> Optional[str]:
-    """Pull the product title from ``<h1>`` (preferred) or ``<title>``."""
-    if not html:
-        return None
-    m = _H1_RE.search(html)
-    if m:
-        text = _decode_html(_strip_tags(m.group(1))).strip()
-        if text:
-            return text
-    m = _TITLE_RE.search(html)
-    if m:
-        text = _decode_html(m.group(1)).strip()
-        for suffix in _TITLE_SUFFIXES:
-            if text.endswith(suffix):
-                text = text[: -len(suffix)].strip()
-                break
-        if text:
-            return text
-    return None
-
-
-def _meta_content(html: str, prop_name: str) -> Optional[str]:
-    """Return the ``content`` of a ``<meta itemprop="prop_name">``.
-
-    Tolerates both ``<meta itemprop="X" content="Y">`` and the reversed
-    attribute order ``<meta content="Y" itemprop="X">``.
-    """
-    if not html:
-        return None
-    name = re.escape(prop_name)
-    fwd = (
-        rf'<meta\b[^>]*itemprop\s*=\s*["\']{name}["\']'
-        rf'[^>]*content\s*=\s*["\']([^"\']*)["\']'
-    )
-    rev = (
-        rf'<meta\b[^>]*content\s*=\s*["\']([^"\']*)["\']'
-        rf'[^>]*itemprop\s*=\s*["\']{name}["\']'
-    )
-    m = re.search(fwd, html, re.IGNORECASE)
-    if m:
-        return _decode_html(m.group(1)).strip() or None
-    m = re.search(rev, html, re.IGNORECASE)
-    if m:
-        return _decode_html(m.group(1)).strip() or None
-    return None
-
-
-def _itemprop_text(html: str, prop_name: str) -> Optional[str]:
-    """Return the inner text of the first ``<* itemprop="prop_name">``.
-
-    Matches ``span`` / ``div`` / ``p`` / ``a`` containers; ignores
-    ``<meta>`` (use ``_meta_content`` for that). Inner HTML tags are
-    stripped before returning.
-    """
-    if not html:
-        return None
-    name = re.escape(prop_name)
-    pattern = (
-        rf'<(?P<tag>span|div|p|a|h\d|strong|em)\b[^>]*'
-        rf'itemprop\s*=\s*["\']{name}["\'][^>]*>'
-        rf'(?P<inner>.*?)</(?P=tag)>'
-    )
-    m = re.search(pattern, html, re.IGNORECASE | re.DOTALL)
-    if m:
-        text = _decode_html(_strip_tags(m.group("inner"))).strip()
-        return text or None
-    return None
-
-
-# Price tokens we accept:
-#   $12.34       — explicit dollar sign, decimal
-#   $1,234.56    — explicit dollar sign, thousands separator
-#   12.34        — bare number with decimal (must look like a price)
-#   $1234        — explicit dollar sign, integer (treated as whole-dollar)
-_PRICE_RE = re.compile(
-    r"\$?\s*((?:\d{1,3}(?:,\d{3})+|\d{1,9})(?:\.\d{1,2})?)"
-)
-
-# Plausibility window for a single retail catalog SKU. Same as ``hd_pro``.
-MIN_PLAUSIBLE_PRICE = 0.05
-MAX_PLAUSIBLE_PRICE = 100_000.0
-
-
-def parse_price(text: Optional[str]) -> Optional[float]:
-    """Parse a USD price out of ``text``.
-
-    Returns ``None`` if no price-like token is found or the parsed
-    value falls outside the plausibility window.
-    """
-    if not text:
-        return None
-    m = _PRICE_RE.search(text)
-    if m is None:
-        return None
-    try:
-        val = float(m.group(1).replace(",", ""))
-    except ValueError:
-        return None
-    if not (MIN_PLAUSIBLE_PRICE <= val <= MAX_PLAUSIBLE_PRICE):
-        return None
-    return val
-
-
-# UoM extraction — try structured selectors first, then keyword fallback.
-_UOM_STRUCTURED_PATTERNS = [
-    r'<dt[^>]*>\s*Unit\s+of\s+Measure\s*</dt>\s*<dd[^>]*>([^<]+)</dd>',
-    r'<[^>]*class\s*=\s*["\'][^"\']*unit[\-_]of[\-_]measure[^"\']*["\']'
-    r'[^>]*>([^<]+)</',
-    r'<[^>]*class\s*=\s*["\'][^"\']*\buom\b[^"\']*["\'][^>]*>([^<]+)</',
-    r'<[^>]*class\s*=\s*["\'][^"\']*sales-unit[^"\']*["\'][^>]*>([^<]+)</',
-    r'<span[^>]*>\s*Sold\s+by\s*</span>\s*<span[^>]*>([^<]+)</span>',
-]
-_UOM_STRUCTURED_RE = [
-    re.compile(p, re.IGNORECASE | re.DOTALL)
-    for p in _UOM_STRUCTURED_PATTERNS
-]
-
-_UOM_KEYWORD_RE = re.compile(
-    r"\b("
-    r"box\s+of\s+\d+|"
-    r"case\s+of\s+\d+|"
-    r"pack\s+of\s+\d+|"
-    r"bag\s+of\s+\d+|"
-    r"bundle\s+of\s+\d+|"
-    r"\d+\s*lbs?|"
-    r"\d+\s*ft|"
-    r"\d+\s*pc|"
-    r"linear\s+ft|"
-    r"square\s+ft|"
-    r"sq\.?\s*ft\.?|"
-    r"each|"
-    r"box|case|pack|bag|bundle|"
-    r"gallon|gal\.?|"
-    r"piece|pieces|pc"
-    r")\b",
-    re.IGNORECASE,
-)
-
-
-def parse_unit_of_measure(html: str) -> str:
-    """Extract the UoM verbatim from ``html``; fall back to ``"each"``.
-
-    Tries structured selectors (``<dt>Unit of Measure</dt><dd>...</dd>``,
-    ``<div class="unit-of-measure">``, etc.) before falling back to a
-    keyword scan over the page body. Case is preserved as it appears in
-    the source HTML.
-    """
-    if not html:
-        return "each"
-    for rx in _UOM_STRUCTURED_RE:
-        m = rx.search(html)
-        if m:
-            value = _decode_html(m.group(1)).strip()
-            if value:
-                return value
-    text = _strip_tags(html)
-    m = _UOM_KEYWORD_RE.search(text)
-    if m:
-        return m.group(1).strip()
-    return "each"
-
-
 # --- Snapshot construction --------------------------------------------
+
 
 def parse_product_page(
     html: str,
@@ -425,6 +270,13 @@ def parse_product_page(
 ) -> Optional[PricingSnapshot]:
     """Parse a Lowe's product page HTML into a ``PricingSnapshot``.
 
+    Thin wrapper around
+    :func:`core.pricing.sources._catalog_common.parse_product_page` that
+    pins Lowe's-specific title suffixes + CAPTCHA markers, then
+    constructs the ``PricingSnapshot`` using adapter-specific fields
+    the common parser doesn't (and shouldn't) know about — license
+    string, source URL, region (zip code), and snapshot period.
+
     Returns ``None`` (no crash) when:
       - ``html`` is empty.
       - ``html`` looks like a CAPTCHA / anti-bot interstitial.
@@ -433,68 +285,24 @@ def parse_product_page(
     The function never raises on parse error — callers that want
     raising behavior must check the return value.
     """
-    if not html:
-        return None
-    if is_captcha_page(html):
-        LOG.warning(
-            "%s: anti-bot/CAPTCHA page returned for sku %r at %s — "
-            "skipping (this is the documented anti-bot fragility; see "
-            "firm/playbooks/pricing-data-sources.md)",
-            adapter_name, sku, source_url,
-        )
-        return None
-
-    parsed_sku = (
-        _meta_content(html, "sku")
-        or _meta_content(html, "productID")
-        or sku
+    parsed = _common_parse_product_page(
+        html, sku,
+        adapter_name=adapter_name,
+        title_suffixes=_TITLE_SUFFIXES,
+        captcha_markers=CAPTCHA_MARKERS,
     )
-
-    price_str = (
-        _itemprop_text(html, "price")
-        or _meta_content(html, "price")
-    )
-    if not price_str:
-        body_text = _strip_tags(html)
-        m = re.search(
-            r"\$\s?\d{1,3}(?:,\d{3})*(?:\.\d{2})?",
-            body_text,
-        )
-        price_str = m.group(0) if m else None
-
-    if not price_str:
-        LOG.info(
-            "%s: no price found for sku %r at %s — skipping",
-            adapter_name, sku, source_url,
-        )
+    if parsed is None:
         return None
-
-    price = parse_price(price_str)
-    if price is None:
-        LOG.info(
-            "%s: price text %r did not parse for sku %r — skipping",
-            adapter_name, price_str, sku,
-        )
-        return None
-
-    title = _extract_title(html) or f"SKU {parsed_sku}"
-    brand = _itemprop_text(html, "brand") or _meta_content(html, "brand")
-    mpn = (
-        _itemprop_text(html, "mpn")
-        or _meta_content(html, "mpn")
-        or _meta_content(html, "model")
-    )
-    unit = parse_unit_of_measure(html)
 
     fetched_at = datetime.now(timezone.utc)
     period_str = period or fetched_at.strftime("%Y-%m-%d")
 
     return PricingSnapshot(
         source=adapter_name,
-        series_id=parsed_sku,
-        label=title,
-        unit=unit,
-        value=price,
+        series_id=parsed["sku"],
+        label=parsed["title"],
+        unit=parsed["unit"],
+        value=parsed["price"],
         region=zip_code,
         csi_division=None,
         naics=None,
@@ -504,13 +312,13 @@ def parse_product_page(
         source_url=source_url,
         raw={
             "sku_requested": sku,
-            "sku_parsed": parsed_sku,
-            "title": title,
-            "brand": brand,
-            "mpn": mpn,
-            "price_raw": price_str,
-            "price_value_usd": price,
-            "unit_of_measure": unit,
+            "sku_parsed": parsed["sku"],
+            "title": parsed["title"],
+            "brand": parsed["brand"],
+            "mpn": parsed["mpn"],
+            "price_raw": parsed["price_raw"],
+            "price_value_usd": parsed["price"],
+            "unit_of_measure": parsed["unit"],
             "zip_code": zip_code,
             "fetched_at": fetched_at.isoformat(),
         },

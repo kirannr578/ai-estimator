@@ -49,7 +49,7 @@ from typing import Any, Iterable
 
 import fitz  # PyMuPDF
 
-from .door_schedule import parse_dimension
+from .door_schedule import _header_index_excluding, parse_dimension
 
 logger = logging.getLogger(__name__)
 
@@ -293,8 +293,21 @@ def _cell(row: list[str], idx: int | None) -> str | None:
 
 def _records_from_table(headers: list[str], data_rows: list[list[str]],
                           page_index: int) -> list[RoomRecord]:
-    """Convert one table's rows to :class:`RoomRecord` instances."""
+    """Convert one table's rows to :class:`RoomRecord` instances.
+
+    Phase T5.1 propagation: when a schedule orders ``ROOM NAME``
+    BEFORE the room-number column, the substring ``ROOM`` candidate
+    on ``_HEADERS["room_number"]`` used to land ``room_number`` on
+    the ``ROOM NAME`` column. Fix: pin ``room_name`` first; re-pick
+    ``room_number`` with the room-name column excluded so each field
+    maps to its own column.
+    """
     idx = {k: _header_index(headers, v) for k, v in _HEADERS.items()}
+    if idx["room_name"] is not None and idx["room_number"] == idx["room_name"]:
+        idx["room_number"] = _header_index_excluding(
+            headers, _HEADERS["room_number"],
+            exclude={idx["room_name"]},
+        )
     records: list[RoomRecord] = []
     for row in data_rows:
         if not row:

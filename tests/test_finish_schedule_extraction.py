@@ -567,3 +567,114 @@ def test_record_attached_with_phrase_only_when_table_unavailable(tmp_path: Path)
     )
     result = extract_finish_schedule(pdf, 0)
     assert result.rooms == []
+
+
+# ---------------------------------------------------------------------------
+# Phase T5.1 propagation — header-index substring-collision regressions
+#
+# These pin the same class of bug Worker U fixed in `door_schedule.py` via
+# `_header_index_excluding()`. The substring-tolerant `_header_index()`
+# matcher can grab the wrong column when one candidate ("ROOM", "CEILING")
+# is a substring of another column's normalized header ("ROOM NAME",
+# "CEILING HEIGHT"). Without the exclude-aware fix, both columns land on
+# the same index and downstream record fields are scrambled.
+# ---------------------------------------------------------------------------
+
+
+def test_finish_schedule_ceiling_height_does_not_collide_with_ceiling(
+    tmp_path: Path,
+) -> None:
+    """Regression: a schedule whose ceiling column is published as
+    ``CEILING HEIGHT`` (and ships a separate ``CEILING`` finish column
+    ordered AFTER it) used to land both ``ceiling_finish`` and
+    ``ceiling_height_ft`` on the same column because the ``CEILING``
+    substring matched both `_HEADERS["ceiling"]` and
+    `_HEADERS["ceiling_height"]` on the leading column.
+
+    Post-fix: `ceiling_height` is pinned first; `ceiling` is then
+    re-picked with the ceiling-height column excluded so each surface
+    maps to its own column.
+    """
+    pdf = _build_pdf(
+        tmp_path,
+        title_lines=["FINISH SCHEDULE"],
+        table=[
+            ["ROOM", "NAME",   "FLOOR", "BASE", "WALL", "CEILING HEIGHT", "CEILING"],
+            ["101",  "Office", "VCT-1", "RB-1", "PT-1", "9'-0\"",         "ACT-1"],
+        ],
+        cell_size=(80.0, 24.0),
+        name="ceiling_collision.pdf",
+    )
+    result = extract_finish_schedule(pdf, 0)
+    assert len(result.rooms) == 1
+    r = result.rooms[0]
+    assert r.ceiling_finish == "ACT-1", (
+        f"ceiling_finish must be 'ACT-1', got {r.ceiling_finish!r} — "
+        f"likely scrambled with the CEILING HEIGHT column."
+    )
+    assert r.ceiling_height_ft == pytest.approx(9.0)
+    assert r.ceiling_height_raw == "9'-0\""
+
+
+def test_finish_schedule_room_number_does_not_collide_with_room_name(
+    tmp_path: Path,
+) -> None:
+    """Regression: a schedule that orders ``ROOM NAME`` BEFORE
+    ``ROOM NUMBER`` used to land ``room_number`` on the ROOM NAME
+    column because the substring ``ROOM`` candidate matched the
+    leading column.
+
+    Post-fix: `room_name` is pinned first via the normal indexer;
+    `room_number` is then picked with the room-name column excluded
+    so each field maps to its own column.
+    """
+    pdf = _build_pdf(
+        tmp_path,
+        title_lines=["FINISH SCHEDULE"],
+        table=[
+            ["ROOM NAME", "ROOM NUMBER", "FLOOR", "BASE", "WALL", "CEILING"],
+            ["Office",    "101",         "VCT-1", "RB-1", "PT-1", "ACT-1"],
+            ["Lobby",     "102",         "TILE-1","CB-1", "WC-1", "ACT-1"],
+        ],
+        cell_size=(85.0, 24.0),
+        name="room_name_number_swap.pdf",
+    )
+    result = extract_finish_schedule(pdf, 0)
+    by_num = {r.room_number: r for r in result.rooms}
+    assert set(by_num) == {"101", "102"}, (
+        f"room_number must be the value from the ROOM NUMBER column; "
+        f"got {[r.room_number for r in result.rooms]!r}."
+    )
+    assert by_num["101"].room_name == "Office"
+    assert by_num["102"].room_name == "Lobby"
+
+
+def test_finish_schedule_clg_ht_short_form_does_not_collide_with_ceiling(
+    tmp_path: Path,
+) -> None:
+    """Regression on the short-form ``CLG HT`` header: when a schedule
+    uses ``CLG HT`` for the height column and a separate ``CEILING``
+    column for the finish (typical commercial convention), the
+    ``CLG`` candidate on ``_HEADERS["ceiling"]`` could grab the
+    ``CLG HT`` column if it was ordered first.
+
+    Post-fix: the ceiling_height pin happens first; ceiling is
+    re-picked with that column excluded.
+    """
+    pdf = _build_pdf(
+        tmp_path,
+        title_lines=["FINISH SCHEDULE"],
+        table=[
+            ["ROOM", "NAME",   "FLOOR", "BASE", "WALL", "CLG HT", "CEILING"],
+            ["101",  "Office", "VCT-1", "RB-1", "PT-1", "9'-6\"", "ACT-1"],
+        ],
+        cell_size=(80.0, 24.0),
+        name="clg_ht_collision.pdf",
+    )
+    result = extract_finish_schedule(pdf, 0)
+    assert len(result.rooms) == 1
+    r = result.rooms[0]
+    assert r.ceiling_finish == "ACT-1", (
+        f"ceiling_finish must be 'ACT-1', got {r.ceiling_finish!r}."
+    )
+    assert r.ceiling_height_ft == pytest.approx(9.5)
