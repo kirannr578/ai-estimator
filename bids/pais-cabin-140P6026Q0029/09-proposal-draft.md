@@ -1,24 +1,26 @@
 # PAIS — Backcountry Cabin Roof Repairs — Proposal Draft (Single QUOTE PACKAGE Assembly)
 
-> **Federal SAP best-value proposal discipline (NOT LPTA):**
-> - **Single combined PDF "QUOTE PACKAGE"**, NOT split into Volume I + Volume II.
-> - Price + Technical Capability narrative + Prior Experience are scored together; Section M's stated weighting puts price first but the narrative is **scored** not pass/fail.
-> - The narrative MUST demonstrate "thorough understanding" of the SOW (Section L Part C). Don't go silent on approach.
+> **Federal SAP best-value proposal discipline (NOT LPTA, NOT FAR Part 15):**
+> - **Single combined PDF "QUOTE PACKAGE"**, NOT split into Volume I + II (LPTA pattern) and NOT split into the 4-volume Volume I–IV structure (FAR Part 15 pattern).
+> - The four substantive narrative sections of a SAP quote package — **(1) Technical Capability narrative, (2) Prior Experience, (3) Key Personnel, (4) Price Summary** — are sectioned within the single PDF in the order Section L specifies, not as separate volumes. The forms (SF-18, SF-30, Section K reps, Section L checklist, Core Data block) wrap the four narrative sections.
+> - Price + Technical Capability + Prior Experience are scored together via comparative trade-off; Section M's stated weighting puts price first via the "groups of 3 lowest priced" gate but the narrative is **scored** not pass/fail once inside that gate.
+> - The narrative MUST demonstrate "thorough understanding" of the SOW (Section L Part C). Don't go silent on approach — that's the LPTA pattern and loses on SAP.
 
-## QUOTE PACKAGE — assembly order (per Section L Part C checklist on RFQ pp 25–26)
+## QUOTE PACKAGE — assembly order (per Section L Part C checklist on RFQ pp 25–26 + the SAP-best-value template's canonical assembly order)
 
 > File name: `BPC_140P6026Q0029_QUOTE_PACKAGE.pdf` (single PDF; ≤ 25 MB per email)
-> Assembly order:
+> Assembly order (forms wrap the four narrative sections):
 > 1. **Section L Checklist (RFQ p 26 completed)** — page 1
 > 2. **SF-18 signed**
 > 3. **SF-30 Amd 0001 signed** (and any further amendments)
 > 4. **Cover letter / transmittal** (optional but recommended for best-value SAP — narrative space without exception language)
 > 5. **Section K representations** completed where applicable (52.203-18, 52.209-11, 52.209-13)
-> 6. **Section B Schedule of Prices** completed
-> 7. **Technical Capability narrative**
-> 8. **Prior Experience** — 3 to 5 references
-> 9. **"or-equal" product literature** (only if proposing substitutes)
-> 10. **Contractor Core Data block**
+> 6. **Section B Schedule of Prices** completed *(= Price Summary, narrative section #4)*
+> 7. **Technical Capability narrative** *(narrative section #1)*
+> 8. **Prior Experience** — 3 to 5 references *(narrative section #2)*
+> 9. **Key Personnel short-form** — ½-page per named role (PM, Super, QC; add PIC + Safety if RFQ asks) *(narrative section #3)*
+> 10. **"or-equal" product literature** (only if proposing substitutes)
+> 11. **Contractor Core Data block**
 
 ### 1. Section L Checklist (page 1)
 
@@ -209,7 +211,7 @@ Blueprint Constructs will:
     schedule, materials submittals, as-built drawings, warranty, DI-137
     Release of Claims (per DIAR 1452.204-70).
 
-F. Team
+F. Team (summary — see §9 Key Personnel below for the short-form resume blocks)
 
 Project Lead / PIC: [USER TO FILL — recommended Ravikiran (Rocky) Nudurupati,
 Founder & Managing Director, 22 yrs program/delivery + 4 yrs construction
@@ -274,8 +276,89 @@ drawings provided]
 #### (Optional) Reference 4 + 5
 
 > Section L permits up to 5. Add 1–2 additional from `firm/firm-profile.json → past_projects` if any specifically demonstrate **coastal/marine** OR **federal-land / Park Service** OR **roof-repair** work, OR pull from the 250-500+ single-family-home portfolio (cumulative since 2022; primarily as a specialty trade sub through GC partners That 1 Painter, Touchmark, Bridge View Build, Hill Design Build).
+> Per [federal-simplified-acquisition-best-value playbook](../../firm/playbooks/federal-simplified-acquisition-best-value.md) §7 (Pitfall #6), submit the **maximum the RFQ allows** — 5, not 3. The marginal cost of two additional ½-page reference blocks is trivial and the marginal benefit (additional comparative material the CO weighs against competitor quotes) is real.
 
-### 9. Contractor Core Data block
+### 9. Key Personnel — short-form (½-page per named role)
+
+> Per the [federal-simplified-acquisition-best-value playbook](../../firm/playbooks/federal-simplified-acquisition-best-value.md) §5 + §9, SAP best-value quotes include a short-form key-personnel block (½-page per named role), NOT the full 1-page resumes a FAR Part 15 Volume IV (Management) would carry. Recommend one block each for **PM, Superintendent, QC**; add **PIC + Safety** if RFQ asks (PAIS Section L does not specifically request, but including PIC strengthens the technical-capability narrative).
+> All key-personnel blocks live in `firm/proposal-library/key-personnel/` as 1-page full resumes — trim to ½ page for SAP submission. Per the playbook, the short-form library is a Day-3 priority (still partial as of 2026-05-27).
+
+#### Key Personnel — Principal in Charge (PIC) / Project Lead
+
+```
+NAME:           [USER TO FILL — recommended: Ravikiran (Rocky) Nudurupati]
+ROLE:           Founder & Managing Director / Principal in Charge
+EXPERIENCE:     22 years program & delivery management
+                4 years construction-firm leadership
+CERTIFICATIONS: PMP, CSM, SAFe
+RELEVANT TO PAIS: Owns commercial relationship with the contracting agency;
+                  signs SF-18 + SF-30; chairs go/no-go decision; available
+                  for CO clarification calls within 1 business day during
+                  the 60-cal-day acceptance period.
+COMMITMENT:     50% allocation through award; 15% allocation through
+                substantial completion.
+```
+
+#### Key Personnel — Project Manager (PM)
+
+```
+NAME:           [USER TO FILL]
+ROLE:           Project Manager
+EXPERIENCE:     [USER TO FILL — years of federal-construction PM experience;
+                if first federal project, cite commercial PM experience +
+                FAR familiarity from BPC's prior federal bid library]
+CERTIFICATIONS: [USER TO FILL — PMP / CCM / OSHA 30 if held]
+RELEVANT TO PAIS: Owns sub solicitations (≥ 3 TDI shutter quotes per
+                  04-checklist.md); owns RFI workflow (11 candidate RFIs
+                  per 03-missing-documents.md); owns WH-347 weekly
+                  certified payroll; owns closeout package per RFQ §G.
+COMMITMENT:     100% allocation NTP through substantial completion + 30 days.
+```
+
+#### Key Personnel — Superintendent (on-site)
+
+```
+NAME:           [USER TO FILL — coastal / remote-site experience preferred]
+ROLE:           Superintendent
+EXPERIENCE:     [USER TO FILL — years of on-site construction supervision;
+                marine / coastal envelope work; 4WD access experience]
+CERTIFICATIONS: OSHA 30, First Aid + CPR, [USER TO FILL — any additional
+                NPS resource-protection training if available]
+RELEVANT TO PAIS: On-site supervision of crew during active work days at
+                  the backcountry cabin (~50 mi south of HQ on Park Road 22);
+                  coordinates with NPS site POC (Greg Smith); manages
+                  4WD vehicle logistics, materials haul-out from HQ,
+                  generator-powered tools (no on-site power),
+                  sea-turtle nesting buffer compliance, and crew safety
+                  (EMS plan per 01-scope.md §7).
+COMMITMENT:     100% allocation during active work days (estimated 25–35
+                of the 60-cal-day POP).
+```
+
+#### Key Personnel — QC Lead
+
+```
+NAME:           [USER TO FILL — may be combined with Superintendent on
+                small SAP scopes if RFQ permits; PAIS does not prohibit]
+ROLE:           Quality Control Lead
+EXPERIENCE:     [USER TO FILL — QC plan authorship; FAR 52.246-12
+                construction-inspection compliance; ASTM / TDI
+                impact-test familiarity for CLIN 003 shutters]
+CERTIFICATIONS: [USER TO FILL — ICC inspector certification if held]
+RELEVANT TO PAIS: Owns pre-installation inspections (door measurement,
+                  roof substrate condition, shutter mounting penetrations,
+                  ramp lumber grade verification, breakaway sand-control
+                  flood-opening verification); owns post-installation
+                  inspections (water test for CLIN 002, manual operation
+                  + locking verification for CLIN 003, ramp slope + rail
+                  height verification for Option 001); owns interim +
+                  final inspection coordination with NPS COR per
+                  RFQ §G + FAR 52.246-12.
+COMMITMENT:     20% allocation throughout, with on-site presence for
+                each major inspection gate.
+```
+
+### 10. Contractor Core Data block
 
 ```
 Offeror's Company Name:    Blue Print Constructs (RK Residential Homes and

@@ -2,6 +2,8 @@
 
 > **Use:** Internal pricing rationale + markup recipe + competitive-position read. **Not** in the proposal.
 > **Best-value SAP** (NOT LPTA). Markup discipline matters but Section M's stated weighting (price + technical capability + prior experience, evaluated in groups of 3 lowest-priced) means **lowest-price wins enter the evaluation pool first** — bid lean enough to be in the lowest-3 pool.
+>
+> Aligned with the [federal-simplified-acquisition-best-value playbook](../../firm/playbooks/federal-simplified-acquisition-best-value.md) §10 (SAP pricing discipline + "Groups of 3" pricing posture). See §1.5 below for the PAIS-specific application of the groups-of-3 posture.
 
 ## 1. Magnitude anchor
 
@@ -13,6 +15,22 @@
 | BPC target bid | `[USER TO FILL — recommend $100–160K depending on sub quotes; CLIN 003 shutters dominate the cost stack at est. $40–80K]` |
 | Floor for "unreasonably low" determination (FAR 13.106-3 / FAR 15.404-1(d)) | ~`[USER TO FILL — recommend ~$80K; cost of self-perform labor + per-diem + 4WD truck + materials cannot honestly fall below this for a 60-cal-day backcountry job]` |
 | Ceiling for competitive position | ~`[USER TO FILL — recommend ≤ $200K to remain in the lowest-3 evaluation pool; over $250K converts to non-SAP threshold]` |
+
+## 1.5 "Groups of 3 lowest priced" — pricing posture (SAP archetype)
+
+Per the [federal-simplified-acquisition-best-value playbook](../../firm/playbooks/federal-simplified-acquisition-best-value.md) §10 ("Groups of 3" pricing posture) and Section M of this RFQ, the CO will rank all quotes by total evaluated price and then evaluate technical capability + prior experience **only on the lowest 3 (or sometimes the lowest 5) priced quotes**, then award best-value among that subset.
+
+The implication for BPC's bid posture on PAIS:
+
+| Posture rule | Application to PAIS |
+|---|---|
+| **Price must clear the lowest-3 cutoff** to get technical narrative read at all. A 4th-place quote is eliminated on price regardless of narrative quality. | Bid posture has to land in the lowest-3 envelope of a 5–10 offeror pool. For a $80–180K magnitude scope, that probably means the lowest-3 cutoff sits around **~$130–160K**. BPC's target ≤ $160K. |
+| **Once inside the lowest-3 envelope, technical + experience pull weight.** A quote that is #2 on price but #1 on technical can win over a quote that is #1 on price but #3 on technical. | This is where BPC's actual edge sits — the backcountry-logistics premium pushes BPC's true cost higher than local Corpus Christi GCs, but BPC's prior experience (Lavon RV Park 30-lot build, Hindu Temple finish-out, Holiday Inn reno) and the 5–8 page narrative-quality gate (per `07-risk-register.md` B14) can claw back the price gap inside the lowest-3 envelope. |
+| **Bid posture: tightly competitive on price + strong on technical** (NOT premium price + best narrative). | Markup recipe in §3 below targets 6–8% contingency + 5–7% profit (vs. LPTA's 3–5% / 3–6%, vs. FAR 15's 5–8% / 6–10%). This is the "technical-capability buffer" — slightly tighter than LPTA's "floor + 5–10%" because narrative drafting needs estimator-hours; slightly looser than FAR 15's "magnitude midpoint" because the price cutoff is real. |
+| **Bid the magnitude floor + 5–15%, WITH a substantive 5–15 pp technical narrative + 3–5 prior-experience refs + short-form key personnel.** | PAIS-specific: magnitude floor estimated at ~$80K (cannot honestly cover 4WD truck + per-diem + lodging + materials haul-out + active-day labor below this). Floor + 5–15% = **$84–92K**. With a strong narrative + 3–5 refs + key personnel short-form, this is the competitive-position posture. |
+| **Don't bid at the magnitude midpoint and rely on narrative quality — you won't make the lowest-3 cut.** | If BPC bids $150K+ relying on Hindu Temple + Lavon RV Park to carry the win, the bid likely misses the lowest-3 cut and never gets evaluated on technical. The narrative is **necessary but not sufficient** — price gate is binding. |
+
+**Net pricing target:** `[USER TO FILL — recommend $95–135K target range, with go/no-go test: bid below $100K only if BPC can honestly cover the backcountry-logistics premium (4WD truck rental, lodging, per-diem, haul-out); bid above $150K only if a strong narrative + 5 prior-experience refs (vs. minimum 3) can plausibly clear the lowest-3 cut in this offeror pool]`.
 
 ## 2. Direct-cost rollup
 

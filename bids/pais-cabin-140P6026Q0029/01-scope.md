@@ -3,6 +3,8 @@
 > **Source:** `B08_Solicitation_-_Att_1_-_Specifications.docx` (SOW), `B08_Solicitation_-_Att_2_-_Drawings.pdf` (ramp construction details), Sol §C and §B (CLIN list).
 > Walk every page — federal RFPs frequently carry stale boilerplate (e.g. SOW Section 9 says "All on-site work must be completed before 01 JUNE 2025", which is wrong since the RFQ was issued 5/7/2026 — operative POP is 60 cal-days from NTP per Section B). Flag in `03-missing-documents.md`.
 > **Scope template to paste from:** no exact-fit template in [`firm/scope-templates/`](../../firm/scope-templates/README.md) — closest archetypes are residential-roof + small-structure carpentry; build out the cabin-specific scope inline.
+>
+> **SAP best-value note (per [federal-simplified-acquisition-best-value playbook](../../firm/playbooks/federal-simplified-acquisition-best-value.md) §2):** The CLIN-by-CLIN scope table below is also the spine of the **Technical Capability narrative** in `09-proposal-draft.md` §7 — for each CLIN, the proposal narrative restates the SOW requirement in BPC's own words + names the proposed method, materials, and self/sub split. Under-investing in the narrative (treating the scope row as the complete answer) is the dominant SAP loser pattern; the CO needs comparative narrative material to score technical capability against the 3 lowest-priced quotes.
 
 ## 1. Project summary
 

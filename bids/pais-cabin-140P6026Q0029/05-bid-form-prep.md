@@ -1,7 +1,10 @@
 # PAIS — Backcountry Cabin Roof Repairs — Bid Form Preparation (SF-18 + Section B)
 
-> **Heads-up — this RFQ is on SF-18, NOT SF-1442.** The template's SF-1442 block-by-block guide does not directly apply. Adjusted version below. See dogfood note #1 in `00-overview.md`.
-> **No bid bond at submission.** FAR 52.228-1 is not invoked. FAR 52.228-13 Alternative Payment Protections governs — Payment Bond OR ILC due **within 10 days of award**. See dogfood note #3.
+> **Form on cover: SF-18** (verified, RFQ pp 1–2). This is the canonical SAP-best-value form for sub-SAT FAR Part 13 RFQs per the [federal-simplified-acquisition-best-value playbook](../../firm/playbooks/federal-simplified-acquisition-best-value.md) §4. NOT SF-1442 (would have flipped this to a full FAR Part 14/15 construction RFP) and NOT SF-1449 (would have triggered the integrated commercial-item solicitation/contract/order format — the CO may elect SF-1449 for commercial-item SAP under FAR 13.500, but did not here).
+>
+> **Variant note:** if a future SF-30 amendment changes the form to SF-1449 (rare; CO discretion), see the playbook §4 table for the clause-inventory shift from 52.213 → 52.212 family and update the Box-by-Box fill below from SF-18 (offeror fills Blocks 8 + 12–16) to SF-1449 (offeror fills Blocks 17a + 24 + 30a–c). No SF-1449 variant fill is provided in this file because SF-18 is operative.
+>
+> **No bid bond at submission.** FAR 52.228-1 is not invoked. FAR 52.228-13 Alternative Payment Protections governs — Payment Bond OR ILC due **within 10 days of award**. This is the SAP norm per the playbook §8.
 
 ## SF-18 — Request for Quotation (Construction)
 

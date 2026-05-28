@@ -1,6 +1,8 @@
 # PAIS — Backcountry Cabin Roof Repairs — Missing Documents + RFI Candidates
 
 > **Use:** Tracking what the RFP package is missing / ambiguous, and what BPC needs to raise as RFIs before the **6/7/2026 cutoff** (3 calendar days after the 6/4 site visit per Section L Part B). Per RFQ Section L, **only written RFIs by email to bridget_parizek@ios.doi.gov** will be considered, and NPS responses will be posted as a SAM amendment.
+>
+> **Form-on-cover disambiguation (per [federal-simplified-acquisition-best-value playbook](../../firm/playbooks/federal-simplified-acquisition-best-value.md) §4):** This RFQ is on **SF-18** (verified, RFQ pp 1–2). It is NOT on SF-1449 (which would have triggered the FAR Part 12 commercial-item integrated solicitation/contract/order format) and it is NOT on SF-1442 (which would have flipped this to a full FAR Part 14/15 construction RFP). The SF-18 form, combined with the cited FAR Part 13 + Part 12 acquisition method and the "groups of 3 lowest priced" evaluation language in Section M, is the canonical SAP best-value signature. If the CO posts an SF-30 amendment changing the form to SF-1449 (uncommon but the CO has discretion under FAR 13.500), re-verify the clause inventory shift from 52.213 → 52.212 family per the playbook §4. No ambiguity at this time — SF-18 is operative.
 
 ## 1. Document inventory — what we have
 

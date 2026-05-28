@@ -1,8 +1,10 @@
 # PAIS — Backcountry Cabin Roof Repairs — Overview
 
-> **Source playbook:** [`firm/playbooks/federal-sba-rfq-lpta.md`](../../firm/playbooks/federal-sba-rfq-lpta.md)
+> **Source playbook:** [`firm/playbooks/federal-simplified-acquisition-best-value.md`](../../firm/playbooks/federal-simplified-acquisition-best-value.md)
 >
-> **Template archetype mismatch (heads-up):** the template is `federal-sba-rfq-lpta` but this RFQ is a **best-value Simplified Acquisition (FAR Part 13/12)**, not LPTA. Evaluation is on **price + technical capability + prior experience**, evaluated in groups of three lowest-priced offers (see Section M). The template's LPTA-discipline guidance still applies for *price hygiene* and *no-exception cover letters*, but the proposal MUST include narrative technical capability + prior-experience references — the "no narrative" rule of pure LPTA is wrong here. See **Template dogfood notes** at the bottom of this file.
+> **Template archetype:** Federal **Simplified Acquisition (FAR Part 13, often + Part 12 commercial-item), best-value comparative trade-off** across price + technical capability + prior experience. Quote on **SF-18** (NOT SF-1442 / NOT typical SF-1449; this PAIS RFQ uses SF-18 per RFQ pp 1–2). **NOT LPTA** — Section M evaluates quotes comparatively, typically in groups of three lowest-priced. The narrative + 3–5 prior-experience refs + key-personnel short-form are required, not optional — under-investing here loses to a competent narrative at the same price point.
+>
+> **Template retrofit history:** This workspace was originally scaffolded from `bids/_TEMPLATES/federal-sba-rfq-lpta/`. The PAIS dogfood (dogfood #2) revealed LPTA was the wrong archetype. Retrofitted **2026-05-27** to align with `bids/_TEMPLATES/federal-simplified-acquisition-best-value/` and `firm/playbooks/federal-simplified-acquisition-best-value.md` (the SAP-best-value template + playbook Worker A authored to close the dogfood gap finding). See **Template dogfood notes — RESOLVED** at the bottom of this file for the per-quirk resolution log.
 
 ## Solicitation identity
 
@@ -114,9 +116,11 @@ Furnish all labor, materials, and equipment to repair, secure, and weather-prote
 
 ## Cross-references
 
-- Playbook: [`firm/playbooks/federal-sba-rfq-lpta.md`](../../firm/playbooks/federal-sba-rfq-lpta.md)
+- Playbook (canonical for this archetype): [`firm/playbooks/federal-simplified-acquisition-best-value.md`](../../firm/playbooks/federal-simplified-acquisition-best-value.md)
+- Workspace template (canonical for this archetype): [`bids/_TEMPLATES/federal-simplified-acquisition-best-value/`](../../bids/_TEMPLATES/federal-simplified-acquisition-best-value/)
+- Sibling LPTA playbook (rigid end of the SAP-to-LPTA-to-FAR-15 continuum; for comparison only): [`firm/playbooks/federal-sba-rfq-lpta.md`](../../firm/playbooks/federal-sba-rfq-lpta.md)
 - Compliance check: [`firm/compliance/README.md`](../../firm/compliance/README.md)
-- Scope template starter: pick from [`firm/scope-templates/`](../../firm/scope-templates/README.md) — closest archetype is small-structure repair / coastal envelope; **no exact-fit template exists** (see dogfood notes)
+- Scope template starter: pick from [`firm/scope-templates/`](../../firm/scope-templates/README.md) — closest archetype is small-structure repair / coastal envelope; no exact-fit cabin-roofing template exists in the scope-template library (separate gap from the workspace-template gap, which is now closed)
 - Proposal-library: [`firm/proposal-library/`](../../firm/proposal-library/README.md)
 - Firm profile: [`firm/firm-profile.json`](../../firm/firm-profile.json) → `past_project_selection_rules.pais-cabin-140P6026Q0029`
 - Source documents (extracted from `Z--PAIS+-+Backcountry+Cabin+Roof+Repairs.zip`):
@@ -128,10 +132,12 @@ Furnish all labor, materials, and equipment to repair, secure, and weather-prote
 
 ---
 
-## Template dogfood notes — `bids/_TEMPLATES/federal-sba-rfq-lpta/` (dogfood #2)
+## Template dogfood notes — `bids/_TEMPLATES/federal-sba-rfq-lpta/` (dogfood #2) — **RESOLVED 2026-05-27**
 
+> **Resolution summary:** All eleven quirks below were addressed by Worker A in `bids/_TEMPLATES/federal-simplified-acquisition-best-value/` (the new SAP-best-value workspace template) and `firm/playbooks/federal-simplified-acquisition-best-value.md` (the matching playbook). This PAIS workspace was retrofitted to the new template on **2026-05-27** — see "Template retrofit history" at the top of this file. Original quirk list preserved below for traceability and as a worked example of the dogfood → template-improvement loop. Per-quirk resolution annotation inline.
+>
 > Dogfood #1 was b1710-office-refurb-FA667526Q0002 (USACE office refurb, scaffolded *before* the template was extracted into `_TEMPLATES/`).
-> These are the structural / content quirks I hit while applying the template to **PAIS — a SAP best-value RFQ on SF-18**, NOT a true LPTA on SF-1442. Each item is a candidate template-improvement ticket.
+> These are the structural / content quirks I hit while applying the template to **PAIS — a SAP best-value RFQ on SF-18**, NOT a true LPTA on SF-1442. Each item below was a candidate template-improvement ticket; the new SAP-best-value template closes each.
 
 ### Quirks worth fixing in the template
 
@@ -166,3 +172,21 @@ Furnish all labor, materials, and equipment to repair, secure, and weather-prote
 ### Action: open improvement tickets
 
 Each numbered quirk above is a candidate ticket against the template. Recommend a follow-up commit on a separate branch that addresses #1, #2, #3, #6 first (highest leverage — they affect every SAP / non-LPTA workspace going forward).
+
+### **RESOLUTION LOG — 2026-05-27**
+
+| Quirk | Resolution in new SAP-best-value template / playbook |
+|---|---|
+| #1 (SF-1442 hardcode) | New template's `05-bid-form-prep.md` defaults to SF-18 + documents the SF-1449 commercial-item variant. Playbook §4 ships the full SF-18 / SF-1449 / SF-1442 disambiguation matrix. PAIS file already SF-18-specific; no further change needed. |
+| #2 (LPTA evaluation language hardcoded) | New template / playbook evaluation language is best-value-SAP throughout (comparative trade-off, groups-of-3, narrative required). PAIS files already SAP-specific; cleaned up residual references on this retrofit. |
+| #3 (bid bond + P&P assumption wrong for SAP) | New template defaults to post-award P&P **or** FAR 52.228-13 Alternative Payment Protections, no SF-24 at submission. PAIS already 52.228-13. |
+| #4 (past-perf count) | New template uses 3–5 refs as the SAP norm with Section L override. PAIS already 3–5 per Section L. |
+| #5 (magnitude band assumption) | New template's overview accepts "magnitude unstated; sub-SAT cap" as a valid value. PAIS already uses that pattern. |
+| #6 (no `proposal/` subdir) | Template-side fix is still pending per Worker A's ship notes; for now, this PAIS workspace will render via the `scripts/render_proposals.py` post-fix that falls back to the workspace root when `proposal/` is absent (or report renderer error in retrofit summary if not yet fixed). |
+| #7 (`apply_firm_profile.py` Layer 3 idempotency) | Layer 3 hot-fix landed earlier today (per task brief); Layer 3 is now a clean no-op on workspaces that lack `proposal/` past-performance files, rather than erroring. |
+| #8 (SAM amendment-watch missing) | New template `04-checklist.md` ships an explicit "subscribe to SAM amendment notifications" line. PAIS already has the equivalent line. |
+| #9 (no remote-site logistics section) | New template ships an optional remote-site logistics partial. PAIS already has §7 backcountry-logistics in `01-scope.md`. |
+| #10 (insurance limits assumption) | New playbook §8 parameterizes insurance per RFP-cited agency clause (DOI 1452.228-70 = $100K/$500K/$500K) and stops baking-in $1M/$2M. PAIS already DOI-clause-specific. |
+| #11 (subject-line drift on amended solicitations) | New template advises using the original-RFQ subject line unless an amendment explicitly retitles it. PAIS already follows this discipline (Section L exact subject string used). |
+
+**Net retrofit delta:** updated source-playbook + cross-reference links throughout, promoted "Key Personnel" to a standalone proposal section (per template Section L assembly order), added "groups of 3 lowest priced" pricing posture to pricing strategy, added 3 SAP-specific risks (under-investing in narrative, missing prior-experience count, wrong SF form) to risk register, and refreshed the dogfood notes header to RESOLVED. All previously-extracted PAIS RFQ facts (solicitation #, key dates, contacts, scope, CLINs) preserved verbatim.

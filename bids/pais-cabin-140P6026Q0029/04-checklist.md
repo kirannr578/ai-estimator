@@ -1,6 +1,13 @@
 # PAIS — Backcountry Cabin Roof Repairs — Bid-Prep Checklist
 
-> Generalized from `bids/usfws-san-marcos-140FC126R0017/02-bid-prep-checklist.md` and the federal-SBA-RFQ-LPTA template, **with adjustments for SAP best-value (NOT LPTA)** and **post-award-only bonding (52.228-13)** specific to this PAIS RFQ.
+> Aligned with the **federal-simplified-acquisition-best-value** template + playbook ([`bids/_TEMPLATES/federal-simplified-acquisition-best-value/`](../../bids/_TEMPLATES/federal-simplified-acquisition-best-value/), [`firm/playbooks/federal-simplified-acquisition-best-value.md`](../../firm/playbooks/federal-simplified-acquisition-best-value.md)). The checklist below reflects **SAP best-value (NOT LPTA)** submission discipline:
+> - Single combined QUOTE PACKAGE PDF (no Volume I + II split)
+> - SF-18 (NOT SF-1442) signed
+> - Technical Capability narrative **required** (5–15 pp typical) — under-investing eliminates from the lowest-3 evaluation pool
+> - 3–5 prior-experience refs with verified working POCs
+> - Key-personnel short-form (½-page per named role)
+> - **Post-award-only bonding** (FAR 52.228-13 Alternative Payment Protections) — no SF-24 at submission
+>
 > Marked items map to [`firm/compliance/README.md`](../../firm/compliance/README.md).
 
 ## Pre-pricing (Day 1–5 after RFP capture: 5/27 → 6/1)
@@ -58,8 +65,9 @@
 - [ ] **SF-30 Amd 0001 signed** (Block 15 — signer signature) + acknowledged in transmittal
 - [ ] Section K representations completed — 52.203-18, 52.209-11, 52.209-13 + SAM Reps & Certs incorporation per 52.204-19
 - [ ] **Section B Schedule of Prices** completed — every CLIN + both options priced
-- [ ] **Technical Capability narrative** drafted — schedule + approach + understanding of SOW (best-value SAP requires this; **NOT** the LPTA "no narrative" pattern)
-- [ ] **Prior Experience** — 3 references (Lavon, Hindu Temple, Holiday Inn) per firm-profile picks; up to 5 allowed
+- [ ] **Technical Capability narrative** drafted — schedule + approach + understanding of SOW (best-value SAP requires this; **NOT** the LPTA "no narrative" pattern). Target 5–15 pp per [federal-simplified-acquisition-best-value playbook](../../firm/playbooks/federal-simplified-acquisition-best-value.md) §5; PAIS scope is tight so a 5–8 pp narrative is sufficient
+- [ ] **Prior Experience** — 3 references (Lavon, Hindu Temple, Holiday Inn) per firm-profile picks; up to 5 allowed (Section L caps at 5). Verify each reference contact's working email + phone before submission — Section L permits the Government to "contact and confirm the information provided"
+- [ ] **Key Personnel short-form** (½-page per named role: PM, Super, QC; add PIC + Safety if RFQ asks) — required per the SAP-best-value template's assembly order; under-counting key personnel is a common loser pattern
 - [ ] **Contractor Core Data block** — Company Name, CAGE 9LET0, UEI LM4YHVQ71QG7, POC, POC email + phone
 - [ ] Single combined PDF filename: `BPC_140P6026Q0029_QUOTE_PACKAGE.pdf`
 

@@ -20,6 +20,9 @@
 | B11 | Bid below realistic floor — "unreasonably low" determination | 5 | 1 | 5 | Verify bid covers per-diem + 4WD truck rental + lodging in CCI for the active construction days within 60-cal-day POP; do not chase volume by under-bidding the logistics premium | PIC |
 | B12 | **PAIS-specific:** Subject-line mismatch (RFP retitled by Amd 0001 but Section L subject line is from the original RFP) | 2 | 3 | 6 | Use Section L exact subject line; document interpretation in transmittal email; RFI #10 if unresolved | PM |
 | B13 | **PAIS-specific:** Wage Determination Att 3 PDF text-extraction failure | 4 | 5 | 20 | User reads Att 3 PDF directly in Acrobat or printed; transcribe Kenedy County / TX-DOT 4 region trade rates (prevailing wages effective Jan/2026) before pricing assembly | Estimator |
+| B14 | **SAP archetype risk:** Under-investing in the Technical Capability narrative (treating it as the LPTA "no narrative" pattern would treat it). PAIS is best-value SAP — Section M scores narrative comparatively, not pass/fail. A one-page narrative loses to a competent 5–8 page narrative at the same price point. Per [federal-simplified-acquisition-best-value playbook](../../firm/playbooks/federal-simplified-acquisition-best-value.md) §7 (Pitfall #2), this is **the dominant SAP loser pattern**. | 5 | 3 | 15 | Allocate ≥ 8 estimator-hours to drafting the Technical Capability narrative in `09-proposal-draft.md` §7; cover all 5 sub-sections (Understanding, Site Logistics + Self-Performance, CLIN-by-CLIN Approach, Schedule, Compliance + Quality); paste-adapt boilerplate from `firm/proposal-library/boilerplate/` where applicable. Pre-submission, a non-author BPC reviewer reads narrative end-to-end and signs off that it demonstrates "thorough understanding" per Section L Part C. | PIC |
+| B15 | **SAP archetype risk:** Missing or under-counting the 3–5 prior-experience references (Section L states "minimum of 3 and/or maximum of 5"). Submitting only 2 fails the count check on its face and per playbook §7 (Pitfall #6) is a hard eliminator from the lowest-3 evaluation pool — the CO has no comparative basis to evaluate prior experience. Currently all 3 picks (Lavon, Hindu Temple, Holiday Inn) have `[USER TO FILL]` reference contacts in `firm/firm-profile.json`. | 5 | 4 | 20 | Pre-confirm reference contacts (working email + phone) for all 3 firm-profile picks by Day 10; submit the **maximum 5** the RFQ allows (add 2 more from `firm/firm-profile.json → past_projects` — recommend any project with coastal/marine, federal-land, or roof-repair relevance). Cross-reference duplicates B7. | PM |
+| B16 | **SAP archetype risk:** Wrong SF form on the quote (e.g. submitting SF-1442 because the LPTA template assumed it). Per playbook §7 (Pitfall #4) this is a common eliminator. **Mitigated** for PAIS — the workspace is now retrofitted to the SAP-best-value template which defaults to SF-18, and `05-bid-form-prep.md` explicitly verifies SF-18 against RFQ pp 1–2. Residual risk: a future SF-30 amendment switching the form to SF-1449 (CO discretion under FAR 13.500) — re-verify the form on every amendment. | 4 | 1 | 4 | Verify SF-18 on RFQ cover before submission; re-verify on every SF-30 amendment; if amendment switches to SF-1449, update `05-bid-form-prep.md` block-by-block fill from SF-18 to SF-1449 per playbook §4. | PM |
 
 ## 2. Execution-side risks (post-award; for pricing-strategy contingency justification)
 
@@ -47,8 +50,9 @@ The contingency in `08-pricing-strategy.md` is justified by:
 - Concentration of risk in **CLIN 003 long-lead shutter (E2 score 20)**: → adds 1–2% to procurement-line GC for expedite-freight + dual-source contingency
 - Concentration of risk in **logistics (B5 score 15, E5 score 12)**: → adds 2–3% to GC supervision + per-diem + 4WD vehicle line
 - Concentration of risk in **wildlife / weather buffer (E8, E11)**: → adds 1% to schedule-buffer GC
+- **SAP archetype risks (B14 + B15) do not flow into contingency dollars** — they are bid-quality / proposal-completeness risks. They are mitigated by allocating estimator-hours (not dollars) to narrative drafting and reference-contact pre-confirmation. Per the playbook §10, the SAP markup range (5–7% profit, 6–8% contingency, 8–11% OH) already prices in the estimator-hours premium vs. LPTA.
 
-Recommended contingency band: **6–8%** (vs. the template's 3–5% LPTA default).
+Recommended contingency band: **6–8%** (per [federal-simplified-acquisition-best-value playbook](../../firm/playbooks/federal-simplified-acquisition-best-value.md) §10 — between LPTA's 3–5% floor and FAR 15's 5–8% range; the SAP-specific tightening vs. FAR 15 reflects shorter schedule, the loosening vs. LPTA reflects narrative-buffer room).
 
 ## 4. Go / No-go drivers
 
@@ -65,7 +69,8 @@ Recommended posture: **Conditional Go pending:**
 2. WD trade-rate transcription (B13)
 3. Renewed COI on hand (B3)
 4. SAM expiration date verified (B1)
-5. ≥ 1 past-perf reference contact pre-confirmed (B7)
+5. ≥ 1 past-perf reference contact pre-confirmed (B7 / B15)
 6. ≥ 2 TDI shutter sub quotes returned (B9, E2)
+7. Technical Capability narrative drafted to ≥ 5 pp by 6/14 (B14 — narrative-quality gate)
 
-If 5 of the above 6 close by 6/14, recommend **Go**. If fewer, recommend **No-Go** and re-deploy estimating effort to other workspaces.
+If 6 of the above 7 close by 6/14, recommend **Go**. If fewer, recommend **No-Go** and re-deploy estimating effort to other workspaces. The narrative-quality gate (item 7) is a SAP-archetype-specific addition — without it, the bid lands in the lowest-3 pool on price but loses on technical-capability comparison.
