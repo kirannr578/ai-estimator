@@ -149,6 +149,18 @@ class DrawingPrepassResult:
     # a ``core.extraction.hvac_schedule.HVACScheduleResult`` or
     # ``None``.
     hvac_schedule: Any = None
+    # T2.9 — typed plumbing-fixture-schedule pre-pass. Populated
+    # whenever a plumbing fixture schedule was detected on the page.
+    # Runs INDEPENDENTLY of door / window / finish / room precedence
+    # — plumbing schedules live on P-series sheets that those
+    # upstream detectors never claim, same posture as panels +
+    # lighting + HVAC.  Runs ALONGSIDE the panel + lighting + HVAC
+    # detectors (different table shapes, different sheets → no
+    # scheduling conflict).  Closes the Division 22+23+26 typed-
+    # schedule trifecta entirely.  Concretely a
+    # ``core.extraction.plumbing_schedule.PlumbingScheduleResult``
+    # or ``None``.
+    plumbing_schedule: Any = None
 
 
 # ---------------------------------------------------------------------------
@@ -818,6 +830,52 @@ def _maybe_extract_hvac_schedule(page: "fitz.Page", page_index: int,
     return result if result.equipment else None
 
 
+def _maybe_extract_plumbing_schedule(page: "fitz.Page", page_index: int,
+                                        schedules: list[Schedule]) -> Any:
+    """T2.9 hook: run the plumbing-fixture-schedule extractor when present.
+
+    Imported lazily so the plumbing_schedule module stays optional at
+    load time. **Runs independently of door / window / finish / room
+    precedence** — plumbing fixture schedules live on P-series sheets
+    those upstream detectors never claim, same posture as the panel
+    + lighting + HVAC hooks.  Runs ALONGSIDE the panel + lighting +
+    HVAC hooks (different table shapes, different sheets → no
+    scheduling conflict).  Closes the Division 22+23+26 typed-
+    schedule trifecta entirely.  Returns a ``PlumbingScheduleResult``
+    dataclass or ``None``.
+    """
+    text_upper = (page.get_text("text") or "").upper()
+    text_has_phrase = any(
+        kw in text_upper
+        for kw in (
+            "PLUMBING FIXTURE SCHEDULE",
+            "PLUMBING SCHEDULE",
+            "PLUMBING FIXTURES",
+            "FIXTURE SCHEDULE",
+            "FIXTURE TYPE",
+        )
+    )
+    if not text_has_phrase:
+        try:
+            from .plumbing_schedule import _looks_like_plumbing_header  # type: ignore
+        except Exception:  # pragma: no cover - defensive
+            return None
+        if not any(_looks_like_plumbing_header(s.headers) for s in schedules):
+            return None
+    try:
+        from .plumbing_schedule import extract_plumbing_schedule_from_page
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.debug("plumbing_schedule import failed: %s", exc)
+        return None
+    try:
+        result = extract_plumbing_schedule_from_page(page, page_index)
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.warning("plumbing_schedule extraction failed on page %d: %s",
+                       page_index, exc)
+        return None
+    return result if result.fixtures else None
+
+
 def prepass_drawing_page(pdf_path: Path, page_index: int) -> DrawingPrepassResult:
     """Run the deterministic pre-pass on a single page of a drawing PDF."""
     pdf_path = Path(pdf_path)
@@ -851,6 +909,9 @@ def prepass_drawing_page(pdf_path: Path, page_index: int) -> DrawingPrepassResul
         hvac_schedule = _maybe_extract_hvac_schedule(
             page, page_index, schedules,
         )
+        plumbing_schedule = _maybe_extract_plumbing_schedule(
+            page, page_index, schedules,
+        )
 
     if not text.strip():
         quality_issues.append("page has no embedded text (likely scanned)")
@@ -868,6 +929,7 @@ def prepass_drawing_page(pdf_path: Path, page_index: int) -> DrawingPrepassResul
         panel_schedule=panel_schedule,
         lighting_schedule=lighting_schedule,
         hvac_schedule=hvac_schedule,
+        plumbing_schedule=plumbing_schedule,
     )
     result.confidence = round(_score(result), 4)
     return result
@@ -903,6 +965,9 @@ def prepass_drawing_pdf(pdf_path: Path) -> list[DrawingPrepassResult]:
             hvac_schedule = _maybe_extract_hvac_schedule(
                 page, i, schedules,
             )
+            plumbing_schedule = _maybe_extract_plumbing_schedule(
+                page, i, schedules,
+            )
             if not text.strip():
                 quality_issues.append("page has no embedded text (likely scanned)")
 
@@ -919,6 +984,7 @@ def prepass_drawing_pdf(pdf_path: Path) -> list[DrawingPrepassResult]:
                 panel_schedule=panel_schedule,
                 lighting_schedule=lighting_schedule,
                 hvac_schedule=hvac_schedule,
+                plumbing_schedule=plumbing_schedule,
             )
             r.confidence = round(_score(r), 4)
             results.append(r)
@@ -977,6 +1043,10 @@ def to_schema(result: DrawingPrepassResult):
     if result.hvac_schedule is not None:
         from .hvac_schedule import to_schema as hvac_to_schema
         hvac_schedule = hvac_to_schema(result.hvac_schedule)
+    plumbing_schedule = None
+    if result.plumbing_schedule is not None:
+        from .plumbing_schedule import to_schema as plumbing_to_schema
+        plumbing_schedule = plumbing_to_schema(result.plumbing_schedule)
     return S.DrawingPrepassResult(
         title_block=S.TitleBlockData(
             project_name=tb.project_name,
@@ -1005,6 +1075,7 @@ def to_schema(result: DrawingPrepassResult):
         panel_schedule=panel_schedule,
         lighting_schedule=lighting_schedule,
         hvac_schedule=hvac_schedule,
+        plumbing_schedule=plumbing_schedule,
     )
 
 

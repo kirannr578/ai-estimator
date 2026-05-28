@@ -31,6 +31,7 @@ from .extraction.finish_dedupe import dedupe_finishes_against_synthesis
 from .extraction.hvac_dedupe import dedupe_hvac_against_synthesis
 from .extraction.lighting_dedupe import dedupe_lighting_against_synthesis
 from .extraction.panel_dedupe import dedupe_panels_against_synthesis
+from .extraction.plumbing_dedupe import dedupe_plumbing_against_synthesis
 from .extraction.room_schedule import merge_room_schedules
 from .extraction.takeoff_backfill import backfill_finish_quantities
 from .extraction.takeoff_synthesis import (
@@ -39,6 +40,7 @@ from .extraction.takeoff_synthesis import (
     synthesize_hvac_takeoff_items,
     synthesize_lighting_takeoff_items,
     synthesize_panel_takeoff_items,
+    synthesize_plumbing_takeoff_items,
     synthesize_window_takeoff_items,
 )
 from .extraction.window_dedupe import dedupe_windows_against_synthesis
@@ -717,6 +719,14 @@ def reconcile(
     # Same survives-through-merge pattern as panels + lighting;
     # T2.8 dedupe runs after the merge.
     synthesized_hvac_items: list[TakeoffItem] = []
+    # Phase T2.9: per-sheet plumbing-fixture-schedule pre-pass →
+    # typed TakeoffItem rows. Each PlumbingFixtureRecord fans out
+    # into 1 EA fixture row + 1 LS MEP rough-in row + optionally 1
+    # LS trim / installation-hardware row (mfr+model gated). Same
+    # survives-through-merge pattern as panels + lighting + HVAC;
+    # T2.9 dedupe runs after the merge.  Closes the Division
+    # 22+23+26 typed-schedule trifecta entirely.
+    synthesized_plumbing_items: list[TakeoffItem] = []
     # Phase T5: per-sheet room-schedule pre-pass. Unlike doors / windows
     # / finishes there's no synthesis step — the room schedule supplies
     # GEOMETRY (area / perimeter / ceiling height) that the T5 back-fill
@@ -796,6 +806,13 @@ def reconcile(
                     sheet_id=ex.sheet_id,
                 )
             )
+        if ex.prepass is not None and getattr(ex.prepass, "plumbing_schedule", None) is not None:
+            synthesized_plumbing_items.extend(
+                synthesize_plumbing_takeoff_items(
+                    ex.prepass.plumbing_schedule,
+                    sheet_id=ex.sheet_id,
+                )
+            )
 
     # --- dedupe domain entities ---
     rooms = _dedupe_rooms(rooms)
@@ -858,6 +875,14 @@ def reconcile(
     # ``source=hvac_schedule_prepass`` for the downstream dedupe
     # pass.
     all_takeoffs.extend(synthesized_hvac_items)
+    # T2.9: append synthesised plumbing-fixture-schedule rows.  Each
+    # PlumbingFixtureRecord already fanned out into 1 EA fixture +
+    # 1 LS rough-in + optional 1 LS trim/hardware row inside
+    # ``synthesize_plumbing_takeoff_items``; every row is tagged
+    # ``source=plumbing_schedule_prepass`` for the downstream
+    # dedupe pass.  Closes the Division 22+23+26 typed-schedule
+    # trifecta entirely.
+    all_takeoffs.extend(synthesized_plumbing_items)
     # T3: drop legacy LLM door aggregates ("Hollow metal doors", "Solid-core
     # wood doors", "Doors (type unspecified)") and same-mark LLM door rows
     # when a deterministic synthesised row already covers them. Pure on
@@ -903,6 +928,16 @@ def reconcile(
     # when no synthesised HVAC equipment exists on the project
     # (safety rule, mirrors T3 / T2.5 / T4 / T2.6 / T2.7).
     all_takeoffs = dedupe_hvac_against_synthesis(all_takeoffs)
+    # T2.9 dedupe: retire legacy LLM plumbing aggregates ("Water
+    # closets", "Lavatories", "Plumbing Fixtures", "Floor Drains")
+    # and same-tag LLM plumbing rows when a deterministic
+    # synthesised row already covers them.  CSI prefix ``22`` keeps
+    # this pass mutually exclusive with all preceding dedupes
+    # (Divisions 08 / 09 / 03 / 23 / 26 don't overlap with 22).
+    # No-op when no synthesised plumbing fixture exists on the
+    # project (safety rule, mirrors T3 / T2.5 / T4 / T2.6 / T2.7 /
+    # T2.8).
+    all_takeoffs = dedupe_plumbing_against_synthesis(all_takeoffs)
     # T5 back-fill: replace ``quantity=0.0`` on every finish-synthesis
     # row with the right SF (floor / ceiling = area; base = perimeter
     # in LF; wall = perimeter × height × share). Joins finish rows to

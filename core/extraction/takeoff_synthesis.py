@@ -55,6 +55,8 @@ from core.schemas import (
     LightingScheduleResult,
     PanelRecord,
     PanelScheduleResult,
+    PlumbingFixtureRecord,
+    PlumbingScheduleResult,
     TakeoffItem,
     WindowRecord,
     WindowScheduleResult,
@@ -67,12 +69,14 @@ __all__ = [
     "SYNTHESIS_SOURCE_TAG_PANEL",
     "SYNTHESIS_SOURCE_TAG_LIGHTING",
     "SYNTHESIS_SOURCE_TAG_HVAC",
+    "SYNTHESIS_SOURCE_TAG_PLUMBING",
     "synthesize_door_takeoff_items",
     "synthesize_window_takeoff_items",
     "synthesize_finish_takeoff_items",
     "synthesize_panel_takeoff_items",
     "synthesize_lighting_takeoff_items",
     "synthesize_hvac_takeoff_items",
+    "synthesize_plumbing_takeoff_items",
 ]
 
 
@@ -82,6 +86,7 @@ SYNTHESIS_SOURCE_TAG_FINISH: Final[str] = "finish_schedule_prepass"
 SYNTHESIS_SOURCE_TAG_PANEL: Final[str] = "panel_schedule_prepass"
 SYNTHESIS_SOURCE_TAG_LIGHTING: Final[str] = "lighting_schedule_prepass"
 SYNTHESIS_SOURCE_TAG_HVAC: Final[str] = "hvac_schedule_prepass"
+SYNTHESIS_SOURCE_TAG_PLUMBING: Final[str] = "plumbing_schedule_prepass"
 
 
 # ---------------------------------------------------------------------------
@@ -1661,6 +1666,362 @@ def synthesize_hvac_takeoff_items(
                 confidence=_HVAC_DISCONNECT_CONFIDENCE,
                 source_sheet_ids=list(sheets),
                 notes=_hvac_notes_for(record, role="disconnect"),
+            ))
+
+    return items
+
+# ---------------------------------------------------------------------------
+# Phase T2.9 — Plumbing
+# ---------------------------------------------------------------------------
+#
+# Plumbing fixture schedules fan each ``PlumbingFixtureRecord`` out
+# into 2-3 families of ``TakeoffItem``:
+#
+# 1. **N EA fixture** — CSI per fixture family (WATER_CLOSET →
+#    ``22 41 13``, LAVATORY → ``22 41 16``, URINAL → ``22 41 13``
+#    (shares MasterFormat section with WCs), SHOWER → ``22 41 23``,
+#    EWC / drinking fountain → ``22 47 13``, MOP_SINK / SINK →
+#    ``22 41 19``, WATER_HEATER → ``22 33 00``, HOSE_BIBB →
+#    ``22 11 23``, FLOOR_DRAIN → ``22 13 19``, OTHER → ``22 00 00``).
+#    Quantity = ``record.quantity`` when the schedule published a
+#    QTY column (confidence ``0.90``); otherwise quantity ``1.0``
+#    (confidence ``0.55`` → routes to HAND_TAKEOFF queue).
+# 2. **1 LS MEP rough-in** — CSI ``22 11 16`` (Domestic Water Piping)
+#    for water-supply-dominant fixtures (LAV / SHOWER / EWC / SINK /
+#    MOP_SINK / WATER_HEATER / HOSE_BIBB / OTHER), OR ``22 13 16``
+#    (Sanitary Waste and Vent Piping) for waste-dominant fixtures
+#    (WC / URINAL / FLOOR_DRAIN).  The split is documented inline so
+#    a future maintainer can lift the mapping.  Confidence ``0.45``
+#    (PARAMETRIC tier on T7 banding, HAND_TAKEOFF on T6 banding).
+# 3. **1 LS trim / installation hardware** — same CSI section as the
+#    fixture itself, confidence ``0.70``.  ONLY emitted when BOTH
+#    ``manufacturer`` AND ``model_number`` are populated — the trim
+#    package (faucets / stops / supplies / valves / drain assembly)
+#    is mfr-specific and only meaningfully priceable once we know
+#    which manufacturer-model combination was specified.
+#
+# Quantity routing mirrors the HVAC synthesis (T2.8): QTY-present
+# lands at 0.90 confidence; absent lands at 0.55 → HAND_TAKEOFF so
+# the estimator supplies a real count from the floor plan.
+#
+# Rough-in CSI rationale (BPC calibration):
+# * Water-supply-dominant: the supply rough-in (hot / cold stops,
+#   supplies, connection to building domestic water) is the
+#   dominant scope on the unit.
+# * Waste-dominant: WCs / urinals carry large-diameter (3" / 4")
+#   waste laterals + carrier assemblies that dwarf the 1/2"
+#   supply; FDs are waste-only by construction.
+# * HOSE_BIBB / WATER_HEATER carry no waste line at all → 22 11 16
+#   is the correct call.
+
+
+# CSI families used by plumbing synthesis. Tuples are (division,
+# section, family-label-for-description), mirroring the shape used
+# by the door / window / finish / panel / lighting / HVAC synthesisers.
+_CSI_PLUMB_WC:          Final[tuple[str, str, str]] = (
+    "22", "22 41 13", "Water Closet",
+)
+_CSI_PLUMB_LAV:         Final[tuple[str, str, str]] = (
+    "22", "22 41 16", "Lavatory",
+)
+_CSI_PLUMB_URINAL:      Final[tuple[str, str, str]] = (
+    "22", "22 41 13", "Urinal",
+)
+_CSI_PLUMB_SHOWER:      Final[tuple[str, str, str]] = (
+    "22", "22 41 23", "Shower",
+)
+_CSI_PLUMB_EWC:         Final[tuple[str, str, str]] = (
+    "22", "22 47 13", "Electric Water Cooler / Drinking Fountain",
+)
+_CSI_PLUMB_MOP_SINK:    Final[tuple[str, str, str]] = (
+    "22", "22 41 19", "Mop / Service Sink",
+)
+_CSI_PLUMB_SINK:        Final[tuple[str, str, str]] = (
+    "22", "22 41 19", "Sink",
+)
+_CSI_PLUMB_WH:          Final[tuple[str, str, str]] = (
+    "22", "22 33 00", "Domestic Water Heater",
+)
+_CSI_PLUMB_HOSE_BIBB:   Final[tuple[str, str, str]] = (
+    "22", "22 11 23", "Hose Bibb / Hydrant",
+)
+_CSI_PLUMB_FLOOR_DRAIN: Final[tuple[str, str, str]] = (
+    "22", "22 13 19", "Floor Drain",
+)
+_CSI_PLUMB_OTHER:       Final[tuple[str, str, str]] = (
+    "22", "22 00 00", "Plumbing Fixture",
+)
+_CSI_PLUMB_ROUGHIN_SUPPLY: Final[tuple[str, str, str]] = (
+    "22", "22 11 16", "Domestic Water Piping (rough-in)",
+)
+_CSI_PLUMB_ROUGHIN_WASTE:  Final[tuple[str, str, str]] = (
+    "22", "22 13 16", "Sanitary Waste & Vent Piping (rough-in)",
+)
+
+
+# Fixture-type → (division, section, family-label) lookup.  OTHER
+# catches anything the type detector falls through on, plus any
+# future fixture family without a dedicated CSI section.
+_PLUMB_CSI_BY_TYPE: Final[dict[str, tuple[str, str, str]]] = {
+    "WATER_CLOSET": _CSI_PLUMB_WC,
+    "LAVATORY":     _CSI_PLUMB_LAV,
+    "URINAL":       _CSI_PLUMB_URINAL,
+    "SHOWER":       _CSI_PLUMB_SHOWER,
+    "EWC":          _CSI_PLUMB_EWC,
+    "MOP_SINK":     _CSI_PLUMB_MOP_SINK,
+    "SINK":         _CSI_PLUMB_SINK,
+    "WATER_HEATER": _CSI_PLUMB_WH,
+    "HOSE_BIBB":    _CSI_PLUMB_HOSE_BIBB,
+    "FLOOR_DRAIN":  _CSI_PLUMB_FLOOR_DRAIN,
+    "OTHER":        _CSI_PLUMB_OTHER,
+}
+
+
+# Fixture types whose dominant rough-in is the WASTE line (large-
+# diameter waste lateral + carrier on WCs / urinals; waste-only on
+# floor drains).  Everything else routes to the SUPPLY rough-in.
+_PLUMB_WASTE_DOMINANT_TYPES: Final[frozenset[str]] = frozenset({
+    "WATER_CLOSET", "URINAL", "FLOOR_DRAIN",
+})
+
+
+# Confidence assigned when the schedule DOES publish a QTY column.
+# Mirrors ``_HVAC_QTY_CONFIDENCE`` from the T2.8 synthesis.
+_PLUMB_QTY_CONFIDENCE: Final[float] = 0.90
+
+# Confidence assigned when the schedule omits a QTY column and the
+# synthesiser emits the default quantity=1.0. Mirrors
+# ``_HVAC_HAND_TAKEOFF_CONFIDENCE`` from T2.8.
+_PLUMB_HAND_TAKEOFF_CONFIDENCE: Final[float] = 0.55
+
+# Confidence assigned to the parametric MEP rough-in row.  0.45 lands
+# in the PARAMETRIC tier on T7 banding (< 0.50) and HAND_TAKEOFF on
+# T6 banding (< 0.65) so the row appears in the hand-takeoff queue
+# AND is flagged as parametric on the tier rollups.  Matches the
+# HVAC rough-in confidence.
+_PLUMB_ROUGHIN_CONFIDENCE: Final[float] = 0.45
+
+# Confidence assigned to the trim / installation-hardware LS row.
+# 0.70 lands in OPERATOR_REVIEW on T6 banding — trim is reliably-
+# specified (mfr+model gates emission) but the operator should
+# eyeball the trim package against the spec book before pricing.
+_PLUMB_TRIM_CONFIDENCE: Final[float] = 0.70
+
+
+def _classify_plumbing_fixture(
+    fixture: PlumbingFixtureRecord,
+) -> tuple[str, str, str]:
+    """Return ``(csi_division, csi_section, family_label)`` for one record.
+
+    Routes via ``fixture.fixture_type`` (set by the extractor's tag-
+    prefix detector); unknown types land on the generic ``22 00 00``
+    plumbing section.
+    """
+    ftype = (fixture.fixture_type or "OTHER").upper()
+    return _PLUMB_CSI_BY_TYPE.get(ftype, _CSI_PLUMB_OTHER)
+
+
+def _plumbing_label(fixture: PlumbingFixtureRecord) -> str:
+    """Render a ``Plumbing fixture <TAG>`` label.
+
+    The "Plumbing fixture" prefix (rather than just "Fixture") is
+    deliberate — it disambiguates the description from lighting
+    synthesis, which also produces "Fixture <TAG>" rows under CSI
+    Division 26.  Belt-and-braces alongside the CSI-prefix scoping
+    in :mod:`core.extraction.plumbing_dedupe`.
+    """
+    tag = (fixture.fixture_tag or "").strip()
+    if not tag:
+        return "Plumbing fixture (unmarked)"
+    return f"Plumbing fixture {tag}"
+
+
+def _describe_plumbing_fixture(fixture: PlumbingFixtureRecord,
+                                  family: str) -> str:
+    """Build a human-readable description for the fixture row.
+
+    Examples::
+
+        "Plumbing fixture WC-1 — Water Closet, Wall-hung, 1.28 GPF (American Standard 3461.001) WALL"
+        "Plumbing fixture LAV-A — Lavatory (Kohler K-2210) 0.5 GPM COUNTER"
+        "Plumbing fixture FD-1 — Floor Drain"
+    """
+    head = _plumbing_label(fixture)
+    parts: list[str] = []
+    desc = (fixture.description or "").strip()
+    if desc:
+        parts.append(desc)
+    else:
+        parts.append(family)
+    mfr_bits: list[str] = []
+    if fixture.manufacturer:
+        mfr_bits.append(fixture.manufacturer.strip())
+    if fixture.model_number:
+        mfr_bits.append(fixture.model_number.strip())
+    if mfr_bits:
+        parts.append(f"({' '.join(mfr_bits)})")
+    if fixture.flow_rate_value is not None and fixture.flow_rate_unit:
+        parts.append(f"{fixture.flow_rate_value:g} {fixture.flow_rate_unit}")
+    if fixture.mounting:
+        parts.append(fixture.mounting.upper())
+    return f"{head} — {' '.join(parts)}".rstrip()
+
+
+def _describe_plumbing_roughin(fixture: PlumbingFixtureRecord,
+                                  is_waste: bool) -> str:
+    """Build a description for the per-fixture rough-in LS row."""
+    label = "waste / vent rough-in" if is_waste else "water supply rough-in"
+    return f"{_plumbing_label(fixture)} — {label}"
+
+
+def _describe_plumbing_trim(fixture: PlumbingFixtureRecord) -> str:
+    """Build a description for the per-fixture trim / hardware LS row."""
+    return f"{_plumbing_label(fixture)} — trim / installation hardware"
+
+
+def _plumbing_notes_for(fixture: PlumbingFixtureRecord, *, role: str) -> str:
+    """Stable, source-tagged notes string for plumbing dedupe to grep.
+
+    Format mirrors door + window + finish + panel + lighting + HVAC:
+    ``key=value`` pairs joined by ``"; "``.  The first pair is
+    always ``source=plumbing_schedule_prepass`` so a prefix-match is
+    cheap.  The ``role`` token disambiguates which family the row
+    belongs to (``fixture`` / ``roughin`` / ``trim``).
+    """
+    bits: list[str] = [f"source={SYNTHESIS_SOURCE_TAG_PLUMBING}"]
+    if fixture.fixture_tag:
+        bits.append(f"mark={fixture.fixture_tag}")
+    bits.append(f"role={role}")
+    if fixture.fixture_type:
+        bits.append(f"fixture_type={fixture.fixture_type}")
+    if fixture.manufacturer:
+        bits.append(f"manufacturer={fixture.manufacturer}")
+    if fixture.model_number:
+        bits.append(f"model={fixture.model_number}")
+    if fixture.mounting:
+        bits.append(f"mounting={fixture.mounting}")
+    if fixture.flow_rate_value is not None:
+        bits.append(f"flow_rate={fixture.flow_rate_value:g}")
+    if fixture.flow_rate_unit:
+        bits.append(f"flow_rate_unit={fixture.flow_rate_unit}")
+    if fixture.cold_water_size:
+        bits.append(f"cw={fixture.cold_water_size}")
+    if fixture.hot_water_size:
+        bits.append(f"hw={fixture.hot_water_size}")
+    if fixture.waste_size:
+        bits.append(f"waste={fixture.waste_size}")
+    if fixture.vent_size:
+        bits.append(f"vent={fixture.vent_size}")
+    if fixture.ada_compliant:
+        bits.append("ada=true")
+    if fixture.sensor_operated:
+        bits.append("sensor=true")
+    if fixture.quantity is not None:
+        bits.append(f"qty_from_schedule={fixture.quantity}")
+    return "; ".join(bits)
+
+
+def synthesize_plumbing_takeoff_items(
+    fixtures: list[PlumbingFixtureRecord] | PlumbingScheduleResult | None,
+    *,
+    sheet_id: str | None = None,
+) -> list[TakeoffItem]:
+    """Convert each ``PlumbingFixtureRecord`` into 2-3 ``TakeoffItem`` rows.
+
+    Per-fixture fan-out (the structural shape of T2.9 vs. T2.8):
+
+    * One **fixture** row at the per-family CSI section (``22 41 13``
+      WC / URINAL / ``22 41 16`` LAV / ``22 41 23`` SHOWER /
+      ``22 47 13`` EWC / ``22 41 19`` MOP_SINK / SINK /
+      ``22 33 00`` WATER_HEATER / ``22 11 23`` HOSE_BIBB /
+      ``22 13 19`` FLOOR_DRAIN / ``22 00 00`` OTHER), unit ``EA``.
+      Quantity = ``record.quantity`` when the schedule published a
+      QTY column (confidence ``0.90``); otherwise quantity ``1.0``
+      (confidence ``0.55`` → HAND_TAKEOFF queue).
+    * One **MEP rough-in** row at ``22 11 16`` (water-supply-dominant
+      fixtures) OR ``22 13 16`` (WC / URINAL / FLOOR_DRAIN — waste-
+      dominant), unit ``LS``, quantity ``1.0``, confidence ``0.45``.
+      ALWAYS emitted for every record (the actual rough-in scope
+      depends on a plan walk that the synthesiser can't perform).
+    * One **trim / installation hardware** row at the SAME fixture
+      CSI section, unit ``LS``, quantity ``1.0``, confidence
+      ``0.70``.  ONLY emitted when BOTH ``manufacturer`` AND
+      ``model_number`` are populated — the trim package is mfr-
+      specific and only meaningfully priceable once we know the
+      manufacturer-model combination.
+
+    A fixture with no usable ``fixture_tag`` is skipped entirely
+    (defensive — the extractor already filters these).  ``sheet_id``
+    (when provided) is stored on ``source_sheet_ids`` so downstream
+    consumers can trace each row back to its sheet.
+    """
+    if fixtures is None:
+        return []
+    if hasattr(fixtures, "fixtures"):
+        fixture_list: list[PlumbingFixtureRecord] = list(fixtures.fixtures)
+    else:
+        fixture_list = list(fixtures)
+    if not fixture_list:
+        return []
+
+    items: list[TakeoffItem] = []
+    for record in fixture_list:
+        if not (record.fixture_tag and record.fixture_tag.strip()):
+            continue
+        sheets: list[str] = []
+        if sheet_id:
+            sheets.append(sheet_id)
+        elif record.source_sheet:
+            sheets.append(record.source_sheet)
+
+        # 1. Fixture row.
+        division, section, family = _classify_plumbing_fixture(record)
+        if record.quantity is not None and record.quantity > 0:
+            qty = float(record.quantity)
+            fixture_confidence = _PLUMB_QTY_CONFIDENCE
+        else:
+            qty = 1.0
+            fixture_confidence = _PLUMB_HAND_TAKEOFF_CONFIDENCE
+        items.append(TakeoffItem(
+            csi_division=division,
+            csi_section=section,
+            description=_describe_plumbing_fixture(record, family),
+            quantity=qty,
+            unit="EA",
+            confidence=fixture_confidence,
+            source_sheet_ids=list(sheets),
+            notes=_plumbing_notes_for(record, role="fixture"),
+        ))
+
+        # 2. MEP rough-in (parametric, ALWAYS emitted).
+        ftype = (record.fixture_type or "OTHER").upper()
+        is_waste = ftype in _PLUMB_WASTE_DOMINANT_TYPES
+        roughin_csi = (
+            _CSI_PLUMB_ROUGHIN_WASTE if is_waste else _CSI_PLUMB_ROUGHIN_SUPPLY
+        )
+        items.append(TakeoffItem(
+            csi_division=roughin_csi[0],
+            csi_section=roughin_csi[1],
+            description=_describe_plumbing_roughin(record, is_waste),
+            quantity=1.0,
+            unit="LS",
+            confidence=_PLUMB_ROUGHIN_CONFIDENCE,
+            source_sheet_ids=list(sheets),
+            notes=_plumbing_notes_for(record, role="roughin"),
+        ))
+
+        # 3. Trim / installation hardware — only when mfr AND model
+        # are both populated (the trim package is mfr-specific).
+        if record.manufacturer and record.model_number:
+            items.append(TakeoffItem(
+                csi_division=division,
+                csi_section=section,
+                description=_describe_plumbing_trim(record),
+                quantity=1.0,
+                unit="LS",
+                confidence=_PLUMB_TRIM_CONFIDENCE,
+                source_sheet_ids=list(sheets),
+                notes=_plumbing_notes_for(record, role="trim"),
             ))
 
     return items

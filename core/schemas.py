@@ -887,6 +887,75 @@ class HVACScheduleResult(BaseModel):
     raw_table_text: str = ""                   # joined-headers debug string
 
 
+class PlumbingFixtureRecord(BaseModel):
+    """One plumbing fixture record pulled off a P-series fixture schedule (Phase T2.9).
+
+    Plumbing fixture schedules live on P-series sheets (P1.0 / P2.0 /
+    PL-1) and round out the Division 22+23+26 trifecta alongside the
+    panels (T2.6), lighting (T2.7), and HVAC (T2.8) typed extractors.
+    Each fixture record fans out into 2-3 :class:`TakeoffItem`
+    families: the fixture itself (CSI per type — WC → ``22 41 13``,
+    LAV → ``22 41 16``, EWC → ``22 47 13``, FD → ``22 13 19``, ...),
+    a parametric MEP rough-in line (CSI ``22 11 16`` for water-
+    supply-dominant fixtures or ``22 13 16`` for waste-dominant), and
+    optionally a trim / installation-hardware line when manufacturer
+    AND model_number are both populated.
+
+    Fixture type is detected from the tag prefix (``WC-``, ``LAV-``,
+    ``URN-`` / ``UR-``, ``SH-`` / ``SHU-``, ``EWC-`` / ``DF-``,
+    ``MS-``, ``SK-``, ``WH-``, ``HD-`` / ``HB-``, ``FD-``). Flow rate
+    captures the eco / efficiency spec (``1.28 GPF`` for flush
+    fixtures, ``0.5 GPM`` for lavatory aerators, ``1.5 GPM`` for
+    showerheads). Connection sizes round-trip as their original
+    strings (``"1/2\""`` / ``"3/4\""`` / ``"1-1/2\""`` / ``"2\""``)
+    so the spec passes through unchanged.
+
+    Phase T2.9 is the FIFTH downstream consumer of the shared
+    ``header_index_excluding`` helper (door / panel / lighting /
+    HVAC are the prior four).
+    """
+
+    fixture_tag: str                           # "WC-1", "LAV-A", "URN-1", ...
+    fixture_type: str                          # "WATER_CLOSET" | "LAVATORY" |
+                                                # "URINAL" | "SHOWER" | "EWC" |
+                                                # "MOP_SINK" | "SINK" |
+                                                # "WATER_HEATER" | "HOSE_BIBB" |
+                                                # "FLOOR_DRAIN" | "OTHER"
+    description: Optional[str] = None
+    manufacturer: Optional[str] = None
+    model_number: Optional[str] = None
+    mounting: Optional[str] = None             # "FLOOR" | "WALL" | "COUNTER" |
+                                                # "DECK" | "FREESTANDING"
+    flow_rate_value: Optional[float] = None    # 1.28, 0.5, 1.5
+    flow_rate_unit: Optional[str] = None       # "GPF" | "GPM" | None
+    cold_water_size: Optional[str] = None      # "1/2\"", "3/4\""
+    hot_water_size: Optional[str] = None
+    waste_size: Optional[str] = None           # "1-1/2\"", "2\"", "4\""
+    vent_size: Optional[str] = None
+    ada_compliant: Optional[bool] = None
+    sensor_operated: Optional[bool] = None
+    quantity: Optional[int] = None             # from QTY column when present
+    notes: Optional[str] = None
+    confidence: float = 0.85
+    source_sheet: Optional[str] = None
+    source_page: int = 0
+
+
+class PlumbingScheduleResult(BaseModel):
+    """Aggregate plumbing-fixture-schedule pre-pass result for one page (Phase T2.9).
+
+    Attached alongside (not replacing) the generic :class:`Schedule`
+    rows on :class:`DrawingPrepassResult` so the existing prepass
+    surface keeps working while downstream takeoff (Phase T2.9
+    synthesis) consumes the richer typed records.
+    """
+
+    pages: list[int] = Field(default_factory=list)
+    fixtures: list[PlumbingFixtureRecord] = Field(default_factory=list)
+    confidence: float = 0.0                    # 0..1
+    raw_table_text: str = ""                   # joined-headers debug string
+
+
 class DrawingPrepassResult(BaseModel):
     """Snapshot of everything the deterministic pre-pass could pull off
     a single drawing page without invoking the vision LLM."""
@@ -903,6 +972,7 @@ class DrawingPrepassResult(BaseModel):
     panel_schedule: Optional[PanelScheduleResult] = None  # T2.6 typed electrical panels
     lighting_schedule: Optional[LightingScheduleResult] = None  # T2.7 typed lighting fixtures
     hvac_schedule: Optional[HVACScheduleResult] = None  # T2.8 typed HVAC equipment
+    plumbing_schedule: Optional[PlumbingScheduleResult] = None  # T2.9 typed plumbing fixtures
 
 
 class SheetExtraction(BaseModel):
