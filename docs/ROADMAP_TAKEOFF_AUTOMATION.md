@@ -259,9 +259,45 @@ Six phases. Phases T1–T5 follow the suggested ordering from the brief, with on
 - **Storefront size threshold is a single global constant.** Some offices treat storefronts and curtain walls as one section regardless of size; the constant is documented but not yet configurable per project.
 
 **Suggested next slices:**
-- **Phase T3.5 — generalise the dedupe-by-source-tag pattern.** Refactor `door_dedupe.py` + `window_dedupe.py` into a parametrised `dedupe_against_synthesis(items, *, source_tag, section_prefixes, legacy_aggregate_regex, family_label)` shared scaffold. The Phase T3 worker queued this as the next big move; with two concrete callers now in tree, the abstraction is grounded enough to do safely. Mechanical refactor; should land at zero behavioural change and -100 LOC.
+- **Phase T3.5 — generalise the dedupe-by-source-tag pattern.** ~~Refactor `door_dedupe.py` + `window_dedupe.py` into a parametrised `dedupe_against_synthesis(items, *, source_tag, section_prefixes, legacy_aggregate_regex, family_label)` shared scaffold.~~ **SHIPPED** — see the Phase T3.5 section below.
 - **Phase T4: finish schedule + room-finish matrix extraction.** Same dispatch shape (`detect → extract → synthesise → dedupe`); column candidates `ROOM / FINISH / FLOOR / WALL / CEILING / BASE`. Emits per-finish SF lines instead of EA. Pairs naturally with the upcoming geometric measurement work in the original Phase T4.
 - **Phase T4 (continued): equipment / RTU / panel / fixture schedules.** Same shape, swap keywords + CSI codes per discipline (`23 00 00` / `26 24 16` / `22 40 00`).
+
+---
+
+### Phase T3.5 — Generalise the dedupe-by-source-tag pattern
+
+**Status:** SHIPPED — this commit lifts the common skeleton out of `door_dedupe.py` (T3) and `window_dedupe.py` (T2.5) into a single parametrised scaffold. Both existing callers reduce to thin wrappers; the 53 pre-existing door + window dedupe tests pass byte-identical against the refactored modules. Suite: 386 → 397 passed (+11 new generic-scaffold tests; 1 skipped unchanged).
+
+**Implementation notes (this commit):**
+- **New module.** `core/extraction/dedupe.py` exports `dedupe_against_synthesis()` and `extract_mark_from_synthesized()`. The final signature is `dedupe_against_synthesis(items, *, source_tag: str, section_prefixes: tuple[str, ...], legacy_aggregate_patterns: tuple[re.Pattern[str], ...], family_label: str, mark_pattern: re.Pattern[str] | None = None, section_field: Literal["csi_division", "csi_section"] = "csi_section", match_family_by_description: bool = False) -> list[TakeoffItem]`. The proposed signature in the T3.5 brief gained two extra parameters and shed one — see *Asymmetries reconciled* below.
+- **Asymmetries reconciled.** Doors and windows differed in three non-trivial ways that the scaffold now exposes as parameters: (1) **family field** — doors discriminate on `csi_division` (Division 08 catches everything), windows discriminate on `csi_section` (narrower `08 41`/`08 44`/`08 5*` prefixes). Encoded via `section_field: Literal["csi_division", "csi_section"]`. (2) **Description-based family fallback** — windows treat a row as in-family when its description matches the legacy-aggregate regex OR the mark regex, even with an empty/uncategorised section; doors do not. Encoded via `match_family_by_description: bool` (default False, doors's behaviour). (3) **Legacy-aggregate regex count** — doors carry two regexes (`<material> doors` + `Doors (type unspecified)`); windows carry one. Encoded as `legacy_aggregate_patterns: tuple[re.Pattern[str], ...]` so callers pass however many they need.
+- **`mark_pattern` is optional.** When `None`, per-mark dedupe is disabled and only the legacy-aggregate path fires. Pinned by `test_mark_pattern_none_disables_per_mark_dedupe`. The doors and windows wrappers both pass it; this knob exists for future callers (e.g. site-utility aggregates where no mark exists per row).
+- **`family_label` is reserved.** Currently informational only; the scaffold does not log or raise. Threaded through for future error attribution.
+- **Wrappers preserved by name.** `dedupe_doors_against_synthesis(items)` and `dedupe_windows_against_synthesis(items)` keep their signatures unchanged — `core/takeoff.py` imports them by name and was not touched.
+- **LOC delta.** Combined production code +60 lines (door_dedupe 179 → 82, window_dedupe 212 → 94, new dedupe.py 275; net `-97 - 118 + 275 = +60`). Smaller than the brief's "-100 LOC" prediction because the new module carries the consolidated module-level docstring + reconciliation notes for both families; offset by the same documentation being lifted out of the two wrappers. Net **logic** LOC is meaningfully smaller; the test surface gains 14 tests (~190 lines after stripping helpers) that pin the generic behaviour directly.
+- **No third-party deps.** Pure-stdlib (`re`, `typing.Literal`).
+
+**Subtle behaviours reconciled by the refactor:**
+- Door dedupe checks `csi_division.startswith("08")` while window dedupe checks `csi_section.startswith(prefix)`. The unified scaffold runs the prefix match against the configured `section_field` only — it does NOT OR the two fields together. This is intentional: OR-ing would introduce *new* dedupe coverage on rows like `csi_division="", csi_section="08 11 13"` (which the legacy door code would have missed), changing behaviour in production paths that the test suite doesn't exercise. Strict per-field matching preserves byte-identical behaviour.
+- The `extract_mark_from_synthesized` helper is guarded by the notes-prefix check (`item.notes.startswith(f"source={source_tag}")`). Callers can apply it indiscriminately to any item; non-synth rows return `None`. The original modules gated externally via `_is_synthesised(it)` before calling `_extract_synthesised_mark(it)`; the guard moves into the helper without changing the caller's behaviour.
+
+**Tests added (`tests/test_dedupe_generic.py`):** 14 tests against a synthetic "fixture_schedule_prepass" family (made-up CSI Division 22 sections, made-up "Fixture <MARK>" description shape) so the generic surface is pinned without touching the door- or window-specific contracts:
+1. Empty input → empty output.
+2. No synth rows → input unchanged (identity preserved).
+3. Synth row + matching legacy aggregate → aggregate dropped.
+4. Synth row + matching same-mark LLM row → LLM row dropped.
+5. Synth + non-matching items → all preserved, original order intact.
+6. Out-of-family rows untouched regardless of dedupe state (both modes: with and without an active synth row).
+7. Custom `source_tag` — the scaffold is tag-agnostic; using the wrong tag against the same items is a no-op.
+8. `mark_pattern=None` disables per-mark dedupe; legacy-aggregate dropping still fires.
+9. Row matching both aggregate regex AND a synthesised mark — dropped exactly once.
+10. Multiple aggregate patterns — every supplied pattern is honoured.
+11. `extract_mark_from_synthesized` helper — four unit tests (notes wins over desc; desc fallback when notes lack `mark=`; source_tag guard rejects mismatches; None notes + no mark_pattern → None).
+
+The 53 pre-existing door + window tests (`tests/test_door_dedupe.py` + `tests/test_window_dedupe.py`) are byte-identical and untouched.
+
+**Phase T4 readiness:** wiring a third family (finish schedule, panel schedule, RTU schedule, plumbing fixture schedule) is now a 5-line wrapper plus a synthesiser update. The `tests/test_dedupe_generic.py` fixture-schedule shape is a working template — a future T4 worker can copy it, swap the keywords + CSI prefixes, and ship.
 
 ---
 
@@ -522,7 +558,15 @@ Plus:
 
 **Future enhancement — per-agency TX WD harvester.** Rather than a (non-existent) central feed, a future harvester would scrape active-solicitation pages of major TX procuring agencies — **TxDOT, TFC, TBPC, TWDB, the UT / Texas A&M / Texas Tech / UH university systems, large municipalities (Houston, Dallas, San Antonio, Austin, Fort Worth), large counties, TDCJ, HHSC** — and extract the WD PDFs they attach. A placeholder module exists at `core/pricing/sources/tx_agency_wd.py` to make the future shape explicit; **not implemented in current scope.**
 
-**Tier 1 Phase C — stubs.** TX SmartBuy / ESBD, HD Pro / Lowe's catalog, ENR CCI, AGC Inflation Alert, Turner BCI, NAHB Cost of Constructing a Home all ship as importable stubs with documented license + ToS posture and clear `[NOT YET IMPLEMENTED]` markers.
+**Tier 1 Phase C — partial.** The three major U.S. construction cost indexes — **ENR 20-City CCI**, **AGC PPI-based CCI**, and **Turner Building Cost Index** — ship as full adapters in this slice (`core/pricing/sources/enr_cci.py`, `agc_cci.py`, `turner_cci.py`). Each scrapes its publisher's free public landing page, persists the latest headline index value + reporting period to `config/pricing_snapshots/<adapter>/national*/`, and complements (not replaces) the per-CSI BLS PPI integration as a macro escalator. Per-adapter access posture is documented in `firm/playbooks/pricing-data-sources.md` → "Construction Cost Index macro escalators" — headline-only on the free tier, full historical series on each publisher require a subscription / per-quarter PDF parsing that is left as a follow-up slice. The remaining Phase C entries — **TX SmartBuy / ESBD**, **HD Pro / Lowe's catalog**, **NAHB Cost of Constructing a Home** — continue as importable stubs with documented license + ToS posture.
+
+**Phase C CCI access-posture summary (verified 2026-05-28):**
+- **ENR `/economics`** — public landing page; headline 20-city CCI parsed by regex anchor. Full history paywalled.
+- **AGC `/learn/construction-data`** — public landing page; PPI-based headline parsed by anchor. Construction Inflation Alert PDF parser is future work.
+- **Turner `/cost-index`** — public landing page; latest quarterly TBCI parsed by anchor. Per-quarter archive (back to 2006) is future work.
+- Each adapter degrades gracefully on a page-layout change or 4xx / 5xx response: `fetch()` returns `[]` with a logged warning rather than crashing the refresh runner.
+- The CCI adapters are NOT wired into the default `scripts/refresh_pricing.py --sources` list because HTML scraping is more fragile than the Phase A / B JSON APIs. Opt in with `--sources enr_cci,agc_cci,turner_cci` or `--phase c`.
+- Wiring the CCI signal into `core/pricing/escalation.py` (uniform macro multiplier on top of per-CSI BLS PPI) is deferred — the engine does not yet expose a 5-LOC seam for the blend, per the brief's constraint on `escalation.py` modifications.
 
 **Tier 2 — deferred.** RSMeans / Gordian commercial cost DB. Decision gated on Tier 1 calibration data demonstrating a measurable gap. See Section 5 (Build / Buy / Partner) above.
 
