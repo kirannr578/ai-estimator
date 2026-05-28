@@ -26,6 +26,7 @@ from dataclasses import dataclass
 
 from rapidfuzz import fuzz
 
+from .extraction.door_dedupe import dedupe_doors_against_synthesis
 from .extraction.takeoff_synthesis import synthesize_door_takeoff_items
 from .schemas import (
     Alternate,
@@ -658,8 +659,13 @@ def reconcile(
     # T2: append synthesised door-schedule rows AFTER _merge_takeoffs so each
     # DoorRecord survives as a distinct EA line. Each row is tagged with
     # ``source=door_schedule_prepass`` at the start of its notes for the
-    # future T3 dedupe pass to find.
+    # T3 dedupe pass below to find.
     all_takeoffs.extend(synthesized_door_items)
+    # T3: drop legacy LLM door aggregates ("Hollow metal doors", "Solid-core
+    # wood doors", "Doors (type unspecified)") and same-mark LLM door rows
+    # when a deterministic synthesised row already covers them. Pure on
+    # `all_takeoffs`; no-op when no synthesised door exists on the project.
+    all_takeoffs = dedupe_doors_against_synthesis(all_takeoffs)
 
     project_info = _consolidate_project_info(bid_packages)
     scope_matrix = _build_scope_matrix(bid_packages)

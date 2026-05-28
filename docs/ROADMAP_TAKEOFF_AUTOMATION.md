@@ -272,6 +272,32 @@ Six phases. Phases T1–T5 follow the suggested ordering from the brief, with on
 
 ### Phase T3 — Cross-sheet TakeoffItem dedup and reconciliation
 
+**Status:** IN PROGRESS — door-dedupe slice landed in this commit (LLM door aggregates retired when deterministic synthesis covers them). The broader cross-sheet rapidfuzz dedup graph below is still pending.
+
+**Implementation notes (door-dedupe slice, this commit):**
+- **New module:** `core/extraction/door_dedupe.py` exposes a single pure function `dedupe_doors_against_synthesis(items: list[TakeoffItem]) -> list[TakeoffItem]`. No new schema field; the existing `notes` prefix from Phase T2 is the discriminator.
+- **Discriminator rules:**
+  - "Synthesised" = `item.notes` starts with `f"source={SYNTHESIS_SOURCE_TAG}"` (constant imported from `core.extraction.takeoff_synthesis`, never hard-coded).
+  - "Door" = `item.csi_division == "08"` (Division 08 — Openings).
+  - "LLM door" = door AND not synthesised.
+  - "Same mark" = the synthesised row's mark (parsed from its notes `mark=...` segment, fall-back to the `^Door <MARK> — ` description regex) is found as a whole-token, case-insensitive match inside the LLM row's description. The brief specifies a substring; we tighten with alphanumeric-boundary lookarounds so a mark of `"10"` does not spuriously match `"1010"`. Marks shorter than 2 characters are skipped (too promiscuous).
+  - "Legacy aggregate" = description matches `r"^(hollow\s+metal|solid[\-\s]?core\s+wood|wood|steel|aluminum|glass)\s+doors?(\s*:?\s*\d+\s+ea)?\s*$"` OR `r"^doors?\s*\(type\s+unspecified\)\s*$"` (both case-insensitive). These cover the bare descriptions `_derive_takeoffs` actually emits today AND the explicit `: N EA` suffix form from the brief.
+- **Safety rule:** when no synthesised door exists anywhere on the project, the input is returned unchanged. We never drop a legacy aggregate without a deterministic fallback to take its place.
+- **Wired into the pipeline** at one targeted point in `core/takeoff.py:reconcile()` — right after the T2 `all_takeoffs.extend(synthesized_door_items)` append, immediately before the `ProjectModel` is constructed. The legacy `_derive_takeoffs` is intentionally NOT deleted; the dedupe filter handles retirement so the function stays available behind a no-synthesised-door fallback.
+- **Tests:** 24 new tests in `tests/test_door_dedupe.py` covering the eight cases called out in the brief (empty, no-synth, mark match, mark non-match, legacy aggregate with synth, legacy aggregate without synth, mixed CSI codes, combinatorial), plus the reconcile() smoke test, plus ordering preservation, plus short-mark and word-boundary safety regressions, plus a 9-row parametric sweep of the legacy-aggregate regex. Suite: 281 → 305 passed (1 skipped unchanged).
+
+**Known limitations of this slice:**
+- **Exact-substring mark matching only.** An LLM row with mark `"101"` and a synthesised row with mark `"101A"` will both survive — neither is a token of the other under the boundary rule. A future fuzz-match pass (rapidfuzz on the parsed mark substring) would close this gap.
+- **No same-`type` heuristic.** An LLM row with description `"Hollow metal door, custom"` and no mark survives even when 10 synthesised HM doors cover the project. The conservative-dedupe stance (don't drop what we can't confidently attribute) is intentional but errs toward over-count.
+- **Project-wide, not sheet-wide.** The brief's safety rule is "ANY synthesised door on the same project", which is what we implement. A more aggressive sheet-scoped filter would catch cross-sheet duplicates the current pass intentionally preserves.
+- **Hardware-set rollups untouched.** `_derive_takeoffs` still emits `"Door hardware sets"` (qty = total door count). Synthesis doesn't have a hardware aggregate yet, so dropping the LLM one would be a net loss. Phase T2.5 candidate.
+
+**Suggested next slices:**
+- **Phase T2.5: window-schedule extraction.** Mirror `core/extraction/door_schedule.py` swapping `FRAME/HARDWARE` for `GLAZING/OPERATION`; the synthesis + dedupe pattern in `takeoff_synthesis.py` + `door_dedupe.py` extends one-to-one to `WindowRecord` and Division 08 50 / 08 80 rollups.
+- **Phase T4: dedupe extension to room and finish schedules.** Same notes-prefix discriminator pattern, different aggregator patterns (room area roll-ups, per-finish SF roll-ups). The dedupe-by-tag scaffolding can move to `core/takeoff/dedup.py` and accept a `source_tag` argument so each schedule kind gets its own module.
+- **Phase T5: door↔room association.** Extract `room_from / room_to` columns from the door schedule (T1 follow-up) and seed `DoorEntry.room_number`, which feeds the wall-finish opening-deduction in T5.
+- **Phase T6: confidence-aware pricing.** The dedupe pass leaves the synthesised row's 0.92 confidence intact; T6 can finally use it to band the priced output.
+
 **1-line goal:** A given real-world item (a single door, a single RTU) ends up as exactly one priced line, even when it appears on architectural + life-safety + hardware + spec sheets.
 
 **Deliverables:**
