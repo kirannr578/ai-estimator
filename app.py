@@ -21,11 +21,14 @@ Workflow:
 
 from __future__ import annotations
 
+import csv
+import io
 import json
 import logging
 import os
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -33,7 +36,12 @@ import pandas as pd
 import streamlit as st
 from dotenv import load_dotenv
 
-from core.estimator import CostDatabase, price_takeoff
+from core.estimator import (
+    MANUAL_OVERRIDE_NOTE_PREFIX,
+    CostDatabase,
+    apply_manual_override,
+    price_takeoff,
+)
 from core.exporter import export_estimate_json, export_estimate_xlsx
 from core.extractors import extract_bundle, extract_sheet
 from core.llm_client import LLMClient
@@ -41,6 +49,7 @@ from core.pdf_processor import DocumentBundle, process_pdfs
 from core.schemas import (
     ClientInfo,
     CompanyInfo,
+    CostLine,
     CostSourceTier,
     Estimate,
     PaymentMilestone,
@@ -74,6 +83,191 @@ def _t7_tier_label(li) -> str:
         return _T7_TIER_LABELS[CostSourceTier(tier)]
     except Exception:
         return str(tier)
+
+
+# ---------------------------------------------------------------------------
+# Phase T6.2 — Operator override UI helpers (pure functions, easy to test)
+# ---------------------------------------------------------------------------
+#
+# The helpers below back the "Operator price overrides" affordance in the
+# Estimate tab. They are intentionally pure (no Streamlit calls, no
+# session-state reads) so the test suite can exercise them without
+# spinning up an ``AppTest`` harness — Streamlit's testing facility does
+# not yet cleanly support form-submit round-trips against a heavy app
+# like this one. The Streamlit form below is a thin wrapper that
+# (1) collects the operator's input, (2) hands it to ``_apply_operator_override``,
+# and (3) renders the result.
+
+# Sort order for the line-selector dropdown. MANUAL_OVERRIDE first so an
+# operator who already touched a row can find it immediately, then the
+# remaining tiers in descending catalog-completeness quality (EXACT first,
+# MISSING last). Any unknown tier falls through to the bottom.
+_TIER_SORT_ORDER: dict[CostSourceTier, int] = {
+    CostSourceTier.MANUAL_OVERRIDE: 0,
+    CostSourceTier.EXACT_MATCH: 1,
+    CostSourceTier.CATEGORY_MATCH: 2,
+    CostSourceTier.INTERPOLATED: 3,
+    CostSourceTier.PARAMETRIC: 4,
+    CostSourceTier.MISSING: 5,
+}
+
+
+def _format_operator_note(
+    vendor: str | None,
+    quote_ref: str | None,
+    free_text: str | None,
+) -> str | None:
+    """Combine vendor / quote-ref / free-text into one operator-note string.
+
+    Format::
+
+        [vendor: <vendor>] [quote-ref: <quote_ref>] <free_text>
+
+    Empty / whitespace-only fields are skipped. If all three are empty
+    the function returns ``None`` so the caller can pass it straight to
+    ``apply_manual_override`` (which treats ``None`` as "no note" but
+    still stamps the ``MANUAL_OVERRIDE`` sentinel).
+    """
+    parts: list[str] = []
+    v = (vendor or "").strip()
+    q = (quote_ref or "").strip()
+    t = (free_text or "").strip()
+    if v:
+        parts.append(f"[vendor: {v}]")
+    if q:
+        parts.append(f"[quote-ref: {q}]")
+    if t:
+        parts.append(t)
+    if not parts:
+        return None
+    return " ".join(parts)
+
+
+def _select_line_label(idx: int, line: CostLine) -> str:
+    """Human-readable label for the override line-selector dropdown.
+
+    Format: ``#<idx> | <description, truncated> | $<unit_cost>/<unit> | <tier>``.
+
+    The leading ``#<idx>`` is the stable line identifier the override
+    pass uses (CostLine has no ``entity_id`` field per the T7 schema),
+    so the operator can always disambiguate two visually-similar rows
+    by their position.
+    """
+    desc = (line.description or "").strip() or "(no description)"
+    if len(desc) > 60:
+        desc = desc[:57] + "..."
+    tier_label = _t7_tier_label(line)
+    unit = (line.unit or "").strip() or "?"
+    return f"#{idx} | {desc} | ${line.unit_cost:,.2f}/{unit} | {tier_label}"
+
+
+def _sort_lines_by_tier(
+    lines: list[CostLine],
+) -> list[tuple[int, CostLine]]:
+    """Stable-sort ``(index, line)`` pairs by tier preference.
+
+    MANUAL_OVERRIDE first (so an operator who already touched a row
+    finds it at the top), then EXACT → CATEGORY → INTERPOLATED →
+    PARAMETRIC → MISSING. Stable-sorted on the original index so two
+    rows in the same tier preserve their physical order in the
+    estimate.
+    """
+    indexed = list(enumerate(lines))
+    indexed.sort(
+        key=lambda pair: (
+            _TIER_SORT_ORDER.get(pair[1].cost_source_tier, 99),
+            pair[0],
+        )
+    )
+    return indexed
+
+
+def _format_override_delta(
+    old_estimate: Estimate,
+    new_estimate: Estimate,
+    line_idx: int,
+) -> str:
+    """Human-readable delta string for an override application.
+
+    Surfaces three deltas the operator wants to see post-submit: the
+    line's unit-cost change, the line's total-cost change, and the
+    estimate-level subtotal change. Money formatted with thousands
+    separators + 2dp; uses an arrow glyph (``→``) so the diff reads
+    naturally.
+    """
+    old_line = old_estimate.line_items[line_idx]
+    new_line = new_estimate.line_items[line_idx]
+    return (
+        f"Unit cost: ${old_line.unit_cost:,.2f} \u2192 ${new_line.unit_cost:,.2f}  |  "
+        f"Line total: ${old_line.total_cost:,.2f} \u2192 ${new_line.total_cost:,.2f}  |  "
+        f"Subtotal: ${old_estimate.subtotal:,.2f} \u2192 ${new_estimate.subtotal:,.2f}"
+    )
+
+
+def _apply_operator_override(
+    estimate: Estimate,
+    line_idx: int,
+    new_unit_cost: float,
+    vendor: str | None = None,
+    quote_ref: str | None = None,
+    free_text: str | None = None,
+) -> tuple[Estimate, str | None]:
+    """Format the operator-note + apply the override; returns ``(new_estimate, note)``.
+
+    Pure wrapper around :func:`core.estimator.apply_manual_override`.
+    Factored out of the Streamlit form so the round-trip can be tested
+    without an ``AppTest`` harness. Re-raises ``ValueError`` from the
+    underlying override pass unchanged so the UI layer can surface a
+    clean ``st.error`` rather than a stack trace.
+    """
+    note = _format_operator_note(vendor, quote_ref, free_text)
+    new_est = apply_manual_override(
+        estimate,
+        line_idx,
+        new_unit_cost=new_unit_cost,
+        operator_note=note,
+    )
+    return new_est, note
+
+
+def _build_override_history_csv(history: list[dict[str, Any]]) -> str:
+    """Serialise the override-history list to CSV for download.
+
+    Empty history → header-only CSV (still a valid file, downloaded
+    artifact tells the operator there are no overrides yet).
+    """
+    fieldnames = [
+        "timestamp",
+        "line_index",
+        "description",
+        "csi_division",
+        "csi_section",
+        "original_unit_cost",
+        "new_unit_cost",
+        "operator_note",
+    ]
+    buf = io.StringIO()
+    writer = csv.DictWriter(buf, fieldnames=fieldnames, extrasaction="ignore")
+    writer.writeheader()
+    for row in history:
+        writer.writerow(row)
+    return buf.getvalue()
+
+
+def _initialize_override_session_state(estimate: Estimate) -> None:
+    """Populate the override-related session-state keys for a fresh estimate.
+
+    Called once when a new estimate is built (analyze run) — captures
+    a deep copy of the pre-override estimate for delta / reset, and
+    seeds an empty history. Idempotent under repeat calls when an
+    estimate already has snapshots: the brief specifies "populate once",
+    but repeat calls (e.g. on an analysis re-run with the same run-id)
+    overwrite the snapshot with the current estimate, which is the
+    expected behaviour for a fresh analyze pass.
+    """
+    st.session_state["estimate_original"] = estimate.model_copy(deep=True)
+    st.session_state["override_history"] = []
+
 from core.sheet_classifier import classify_sheet
 from core.takeoff import ProjectModel, reconcile
 
@@ -819,6 +1013,12 @@ if run_clicked:
     st.session_state["extractions"] = extractions
     st.session_state["project"] = project
     st.session_state["estimate"] = estimate
+    # Phase T6.2 — seed the override snapshot + history for the operator-
+    # override UI in the Estimate tab. Done here (immediately after the
+    # estimate is committed to session state) so a fresh analyze run
+    # always starts with an empty override history regardless of any
+    # prior session activity.
+    _initialize_override_session_state(estimate)
 
 # --- Results -----------------------------------------------------------------
 
@@ -1429,6 +1629,272 @@ if "estimate" in st.session_state:
                     hide_index=True,
                     use_container_width=True,
                 )
+
+        # ------------------------------------------------------------------
+        # Phase T6.2 — Operator price overrides
+        # ------------------------------------------------------------------
+        #
+        # Wires ``apply_manual_override`` (T6.1) into the Streamlit
+        # round-trip with vendor / quote-ref attribution and an
+        # operator-note field. Sits after the suppressed expander so
+        # the operator's mental flow is "look at table → spot a row
+        # that needs a hand-priced number → apply override → see new
+        # totals". Snapshot + history live in session-state, seeded
+        # by ``_initialize_override_session_state`` at analyze time.
+
+        # Defensive: if a session predates T6.2 (estimate already in
+        # session_state from a pre-T6.2 run), seed the snapshot now so
+        # the rest of the section works cleanly.
+        if "estimate_original" not in st.session_state:
+            st.session_state["estimate_original"] = estimate.model_copy(deep=True)
+        if "override_history" not in st.session_state:
+            st.session_state["override_history"] = []
+
+        estimate_original: Estimate = st.session_state["estimate_original"]
+        override_history: list[dict[str, Any]] = st.session_state["override_history"]
+
+        # Top-of-section banner for context — only shown when overrides exist.
+        manual_override_lines = [
+            li for li in estimate.line_items
+            if li.cost_source_tier == CostSourceTier.MANUAL_OVERRIDE
+        ]
+        if manual_override_lines:
+            adj_total = sum(
+                li.total_cost - estimate_original.line_items[i].total_cost
+                for i, li in enumerate(estimate.line_items)
+                if li.cost_source_tier == CostSourceTier.MANUAL_OVERRIDE
+                and i < len(estimate_original.line_items)
+            )
+            adj_sign = "+" if adj_total >= 0 else "\u2212"
+            st.info(
+                f"\U0001F4DD {len(manual_override_lines)} manual override"
+                f"{'s' if len(manual_override_lines) != 1 else ''} applied "
+                f"\u2014 {adj_sign}${abs(adj_total):,.2f} total adjustment "
+                f"vs. original."
+            )
+
+        with st.expander(
+            "Operator price overrides (Phase T6.2)",
+            expanded=False,
+        ):
+            st.caption(
+                "Hand-price a single line by entering a vendor-quote unit "
+                "cost. Overrides stamp ``cost_source_tier = MANUAL_OVERRIDE`` "
+                "and ``price_confidence = 1.0`` on the line, force "
+                "``suppressed = False`` (manual pricing IS the resolution "
+                "to a unit-mismatch suppression), and recompute the band "
+                "against the new combined confidence. A vendor / "
+                "quote-ref / free-text note is stamped onto the line's "
+                "``notes`` field with the ``operator override`` sentinel "
+                "so downstream readers (Excel / PDF / CSV) can detect the "
+                "override."
+            )
+
+            all_lines = list(estimate.line_items)
+            if not all_lines:
+                st.info("No line items to override.")
+            else:
+                indexed_sorted = _sort_lines_by_tier(all_lines)
+                label_to_idx: dict[str, int] = {}
+                labels: list[str] = []
+                for orig_idx, li in indexed_sorted:
+                    label = _select_line_label(orig_idx, li)
+                    # Disambiguate the rare collision (same desc / unit /
+                    # cost / tier on two indices) by appending the index.
+                    if label in label_to_idx:
+                        label = f"{label} (idx={orig_idx})"
+                    label_to_idx[label] = orig_idx
+                    labels.append(label)
+
+                with st.form("operator_override_form", clear_on_submit=False):
+                    selected_label = st.selectbox(
+                        "Line to override",
+                        options=labels,
+                        index=0,
+                        help=(
+                            "Lines are sorted MANUAL_OVERRIDE first, then "
+                            "EXACT \u2192 CATEGORY \u2192 INTERPOLATED \u2192 "
+                            "PARAMETRIC \u2192 MISSING. The leading #N is "
+                            "the stable line index used by the override "
+                            "pass."
+                        ),
+                    )
+                    selected_idx = label_to_idx.get(selected_label, 0)
+                    selected_line = all_lines[selected_idx]
+
+                    new_unit_cost = st.number_input(
+                        "New unit cost",
+                        min_value=0.0,
+                        value=float(selected_line.unit_cost),
+                        step=0.01,
+                        format="%.2f",
+                        help="Per-unit cost. Multiplied by the line's quantity to recompute total.",
+                    )
+                    vendor = st.text_input(
+                        "Vendor (optional)",
+                        value="",
+                        placeholder="e.g., Ferguson Plumbing, Home Depot Pro",
+                        help="Stamped onto the operator note as ``[vendor: ...]``.",
+                    )
+                    quote_ref = st.text_input(
+                        "Quote / PO reference (optional)",
+                        value="",
+                        placeholder="e.g., Q-2026-0428, PO#12345",
+                        help="Stamped onto the operator note as ``[quote-ref: ...]``.",
+                    )
+                    operator_free_text = st.text_area(
+                        "Operator note (optional)",
+                        value="",
+                        placeholder="Free-form reason / context for the override",
+                        height=80,
+                    )
+                    submitted = st.form_submit_button(
+                        "Apply override",
+                        use_container_width=True,
+                    )
+
+                if submitted:
+                    pre_override = estimate
+                    try:
+                        new_estimate, formatted_note = _apply_operator_override(
+                            estimate,
+                            selected_idx,
+                            new_unit_cost=float(new_unit_cost),
+                            vendor=vendor,
+                            quote_ref=quote_ref,
+                            free_text=operator_free_text,
+                        )
+                    except ValueError as exc:
+                        st.error(f"Override failed: {exc}")
+                    else:
+                        old_line = pre_override.line_items[selected_idx]
+                        new_line = new_estimate.line_items[selected_idx]
+                        # Append to history BEFORE rerun so the CSV
+                        # download (rendered on the next pass) includes
+                        # this entry.
+                        override_history.append({
+                            "timestamp": datetime.utcnow().isoformat(timespec="seconds"),
+                            "line_index": selected_idx,
+                            "description": old_line.description,
+                            "csi_division": old_line.csi_division,
+                            "csi_section": old_line.csi_section or "",
+                            "original_unit_cost": round(float(old_line.unit_cost), 2),
+                            "new_unit_cost": round(float(new_line.unit_cost), 2),
+                            "operator_note": formatted_note or "",
+                        })
+                        st.session_state["override_history"] = override_history
+                        st.session_state["estimate"] = new_estimate
+                        st.success(
+                            f"Override applied to line #{selected_idx} "
+                            f"(``{_t7_tier_label(new_line)}``, band "
+                            f"``{new_line.cost_band.value}``). "
+                            f"New total: ${new_line.total_cost:,.2f}."
+                        )
+                        st.caption(
+                            _format_override_delta(
+                                pre_override, new_estimate, selected_idx
+                            )
+                        )
+                        st.rerun()
+
+            # ----- Override history (read-only) ---------------------------
+
+            if override_history or manual_override_lines:
+                st.markdown("##### Override history")
+                history_rows = []
+                for entry in override_history:
+                    history_rows.append({
+                        "Timestamp (UTC)": entry["timestamp"],
+                        "Line #": entry["line_index"],
+                        "Description": entry["description"],
+                        "Orig $": entry["original_unit_cost"],
+                        "New $": entry["new_unit_cost"],
+                        "Note": entry["operator_note"],
+                    })
+                if history_rows:
+                    hist_df = pd.DataFrame(history_rows)
+                    st.dataframe(
+                        hist_df,
+                        hide_index=True,
+                        use_container_width=True,
+                        column_config={
+                            "Orig $": st.column_config.NumberColumn(format="$%.2f"),
+                            "New $": st.column_config.NumberColumn(format="$%.2f"),
+                        },
+                    )
+                else:
+                    st.caption(
+                        "No overrides applied in this session yet. (Manual "
+                        "Override-tier rows below are from a prior pass.)"
+                    )
+
+                # CSV export — every MANUAL_OVERRIDE-tier line in the current
+                # estimate, with the original unit cost pulled from the snapshot
+                # when the index aligns. Audit-trail artefact for the project file.
+                csv_rows: list[dict[str, Any]] = []
+                history_by_idx = {
+                    e["line_index"]: e for e in reversed(override_history)
+                }
+                for idx, li in enumerate(estimate.line_items):
+                    if li.cost_source_tier != CostSourceTier.MANUAL_OVERRIDE:
+                        continue
+                    orig_uc: float = 0.0
+                    if idx < len(estimate_original.line_items):
+                        orig_uc = round(
+                            float(estimate_original.line_items[idx].unit_cost), 2
+                        )
+                    last_entry = history_by_idx.get(idx)
+                    csv_rows.append({
+                        "timestamp": last_entry["timestamp"] if last_entry else "",
+                        "line_index": idx,
+                        "description": li.description,
+                        "csi_division": li.csi_division,
+                        "csi_section": li.csi_section or "",
+                        "original_unit_cost": orig_uc,
+                        "new_unit_cost": round(float(li.unit_cost), 2),
+                        "operator_note": li.notes or "",
+                    })
+                csv_text = _build_override_history_csv(csv_rows)
+                st.download_button(
+                    "Download override history CSV",
+                    data=csv_text,
+                    file_name=(
+                        f"{estimate.project_name.replace(' ', '_')}"
+                        f"_overrides.csv"
+                    ),
+                    mime="text/csv",
+                    use_container_width=True,
+                    disabled=not csv_rows,
+                    help=(
+                        "Exports every ``MANUAL_OVERRIDE``-tier line "
+                        "with original \u2192 new unit cost + operator note. "
+                        "Disabled when no overrides are present."
+                    ),
+                )
+
+                # Reset strategy: SINGLE GLOBAL "Reset all overrides"
+                # button (per the brief's "pick the simpler option"
+                # guidance). Restores the pre-override snapshot
+                # captured at analyze time. A per-line stack-based
+                # reset would require tracking the prior estimate per
+                # override application and would push session-state
+                # complexity past the simplification line for this
+                # slice.
+                if st.button(
+                    "Reset all overrides (restore original estimate)",
+                    use_container_width=True,
+                    help=(
+                        "Restores the pre-override estimate snapshot "
+                        "captured when this analyze run completed. "
+                        "Clears the override history."
+                    ),
+                ):
+                    st.session_state["estimate"] = estimate_original.model_copy(
+                        deep=True
+                    )
+                    st.session_state["override_history"] = []
+                    st.success("All overrides reverted; history cleared.")
+                    st.rerun()
 
         st.divider()
         st.subheader("Project totals")
