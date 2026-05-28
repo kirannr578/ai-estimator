@@ -229,6 +229,42 @@ Six phases. Phases T1–T5 follow the suggested ordering from the brief, with on
 
 ---
 
+### Phase T2.5 — Window-schedule extraction + synthesis + dedupe
+
+**Status:** SHIPPED — this commit landed the full window slice (extraction → schema → prepass wire-in → synthesis → dedupe → reconcile wire-in) on top of the door-shaped T1/T2/T3 dispatcher. Suite: 305 → 386 passed (+81 tests; 1 skipped unchanged).
+
+**Implementation notes (this commit):**
+- **Module structure.** Three new modules: `core/extraction/window_schedule.py` (T1-shape extractor, dataclasses + `to_schema()` bridge), `core/extraction/window_dedupe.py` (T3-shape dedupe), plus an extension of `core/extraction/takeoff_synthesis.py` adding `synthesize_window_takeoff_items()` and `SYNTHESIS_SOURCE_TAG_WINDOW = "window_schedule_prepass"`. `core/schemas.py` gains `WindowRecord` + `WindowScheduleResult` Pydantic models and a new optional `DrawingPrepassResult.window_schedule` field alongside the existing `door_schedule`.
+- **Door-vs-window discriminator (door-precedence).** Window schedules and door schedules share `MARK / TYPE / WIDTH / HEIGHT` headers, so the window header heuristic (`_looks_like_window_header`) requires a window-specific signal (`GLAZING / GLASS / OPERATION / OPER / SILL / U-FACTOR / SHGC`) in addition to the shared tag + dimensional signals. The integration hook `_maybe_extract_window_schedule()` in `drawing_prepass.py` further enforces the rule: if a page's door-schedule extraction succeeded (`door_schedule is not None AND door_schedule.doors`), the window pass is skipped entirely. The older, more-validated door detector wins on ambiguous pages; the test `test_discriminator_door_precedence_when_both_phrases_present` pins the behaviour.
+- **Dimension parsing reuse.** `parse_dimension()` from `door_schedule.py` is imported verbatim — no duplication. The combined `SIZE` cell splitter is local to the window module because its `x / × / by` separator catalogue is the same as the door one (mirror, not extension).
+- **U-factor / SHGC.** Two new optional float fields capture thermal-performance columns when present (typical on commercial window schedules per IECC). The header matcher uses the right-hand token (`FACTOR`) rather than the joined form so `U-FACTOR`, `U FACTOR`, and `UFACTOR` all resolve to the same column.
+- **CSI mapping (six families + storefront tiering).** `_classify_window()` maps the `type + frame + material + operation` haystack to one of:
+  - Aluminum windows → `08 51 13`
+  - Vinyl windows → `08 53 13`
+  - Wood windows → `08 52 13`
+  - Metal-clad wood → `08 52 19` (checked BEFORE bare wood and BEFORE aluminum so `CLAD WOOD` routes to the more-specific section)
+  - Steel windows → `08 51 23`
+  - Storefront / curtain wall — size-tiered: `08 41 13` (Aluminum-Framed Entrances and Storefronts) when both dimensions ≤ 96 in. and the keyword is `STOREFRONT`; `08 44 13` (Glazed Aluminum Curtain Walls) when ANY dimension > 96 in. (8 ft) OR the keyword is `CURTAIN`. The 96 in. threshold is exposed as `_WIN_CURTAIN_WALL_DIM_IN` so a future maintainer can lift it.
+  - Unknown / unmatched → `08 50 00` (Windows — generic)
+- **Confidence rubric.** Identical to T2 doors: 0.92 with mark+type, 0.80 with one, 0.60 with neither. Dimensions are not part of the rubric.
+- **Architectural choice α (mirror).** This slice ships `window_dedupe.py` as a sibling to `door_dedupe.py` rather than generalising both into a parametrised `dedupe_against_synthesis(*, source_tag, csi_prefix, ...)` scaffold. Reasoning: (1) the discriminators differ in three non-trivial ways (window section is a multi-prefix regex over `08 41` / `08 44` / `08 5*`, the legacy aggregate set is shorter and uses different keywords, and there is no equivalent of the door-side `Doors (type unspecified)` rollup); (2) the dedupe modules together total ~310 lines, well under the threshold where mirror-duplication starts to bite; (3) a failed generalisation mid-PR would destabilise the just-landed T3. The Phase T3 worker called out the generalisation as the next big move; it's queued as Phase T3.5 below.
+- **Cross-pollination safety.** The window dedupe `_is_window_row()` matches only Division 08 rows in window-shaped CSI sections (`08 41` / `08 44` / `08 5*`) or with window-shaped descriptions — door rows at `08 11` / `08 14` / `08 71` / `08 80` are never touched. Two regression tests (`test_door_dedupe_never_touches_window_rows`, `test_window_dedupe_never_touches_door_rows`) pin this in both directions.
+- **Wire-in.** `core/takeoff.py:reconcile()` collects `synthesized_window_items` alongside the existing door collection, appends them after `_merge_takeoffs(...)`, then calls `dedupe_windows_against_synthesis(...)` after the existing door dedupe. Two targeted additions, no refactor of the existing T2/T3 path.
+- **Tests.** 81 new tests across three files: `tests/test_window_schedule_extraction.py` (18 tests, including the multi-page discriminator regression that pins the door-precedence rule), `tests/test_window_takeoff_synthesis.py` (34 tests, covering all six CSI families + the storefront / curtain wall size tier + confidence rubric + dimension formatting + the three reconcile-loop integration smoke tests), and `tests/test_window_dedupe.py` (29 tests, including a 12-row parametric sweep of the legacy-aggregate regex and the two cross-pollination safety regressions).
+
+**Known limitations of this slice:**
+- **Exact-substring mark matching only** (inherited from T3 dedupe). A synthesised window with mark `"W1"` does NOT dedupe an LLM row with mark `"W101"` — neither is a token of the other. Future fuzz-match pass closes this gap.
+- **No room-association.** Window-to-room linkage (similar to the door `room_from / room_to` follow-up flagged in T1) is not extracted; if a future Phase T5 wants per-room window opening deduction it needs to add it.
+- **Hardware aggregation not addressed** (this is a door-side limitation flagged in T3; T2.5 inherits the same gap for any future window-side hardware aggregate the LLM might emit).
+- **Storefront size threshold is a single global constant.** Some offices treat storefronts and curtain walls as one section regardless of size; the constant is documented but not yet configurable per project.
+
+**Suggested next slices:**
+- **Phase T3.5 — generalise the dedupe-by-source-tag pattern.** Refactor `door_dedupe.py` + `window_dedupe.py` into a parametrised `dedupe_against_synthesis(items, *, source_tag, section_prefixes, legacy_aggregate_regex, family_label)` shared scaffold. The Phase T3 worker queued this as the next big move; with two concrete callers now in tree, the abstraction is grounded enough to do safely. Mechanical refactor; should land at zero behavioural change and -100 LOC.
+- **Phase T4: finish schedule + room-finish matrix extraction.** Same dispatch shape (`detect → extract → synthesise → dedupe`); column candidates `ROOM / FINISH / FLOOR / WALL / CEILING / BASE`. Emits per-finish SF lines instead of EA. Pairs naturally with the upcoming geometric measurement work in the original Phase T4.
+- **Phase T4 (continued): equipment / RTU / panel / fixture schedules.** Same shape, swap keywords + CSI codes per discipline (`23 00 00` / `26 24 16` / `22 40 00`).
+
+---
+
 **1-line goal:** Tighter, per-sheet-class prompts that boost recall on plumbing, electrical, HVAC, and life-safety counts, with prompt-engineering specifically against the `LS` unit-default issue.
 
 **Deliverables:**

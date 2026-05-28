@@ -27,7 +27,11 @@ from dataclasses import dataclass
 from rapidfuzz import fuzz
 
 from .extraction.door_dedupe import dedupe_doors_against_synthesis
-from .extraction.takeoff_synthesis import synthesize_door_takeoff_items
+from .extraction.takeoff_synthesis import (
+    synthesize_door_takeoff_items,
+    synthesize_window_takeoff_items,
+)
+from .extraction.window_dedupe import dedupe_windows_against_synthesis
 from .schemas import (
     Alternate,
     BidPackage,
@@ -604,6 +608,11 @@ def reconcile(
     # survives as its own line item; cross-source dedupe vs. LLM-derived
     # rows is Phase T3 work.
     synthesized_door_items: list[TakeoffItem] = []
+    # Phase T2.5: per-sheet window-schedule pre-pass → typed TakeoffItem
+    # rows. Mirror of the door collection above; survives _merge_takeoffs
+    # for the same reason. T2.5 dedupe runs alongside T3 once everything
+    # is merged.
+    synthesized_window_items: list[TakeoffItem] = []
 
     for ex in extractions:
         rooms.extend(ex.rooms)
@@ -624,6 +633,13 @@ def reconcile(
             synthesized_door_items.extend(
                 synthesize_door_takeoff_items(
                     ex.prepass.door_schedule,
+                    sheet_id=ex.sheet_id,
+                )
+            )
+        if ex.prepass is not None and ex.prepass.window_schedule is not None:
+            synthesized_window_items.extend(
+                synthesize_window_takeoff_items(
+                    ex.prepass.window_schedule,
                     sheet_id=ex.sheet_id,
                 )
             )
@@ -661,11 +677,19 @@ def reconcile(
     # ``source=door_schedule_prepass`` at the start of its notes for the
     # T3 dedupe pass below to find.
     all_takeoffs.extend(synthesized_door_items)
+    # T2.5: append synthesised window-schedule rows. Same pattern as T2
+    # doors; tagged ``source=window_schedule_prepass``.
+    all_takeoffs.extend(synthesized_window_items)
     # T3: drop legacy LLM door aggregates ("Hollow metal doors", "Solid-core
     # wood doors", "Doors (type unspecified)") and same-mark LLM door rows
     # when a deterministic synthesised row already covers them. Pure on
     # `all_takeoffs`; no-op when no synthesised door exists on the project.
     all_takeoffs = dedupe_doors_against_synthesis(all_takeoffs)
+    # T2.5 dedupe: same pattern as T3 for windows. Retires the legacy
+    # bare "Windows" aggregate and per-material LLM rollups when ANY
+    # synthesised window covers the project. No-op when no synthesised
+    # window exists (safety rule, mirrors T3).
+    all_takeoffs = dedupe_windows_against_synthesis(all_takeoffs)
 
     project_info = _consolidate_project_info(bid_packages)
     scope_matrix = _build_scope_matrix(bid_packages)

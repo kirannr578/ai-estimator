@@ -379,6 +379,51 @@ class DoorScheduleResult(BaseModel):
     raw_table_text: str = ""                   # joined-headers debug string
 
 
+class WindowRecord(BaseModel):
+    """One window extracted from a window-schedule table (Phase T2.5).
+
+    Window schedules share the same shape as door schedules but carry
+    different specialty columns (``GLAZING`` / ``OPERATION`` / ``SILL`` /
+    ``U-FACTOR`` / ``SHGC``). The model preserves the raw cell text in
+    ``raw_cells`` alongside parsed dimensions so a downstream auditor can
+    confirm a unit conversion or surface a column the extractor didn't
+    know about.
+    """
+
+    mark: str                                  # "W-01", "A", "101", ...
+    type: Optional[str] = None                 # "ALUM-S", "VINYL-DH", ...
+    width_in: Optional[float] = None
+    height_in: Optional[float] = None
+    sill_height_in: Optional[float] = None
+    width_raw: Optional[str] = None
+    height_raw: Optional[str] = None
+    sill_height_raw: Optional[str] = None
+    glazing: Optional[str] = None              # "INSUL", "TINTED LOW-E", ...
+    operation: Optional[str] = None            # "FIXED", "CASEMENT", "DH", ...
+    frame: Optional[str] = None                # "ALUM", "VINYL", "WOOD", ...
+    material: Optional[str] = None
+    u_factor: Optional[float] = None
+    shgc: Optional[float] = None               # Solar Heat Gain Coefficient
+    remarks: Optional[str] = None
+    raw_cells: dict[str, str] = Field(default_factory=dict)
+    source_page: int = 0
+
+
+class WindowScheduleResult(BaseModel):
+    """Aggregate window-schedule pre-pass result for a drawing page (Phase T2.5).
+
+    Attached alongside (not replacing) the generic :class:`Schedule` rows
+    on :class:`DrawingPrepassResult` so the existing prepass surface keeps
+    working while downstream takeoff (Phase T2.5 synthesis) consumes the
+    richer typed records.
+    """
+
+    pages: list[int] = Field(default_factory=list)
+    windows: list[WindowRecord] = Field(default_factory=list)
+    confidence: float = 0.0                    # 0..1
+    raw_table_text: str = ""                   # joined-headers debug string
+
+
 class DrawingPrepassResult(BaseModel):
     """Snapshot of everything the deterministic pre-pass could pull off
     a single drawing page without invoking the vision LLM."""
@@ -389,6 +434,7 @@ class DrawingPrepassResult(BaseModel):
     quality_issues: list[str] = Field(default_factory=list)
     confidence: float = 0.0                    # 0..1
     door_schedule: Optional[DoorScheduleResult] = None  # T1 typed door records
+    window_schedule: Optional[WindowScheduleResult] = None  # T2.5 typed window records
 
 
 class SheetExtraction(BaseModel):

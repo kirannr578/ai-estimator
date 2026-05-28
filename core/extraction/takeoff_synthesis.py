@@ -1,12 +1,14 @@
-"""Phase T2 — synthesize :class:`TakeoffItem` rows from a :class:`DoorScheduleResult`.
+"""Phases T2 + T2.5 — synthesize :class:`TakeoffItem` rows from typed schedules.
 
-Pure converter that turns the typed door records produced by the T1
-deterministic door-schedule pre-pass (``core.extraction.door_schedule``)
-into priced-ready :class:`core.schemas.TakeoffItem` rows. One ``DoorRecord``
-becomes one ``TakeoffItem``; the synthesised items are deliberately
-**additive** to LLM-extracted takeoffs — cross-source dedupe is Phase T3.
+Pure converter that turns the typed door / window records produced by the
+deterministic schedule pre-passes (:mod:`core.extraction.door_schedule`
++ :mod:`core.extraction.window_schedule`) into priced-ready
+:class:`core.schemas.TakeoffItem` rows. One ``DoorRecord`` or
+``WindowRecord`` becomes one ``TakeoffItem``; the synthesised items are
+deliberately **additive** to LLM-extracted takeoffs — cross-source
+dedupe is Phase T3 / T2.5 dedupe.
 
-CSI mapping (keyword heuristic, see ``_CSI_MAPPING``):
+Door CSI mapping (keyword heuristic, see ``_DOOR_CSI_MAPPING``):
 
 * Hollow metal  (``HM`` / ``HOLLOW METAL``)              → ``08 11 13``
 * Aluminum frame / storefront (``ALUM`` / ``STOREFRONT``) → ``08 11 16``
@@ -14,32 +16,56 @@ CSI mapping (keyword heuristic, see ``_CSI_MAPPING``):
 * Glass / glazed (``GLASS`` / ``GLAZED``)                  → ``08 80 00``
 * Unknown / unmatched                                      → ``08 10 00``
 
-Confidence rubric (per Phase T2 brief):
+Window CSI mapping (keyword heuristic, see ``_WINDOW_CSI_MAPPING``):
+
+* Aluminum / Alum windows                                  → ``08 51 13``
+* Storefront / curtain wall (size-tiered, see ``_classify_window``) →
+  ``08 44 13`` (entry storefronts) or ``08 41 13`` (large curtain wall;
+  any dimension > 96 in. on a storefront-tagged record)
+* Vinyl windows                                            → ``08 53 13``
+* Metal-clad wood (``METAL CLAD`` / ``CLAD``)              → ``08 52 19``
+* Wood windows                                             → ``08 52 13``
+* Steel windows                                            → ``08 51 23``
+* Unknown / unmatched                                      → ``08 50 00``
+
+Confidence rubric (same for doors and windows):
 
 * mark **and** type present → ``0.92``
 * only one of mark / type   → ``0.80``
 * neither                   → ``0.60`` (caller may filter)
 
-Every synthesised row carries ``source=door_schedule_prepass`` at the
-start of its ``notes`` field. The schema does not yet expose a dedicated
-``source`` column, so the notes prefix is the stable handle a future
-T3 dedupe pass can grep for.
+Every synthesised row carries ``source=door_schedule_prepass`` or
+``source=window_schedule_prepass`` at the start of its ``notes`` field.
+The schema does not yet expose a dedicated ``source`` column, so the
+notes prefix is the stable handle the dedupe passes (T3 / T2.5) grep for.
 """
 
 from __future__ import annotations
 
 from typing import Final
 
-from core.schemas import DoorRecord, DoorScheduleResult, TakeoffItem
+from core.schemas import (
+    DoorRecord,
+    DoorScheduleResult,
+    TakeoffItem,
+    WindowRecord,
+    WindowScheduleResult,
+)
 
-__all__ = ["SYNTHESIS_SOURCE_TAG", "synthesize_door_takeoff_items"]
+__all__ = [
+    "SYNTHESIS_SOURCE_TAG",
+    "SYNTHESIS_SOURCE_TAG_WINDOW",
+    "synthesize_door_takeoff_items",
+    "synthesize_window_takeoff_items",
+]
 
 
 SYNTHESIS_SOURCE_TAG: Final[str] = "door_schedule_prepass"
+SYNTHESIS_SOURCE_TAG_WINDOW: Final[str] = "window_schedule_prepass"
 
 
 # ---------------------------------------------------------------------------
-# CSI mapping
+# CSI mapping — doors
 # ---------------------------------------------------------------------------
 #
 # Ordered (specific → generic). The matcher upper-cases the haystack
@@ -66,6 +92,57 @@ _CSI_MAPPING: Final[tuple[tuple[tuple[str, ...], tuple[str, str, str]], ...]] = 
     # Wood (last among specifics). Includes ``SC`` (solid-core) and
     # ``SCWD`` per the brief.
     (("SCWD", "WOOD", "WD", "SC"), _CSI_WOOD),
+)
+
+
+# ---------------------------------------------------------------------------
+# CSI mapping — windows
+# ---------------------------------------------------------------------------
+#
+# Ordered (specific → generic). The window haystack is
+# ``type + frame + material + operation`` upper-cased. Metal-clad is
+# checked before plain wood so a record tagged ``CLAD WOOD`` lands on
+# ``08 52 19`` (Metal-Clad Wood Windows) rather than the bare wood
+# section. Storefront / curtain wall lives in a separate size-aware
+# helper (``_classify_window``) because the operator's choice between
+# ``08 44 13`` (Glazed Aluminum Curtain Walls) and ``08 41 13``
+# (Aluminum-Framed Entrances and Storefronts) depends on the unit size.
+
+_CSI_WIN_ALUM:       Final[tuple[str, str, str]] = ("08", "08 51 13", "Aluminum Window")
+_CSI_WIN_STEEL:      Final[tuple[str, str, str]] = ("08", "08 51 23", "Steel Window")
+_CSI_WIN_WOOD:       Final[tuple[str, str, str]] = ("08", "08 52 13", "Wood Window")
+_CSI_WIN_METAL_CLAD: Final[tuple[str, str, str]] = ("08", "08 52 19", "Metal-Clad Wood Window")
+_CSI_WIN_VINYL:      Final[tuple[str, str, str]] = ("08", "08 53 13", "Vinyl Window")
+_CSI_WIN_STOREFRONT: Final[tuple[str, str, str]] = ("08", "08 41 13", "Aluminum Storefront")
+_CSI_WIN_CURTAIN:    Final[tuple[str, str, str]] = ("08", "08 44 13", "Aluminum Curtain Wall")
+_CSI_WIN_GENERIC:    Final[tuple[str, str, str]] = ("08", "08 50 00", "Window")
+
+# Threshold above which a STOREFRONT / CURTAIN keyword is upgraded from
+# ``08 41 13`` (storefronts and entrances, typical residential / TI
+# scale, < 8 ft tall and < 12 ft wide) to ``08 44 13`` (glazed curtain
+# wall, larger unitized systems). Tuned to a single dimension > 96 in.
+# (8 ft) — the threshold the operator's discretion settles on for the
+# T2.5 brief. Documented inline so a future maintainer can lift it.
+_WIN_CURTAIN_WALL_DIM_IN: Final[float] = 96.0
+
+# Order matters: metal-clad before bare wood; vinyl / steel before alum
+# only because ``ALUM`` is a substring of ``ALUMINUM`` (cheap match) and
+# we want the keyword scan to short-circuit on the right family first.
+_WIN_CSI_MAPPING: Final[tuple[tuple[tuple[str, ...], tuple[str, str, str]], ...]] = (
+    # Metal-clad wood — ``CLAD WOOD`` / ``METAL CLAD`` / ``ALCLAD``.
+    # Checked BEFORE bare wood and BEFORE aluminum to avoid a
+    # ``CLAD WOOD`` record routing to either ``08 51 13`` or
+    # ``08 52 13`` instead of the more-specific ``08 52 19``.
+    (("METAL CLAD", "METAL-CLAD", "CLAD WOOD", "ALCLAD"), _CSI_WIN_METAL_CLAD),
+    # Vinyl windows — explicit family, never a frame on another material.
+    (("VINYL",), _CSI_WIN_VINYL),
+    # Steel windows — historic / industrial style, distinct from aluminum.
+    (("STEEL",), _CSI_WIN_STEEL),
+    # Wood windows (bare wood, no clad).
+    (("WOOD", "WD"), _CSI_WIN_WOOD),
+    # Aluminum windows (last among specifics; size-aware storefront
+    # classification is handled separately in ``_classify_window``).
+    (("ALUMINUM", "ALUM"), _CSI_WIN_ALUM),
 )
 
 
@@ -205,5 +282,145 @@ def synthesize_door_takeoff_items(
             confidence=_confidence(door),
             source_sheet_ids=list(sheets),
             notes=_notes_for(door),
+        ))
+    return items
+
+
+# ---------------------------------------------------------------------------
+# Window helpers (Phase T2.5)
+# ---------------------------------------------------------------------------
+
+
+def _classify_window(window: WindowRecord) -> tuple[str, str, str]:
+    """Return ``(csi_division, csi_section, family_label)`` for one window.
+
+    Storefront / curtain wall is size-tiered: ``08 44 13`` (Glazed
+    Aluminum Curtain Walls) when ANY dimension on the record exceeds
+    ``_WIN_CURTAIN_WALL_DIM_IN`` (96 in. / 8 ft); otherwise
+    ``08 41 13`` (Aluminum-Framed Entrances and Storefronts). The
+    operator's discretion called out in the T2.5 brief is encoded as
+    this single threshold so a future maintainer can lift it.
+
+    ``type`` wins when present; falls back to ``frame`` / ``material``
+    / ``operation`` for schedules that left ``type`` blank.
+    """
+    parts = [window.type, window.frame, window.material, window.operation]
+    hay = " ".join(p for p in parts if p).upper()
+    if not hay:
+        return _CSI_WIN_GENERIC
+    # Storefront / curtain wall takes precedence over the plain
+    # aluminum classification: an ``ALUM STOREFRONT`` record must land
+    # on ``08 41 13`` or ``08 44 13``, never ``08 51 13``.
+    if "STOREFRONT" in hay or "CURTAIN" in hay:
+        widest = max(
+            (d for d in (window.width_in, window.height_in) if d is not None),
+            default=0.0,
+        )
+        if widest > _WIN_CURTAIN_WALL_DIM_IN or "CURTAIN" in hay:
+            return _CSI_WIN_CURTAIN
+        return _CSI_WIN_STOREFRONT
+    for keywords, mapping in _WIN_CSI_MAPPING:
+        for kw in keywords:
+            if kw in hay:
+                return mapping
+    return _CSI_WIN_GENERIC
+
+
+def _window_confidence(window: WindowRecord) -> float:
+    has_mark = bool(window.mark and window.mark.strip())
+    has_type = bool(window.type and window.type.strip())
+    if has_mark and has_type:
+        return 0.92
+    if has_mark or has_type:
+        return 0.80
+    return 0.60
+
+
+def _describe_window(window: WindowRecord, family: str) -> str:
+    """Build a human-readable description for a window TakeoffItem.
+
+    Examples::
+
+        "Window W-01 — ALUM-S 3'-0\\" x 5'-0\\""
+        "Window 102 — Wood Window"
+        "Window (unmarked) — Aluminum Window"
+    """
+    mark = (window.mark or "").strip()
+    label = (window.type or "").strip() or family
+    head = f"Window {mark}" if mark else "Window (unmarked)"
+    width = _format_inches(window.width_in)
+    height = _format_inches(window.height_in)
+    if width and height:
+        return f"{head} — {label} {width} x {height}"
+    return f"{head} — {label}"
+
+
+def _window_notes_for(window: WindowRecord) -> str:
+    """Stable, source-tagged notes string for window dedupe to grep.
+
+    Format mirrors :func:`_notes_for` for doors: ``key=value`` pairs joined
+    by ``"; "``. The first pair is always
+    ``source=window_schedule_prepass`` so a prefix-match is cheap.
+    """
+    bits: list[str] = [f"source={SYNTHESIS_SOURCE_TAG_WINDOW}"]
+    if window.mark:
+        bits.append(f"mark={window.mark}")
+    if window.type:
+        bits.append(f"type={window.type}")
+    width_s = _format_inches(window.width_in)
+    height_s = _format_inches(window.height_in)
+    if width_s and height_s:
+        bits.append(f"size={width_s} x {height_s}")
+    if window.width_in is not None:
+        bits.append(f"width_in={window.width_in:g}")
+    if window.height_in is not None:
+        bits.append(f"height_in={window.height_in:g}")
+    if window.sill_height_in is not None:
+        bits.append(f"sill_height_in={window.sill_height_in:g}")
+    if window.glazing:
+        bits.append(f"glazing={window.glazing}")
+    if window.operation:
+        bits.append(f"operation={window.operation}")
+    if window.frame:
+        bits.append(f"frame={window.frame}")
+    if window.material:
+        bits.append(f"material={window.material}")
+    if window.u_factor is not None:
+        bits.append(f"u_factor={window.u_factor:g}")
+    if window.shgc is not None:
+        bits.append(f"shgc={window.shgc:g}")
+    return "; ".join(bits)
+
+
+def synthesize_window_takeoff_items(
+    schedule: WindowScheduleResult | None,
+    *,
+    sheet_id: str | None = None,
+) -> list[TakeoffItem]:
+    """Convert each ``WindowRecord`` on ``schedule`` into a ``TakeoffItem``.
+
+    Mirror of :func:`synthesize_door_takeoff_items` for the window-schedule
+    pre-pass. Returns ``[]`` when ``schedule`` is ``None`` or has no
+    windows. Each emitted item carries ``quantity=1.0``, ``unit="EA"``,
+    a CSI section chosen by :func:`_classify_window`, and a confidence
+    per the same rubric used for doors. Every row's ``notes`` field
+    starts with ``source=window_schedule_prepass`` for the T2.5 dedupe
+    pass to find.
+    """
+    if schedule is None or not schedule.windows:
+        return []
+    sheets: list[str] = [sheet_id] if sheet_id else []
+    items: list[TakeoffItem] = []
+    for window in schedule.windows:
+        division, section, family = _classify_window(window)
+        items.append(TakeoffItem(
+            csi_division=division,
+            csi_section=section,
+            description=_describe_window(window, family),
+            quantity=1.0,
+            unit="EA",
+            confidence=_window_confidence(window),
+            source_sheet_ids=list(sheets),
+            notes=_window_notes_for(window),
         ))
     return items

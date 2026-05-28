@@ -94,6 +94,13 @@ class DrawingPrepassResult:
     # Typed `Any` here to avoid a circular import; concretely a
     # ``core.extraction.door_schedule.DoorScheduleResult`` or ``None``.
     door_schedule: Any = None
+    # T2.5 — typed window-schedule pre-pass. Populated alongside the
+    # door-schedule attachment whenever a window schedule was detected
+    # AND the page wasn't already claimed by the door detector (the
+    # door-precedence rule documented in ``window_schedule`` module).
+    # Concretely a ``core.extraction.window_schedule.WindowScheduleResult``
+    # or ``None``.
+    window_schedule: Any = None
 
 
 # ---------------------------------------------------------------------------
@@ -500,6 +507,42 @@ def _maybe_extract_door_schedule(page: "fitz.Page", page_index: int,
     return result if result.doors else None
 
 
+def _maybe_extract_window_schedule(page: "fitz.Page", page_index: int,
+                                      schedules: list[Schedule],
+                                      door_schedule: Any) -> Any:
+    """T2.5 hook: run the window-schedule extractor when this page may have one.
+
+    Imported lazily so the window-schedule module stays optional at load
+    time. Respects the door-precedence rule: if a door schedule has
+    already been detected on this page (``door_schedule is not None``
+    AND it actually has door records) we skip the window pass entirely
+    to avoid mis-attributing door rows to window CSI sections.
+    Returns a ``WindowScheduleResult`` dataclass or ``None``.
+    """
+    # Door-precedence: if a door schedule was extracted on this page,
+    # the older, more-validated extractor wins and we never run the
+    # window detector against the same content.
+    if door_schedule is not None and getattr(door_schedule, "doors", None):
+        return None
+
+    has_window_schedule = any(s.kind == "window" for s in schedules)
+    text_has_phrase = "WINDOW SCHEDULE" in (page.get_text("text") or "").upper()
+    if not (has_window_schedule or text_has_phrase):
+        return None
+    try:
+        from .window_schedule import extract_window_schedule_from_page
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.debug("window_schedule import failed: %s", exc)
+        return None
+    try:
+        result = extract_window_schedule_from_page(page, page_index)
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.warning("window_schedule extraction failed on page %d: %s",
+                       page_index, exc)
+        return None
+    return result if result.windows else None
+
+
 def prepass_drawing_page(pdf_path: Path, page_index: int) -> DrawingPrepassResult:
     """Run the deterministic pre-pass on a single page of a drawing PDF."""
     pdf_path = Path(pdf_path)
@@ -515,6 +558,9 @@ def prepass_drawing_page(pdf_path: Path, page_index: int) -> DrawingPrepassResul
         dimensions = _extract_dimensions(text)
         schedules = _extract_schedules(page, page_index)
         door_schedule = _maybe_extract_door_schedule(page, page_index, schedules)
+        window_schedule = _maybe_extract_window_schedule(
+            page, page_index, schedules, door_schedule,
+        )
 
     if not text.strip():
         quality_issues.append("page has no embedded text (likely scanned)")
@@ -526,6 +572,7 @@ def prepass_drawing_page(pdf_path: Path, page_index: int) -> DrawingPrepassResul
         quality_issues=quality_issues,
         confidence=0.0,
         door_schedule=door_schedule,
+        window_schedule=window_schedule,
     )
     result.confidence = round(_score(result), 4)
     return result
@@ -543,6 +590,9 @@ def prepass_drawing_pdf(pdf_path: Path) -> list[DrawingPrepassResult]:
             dimensions = _extract_dimensions(text)
             schedules = _extract_schedules(page, i)
             door_schedule = _maybe_extract_door_schedule(page, i, schedules)
+            window_schedule = _maybe_extract_window_schedule(
+                page, i, schedules, door_schedule,
+            )
             if not text.strip():
                 quality_issues.append("page has no embedded text (likely scanned)")
 
@@ -553,6 +603,7 @@ def prepass_drawing_pdf(pdf_path: Path) -> list[DrawingPrepassResult]:
                 quality_issues=quality_issues,
                 confidence=0.0,
                 door_schedule=door_schedule,
+                window_schedule=window_schedule,
             )
             r.confidence = round(_score(r), 4)
             results.append(r)
@@ -587,6 +638,10 @@ def to_schema(result: DrawingPrepassResult):
     if result.door_schedule is not None:
         from .door_schedule import to_schema as door_to_schema
         door_schedule = door_to_schema(result.door_schedule)
+    window_schedule = None
+    if result.window_schedule is not None:
+        from .window_schedule import to_schema as window_to_schema
+        window_schedule = window_to_schema(result.window_schedule)
     return S.DrawingPrepassResult(
         title_block=S.TitleBlockData(
             project_name=tb.project_name,
@@ -609,6 +664,7 @@ def to_schema(result: DrawingPrepassResult):
         quality_issues=list(result.quality_issues),
         confidence=result.confidence,
         door_schedule=door_schedule,
+        window_schedule=window_schedule,
     )
 
 
