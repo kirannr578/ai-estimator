@@ -20,6 +20,19 @@ Output entries gain three fields:
     "escalated_from_period": "<base_period>",
     "escalation_factor":     <ratio>,
     "ppi_series_used":       "<series_id>",
+
+Macro CCI multiplier (Phase C closing hook)
+-------------------------------------------
+``apply_macro_cci_multiplier(...)`` layers a single uniform multiplier on
+top of an already per-CSI-escalated DB. It reads ENR / AGC / Turner CCI
+snapshots (produced by ``core/pricing/sources/{enr,agc,turner}_cci.py``)
+and scales every cost-DB entry's unit cost by
+
+    multiplier = latest_cci_value / baseline_cci_value
+
+This composes with — does NOT replace — the per-CSI PPI escalation.
+Use it when a per-bid total-cost cross-check vs the published macro
+construction-cost indices is needed.
 """
 
 from __future__ import annotations
@@ -29,9 +42,23 @@ import logging
 from pathlib import Path
 from typing import Any, Iterable, Optional
 
-from core.pricing.snapshots import PricingSnapshot, load_latest
+from core.pricing.snapshots import PricingSnapshot, load_history, load_latest
+from core.pricing.sources._cci_common import PricingSourceUnavailable
 
 LOG = logging.getLogger(__name__)
+
+
+class EscalationMissingBaseline(RuntimeError):
+    """Raised when the CCI baseline period snapshot can't be located.
+
+    Distinct from ``PricingSourceUnavailable``: the latter signals that
+    we couldn't pull a *latest* value at all (network down, page
+    unparseable, etc.). ``EscalationMissingBaseline`` signals that we
+    have at least one snapshot but none of them match the configured
+    base period, which is a calibration problem, not an availability
+    problem. The caller's fix is usually to broaden the base_period
+    or refresh the source so a baseline-period snapshot exists.
+    """
 
 
 # Exact CSI section overrides (most specific). Keys are 6-character section
@@ -286,5 +313,208 @@ def escalate_cost_database(
         "Escalated %d entries %s -> %s, wrote %s",
         sum(1 for k in out if not k.startswith("_")),
         base_period, target_period, output_path,
+    )
+    return out
+
+
+# --- Macro CCI multiplier hook (Phase C closing slice) ------------------
+
+# Per-source default series_id for the macro CCI sources. Mirrors the
+# ``default_series()`` of each adapter under ``core/pricing/sources/``.
+# Kept here (not imported from the adapters) to avoid a cyclic-import
+# risk: the adapters depend on snapshots.py + base.py; the engine
+# depends on snapshots.py + the lightweight ``_cci_common`` exception
+# class; layering this constants table in the engine module is cheaper
+# than reaching into each adapter at import time.
+_CCI_DEFAULT_SERIES_ID: dict[str, str] = {
+    "enr_cci": "national-20city",
+    "agc_cci": "national",
+    "turner_cci": "national",
+}
+
+
+def _cci_snapshot_for_baseline(
+    snapshots: list[PricingSnapshot],
+    base_period: str,
+) -> Optional[PricingSnapshot]:
+    """Locate the baseline snapshot for ``base_period`` in ``snapshots``.
+
+    Tries exact period match first, then the most-recent snapshot whose
+    period is lexicographically less-than-or-equal-to ``base_period``.
+    Returns None if no usable baseline is found.
+
+    Period format note: ENR / AGC publish ``YYYY-MM``; Turner publishes
+    ``YYYY-QN``. Lexicographic comparison is safe within a single
+    source's period format because all three are zero-padded. Cross-
+    format comparison ("2024-01" vs "2024-Q1") is NOT done here — the
+    caller must pass a ``base_period`` that matches the chosen source's
+    cadence (e.g. "2024-Q1" for Turner, "2024-01" for ENR / AGC).
+    """
+    if not snapshots:
+        return None
+    for s in snapshots:
+        if s.period == base_period:
+            return s
+    candidates = sorted(
+        (s for s in snapshots if s.period <= base_period),
+        key=lambda s: s.period,
+    )
+    if candidates:
+        return candidates[-1]
+    return None
+
+
+def _cci_snapshot_latest(
+    snapshots: list[PricingSnapshot],
+) -> Optional[PricingSnapshot]:
+    """Pick the latest snapshot from ``snapshots`` (by period, ascending)."""
+    if not snapshots:
+        return None
+    return sorted(snapshots, key=lambda s: s.period)[-1]
+
+
+def _load_cci_history(source: str, *, series_id: Optional[str] = None) -> list[PricingSnapshot]:
+    """Load all on-disk snapshots for ``source`` (default series id).
+
+    Wrapped so tests can patch a single function. Returns [] if the
+    source has nothing on disk.
+    """
+    sid = series_id or _CCI_DEFAULT_SERIES_ID.get(source)
+    if sid is None:
+        return []
+    history = load_history(source, sid)
+    if history:
+        return history
+    # `load_history` may miss the latest.json mirror when no
+    # period-specific files have been written yet (e.g. a fresh refresh
+    # that only persisted the latest). Fall back to load_latest as a
+    # safety net so we don't false-negative.
+    latest = load_latest(source, sid)
+    return [latest] if latest is not None else []
+
+
+def apply_macro_cci_multiplier(
+    escalated_db_path: Path | str,
+    *,
+    base_period: str,
+    cci_source: str = "enr_cci",
+    cci_series_id: Optional[str] = None,
+    fallback_sources: tuple[str, ...] = ("agc_cci", "turner_cci"),
+    out_path: Optional[Path | str] = None,
+    snapshots_by_source: Optional[dict[str, list[PricingSnapshot]]] = None,
+) -> dict[str, Any]:
+    """Apply a uniform macro CCI multiplier to an already-escalated DB.
+
+    Reads the latest CCI snapshot from ``cci_source`` (default
+    ``enr_cci``), falls back through ``fallback_sources`` if the
+    configured source has no usable snapshot on disk, computes
+    ``multiplier = latest_cci_value / baseline_cci_value``, multiplies
+    every cost-DB entry's ``unit_cost`` by that multiplier, and writes
+    the result to ``out_path`` (default:
+    ``<input_dir>/<input_stem>_with_cci.json``).
+
+    The input DB is NOT modified — both the per-CSI escalated DB and the
+    macro-CCI-multiplied DB are kept side-by-side for comparison + audit.
+
+    Raises:
+      - ``PricingSourceUnavailable`` if every source in
+        ``[cci_source, *fallback_sources]`` has zero snapshots on disk
+        (or in the injected ``snapshots_by_source`` for tests).
+      - ``EscalationMissingBaseline`` if the chosen source has snapshots
+        but none of them are usable as a baseline at ``base_period``
+        (i.e. there is no snapshot with period ≤ ``base_period``).
+
+    ``snapshots_by_source`` is a test-injection point that bypasses the
+    on-disk snapshot store. Keys are source names (``enr_cci``,
+    ``agc_cci``, ``turner_cci``); values are the list of snapshots to
+    consider for that source. When omitted, snapshots are loaded from
+    ``config/pricing_snapshots/`` on disk.
+    """
+    escalated_db_path = Path(escalated_db_path)
+    if out_path is None:
+        out_path = escalated_db_path.with_name(
+            f"{escalated_db_path.stem}_with_cci{escalated_db_path.suffix}"
+        )
+    out_path = Path(out_path)
+
+    raw = json.loads(escalated_db_path.read_text(encoding="utf-8"))
+
+    sources_to_try = [cci_source, *(s for s in fallback_sources if s != cci_source)]
+
+    selected_source: Optional[str] = None
+    selected_snapshots: list[PricingSnapshot] = []
+    for src in sources_to_try:
+        if snapshots_by_source is not None:
+            history = snapshots_by_source.get(src, [])
+        else:
+            history = _load_cci_history(src, series_id=cci_series_id if src == cci_source else None)
+        if history:
+            selected_source = src
+            selected_snapshots = history
+            break
+
+    if selected_source is None:
+        raise PricingSourceUnavailable(
+            f"apply_macro_cci_multiplier: no snapshots available for any "
+            f"of {sources_to_try}. Run "
+            f"`python scripts/refresh_pricing.py --phase c` to populate."
+        )
+
+    baseline = _cci_snapshot_for_baseline(selected_snapshots, base_period)
+    if baseline is None:
+        raise EscalationMissingBaseline(
+            f"apply_macro_cci_multiplier: source {selected_source!r} has "
+            f"{len(selected_snapshots)} snapshot(s) but none usable as "
+            f"baseline at {base_period!r}. Available periods: "
+            f"{sorted({s.period for s in selected_snapshots})!r}."
+        )
+
+    latest = _cci_snapshot_latest(selected_snapshots)
+    if latest is None or latest.value <= 0 or baseline.value <= 0:
+        raise EscalationMissingBaseline(
+            f"apply_macro_cci_multiplier: source {selected_source!r} "
+            f"baseline or latest snapshot has non-positive value "
+            f"(baseline={baseline.value!r}, latest="
+            f"{latest.value if latest else None!r}); cannot compute "
+            f"multiplier."
+        )
+
+    multiplier = latest.value / baseline.value
+
+    out: dict[str, Any] = {}
+    entry_count = 0
+    for section, entry in raw.items():
+        if section.startswith("_"):
+            out[section] = entry
+            continue
+        if not isinstance(entry, dict):
+            out[section] = entry
+            continue
+        new_entry = dict(entry)
+        original_cost = float(new_entry.get("unit_cost", 0) or 0)
+        new_entry["unit_cost"] = round(original_cost * multiplier, 4)
+        new_entry["macro_cci_multiplier"] = round(multiplier, 6)
+        new_entry["macro_cci_source"] = selected_source
+        new_entry["macro_cci_baseline_period"] = baseline.period
+        new_entry["macro_cci_latest_period"] = latest.period
+        out[section] = new_entry
+        entry_count += 1
+
+    meta = dict(out.get("_meta") or {})
+    meta["macro_cci_applied_at"] = (
+        f"{baseline.period} -> {latest.period} via {selected_source}"
+    )
+    meta["macro_cci_multiplier"] = round(multiplier, 6)
+    meta["macro_cci_source"] = selected_source
+    meta["macro_cci_baseline_value"] = baseline.value
+    meta["macro_cci_latest_value"] = latest.value
+    out["_meta"] = meta
+
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text(json.dumps(out, indent=2), encoding="utf-8")
+    LOG.info(
+        "Applied macro CCI multiplier %.6f (%s %s -> %s) to %d entries, wrote %s",
+        multiplier, selected_source, baseline.period, latest.period,
+        entry_count, out_path,
     )
     return out

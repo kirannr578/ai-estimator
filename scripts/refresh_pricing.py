@@ -44,6 +44,9 @@ from core.pricing.sources.davis_bacon import DavisBaconSource  # noqa: E402
 from core.pricing.sources.eia import EIAFuelSource  # noqa: E402
 from core.pricing.sources.enr_cci import ENRCCISource  # noqa: E402
 from core.pricing.sources.fred import FREDSource  # noqa: E402
+from core.pricing.sources.nahb_construction_cost import (  # noqa: E402
+    NAHBCostOfConstructingAHomeSource,
+)
 from core.pricing.sources.turner_cci import TurnerCCISource  # noqa: E402
 
 LOG = logging.getLogger("refresh_pricing")
@@ -57,17 +60,19 @@ ALL_SOURCES = {
     # Phase C — Construction Cost Index macro escalators. Not in the
     # default --sources list because they scrape HTML and are more fragile
     # than the Phase A / B JSON APIs; opt in explicitly with
-    # `--sources enr_cci,agc_cci,turner_cci` or via `--phase c`.
+    # `--sources enr_cci,agc_cci,turner_cci,nahb_construction_cost` or
+    # via `--phase c`.
     "enr_cci": ENRCCISource,
     "agc_cci": AGCCCISource,
     "turner_cci": TurnerCCISource,
+    "nahb_construction_cost": NAHBCostOfConstructingAHomeSource,
 }
 
 # Source bundles by phase, used by the `--phase` shortcut flag.
 PHASE_SOURCES: dict[str, list[str]] = {
     "a": ["bls_ppi", "bls_oews", "fred", "eia"],
     "b": ["davis_bacon"],
-    "c": ["enr_cci", "agc_cci", "turner_cci"],
+    "c": ["enr_cci", "agc_cci", "turner_cci", "nahb_construction_cost"],
 }
 
 
@@ -91,7 +96,8 @@ def _parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
         choices=sorted(PHASE_SOURCES.keys()),
         help="Shortcut for refreshing every source in a given phase "
              "bundle (a = BLS PPI/OEWS + FRED + EIA; b = Davis-Bacon; "
-             "c = ENR/AGC/Turner CCI). Overrides --sources when given.",
+             "c = ENR/AGC/Turner CCI + NAHB cost-of-constructing-a-home). "
+             "Overrides --sources when given.",
     )
     p.add_argument(
         "--period",

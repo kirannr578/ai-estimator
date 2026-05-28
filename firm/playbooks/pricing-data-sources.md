@@ -37,7 +37,7 @@ This playbook documents:
 | ENR Construction Cost Index | `core/pricing/sources/enr_cci.py` (`ENRCCISource`) | ENR — attribution required, no redistribution | None | Monthly | National 20-city composite cost index | **Shipped (Phase C)** — headline value only; full history requires ENR subscription |
 | AGC PPI-based Construction Cost Index | `core/pricing/sources/agc_cci.py` (`AGCCCISource`) | AGC — attribution required, no redistribution | None | Monthly (underlying PPI) / Quarterly (Inflation Alert) | National PPI-based inflation roll-up | **Shipped (Phase C)** — landing-page headline only; Inflation Alert PDF parser is future work |
 | Turner Building Cost Index | `core/pricing/sources/turner_cci.py` (`TurnerCCISource`) | Turner — attribution required, no redistribution | None | Quarterly | National TBCI composite | **Shipped (Phase C)** — latest quarter only; per-quarter article archive parser is future work |
-| NAHB Cost of Constructing a Home | `core/pricing/sources/construction_indexes.py` (`NAHBCostOfConstructingAHomeSource`) | NAHB — attribution required | None | Annual | NAHB residential cost breakdown report | **Phase C — stub** |
+| NAHB Cost of Constructing a Home | `core/pricing/sources/nahb_construction_cost.py` (`NAHBCostOfConstructingAHomeSource`) | NAHB — attribution required | None | Biennial (2019/2022/2024; 2026 expected) | NAHB residential single-family total construction cost (USD/home), hardcoded historical series since 1998 | **Shipped (Phase C)** — residential macro complement to ENR/AGC/Turner; live article parse + hardcoded historical fallback |
 
 **Tier 2 (RSMeans / Gordian) — deferred.** Paid license per seat. Decision deferred until Tier 1 calibration data demonstrates a measurable gap that the free sources can't close. See `docs/ROADMAP_TAKEOFF_AUTOMATION.md` Section 5 for the build / buy gate.
 
@@ -284,15 +284,9 @@ The three CCI adapters (`enr_cci`, `agc_cci`, `turner_cci`) provide macro escala
 - Cache hit within 24 hours → no second HTTP call. Cache is keyed by URL alone (no auth headers, no per-account state).
 - Unknown `series_id` requested via `fetch(['regional-houston'])` → logged warning + skipped (only the curated series id per adapter is honored on the free tier).
 
-### Optional escalation hook (deferred)
+### Optional escalation hook — SHIPPED (2026-05-28)
 
-`core/pricing/escalation.py` today computes a per-entry factor from BLS PPI series only. Wiring a CCI signal in would require:
-
-1. Loading a CCI snapshot via `core.pricing.snapshots.load_latest("enr_cci", "national-20city")`.
-2. Computing a base→target ratio analogous to `compute_escalation_factor(...)`.
-3. Either replacing the per-entry factor (uniform escalation) or blending it with the per-entry factor (weighted hybrid).
-
-The engine does not yet have a clean seam for "use BLS PPI per entry AND multiply by a macro CCI delta" — adding one is more than 5 lines, so per the brief's constraint on `core/pricing/escalation.py` ("only if the change is genuinely 5 lines or less") this slice **defers the engine wiring**. The snapshots are persisted; downstream integration is a future ticket.
+`core/pricing/escalation.py` now exposes `apply_macro_cci_multiplier(...)` that layers a single uniform `latest_cci / baseline_cci` ratio on top of the per-CSI BLS PPI escalation, with ENR → AGC → Turner fallback. See the **"Macro escalation chain — when to use what"** section below for the full contract and usage guidance. The per-CSI per-entry escalation is unchanged; the macro multiplier is an optional Step 2 that writes to a separate output file (`config/cost_database_escalated_with_cci.json`) so the per-CSI-only and per-CSI + macro outputs can be audited side-by-side.
 
 ### Source-of-truth references in the new code
 
@@ -301,6 +295,127 @@ The engine does not yet have a clean seam for "use BLS PPI per entry AND multipl
 - `core/pricing/sources/agc_cci.py` — AGC adapter.
 - `core/pricing/sources/turner_cci.py` — Turner adapter.
 - `tests/test_pricing_sources_{enr,agc,turner}_cci.py` — offline tests via `httpx.MockTransport`.
+
+---
+
+## NAHB Cost of Constructing a Home — residential macro complement (Phase C — shipped 2026-05-28)
+
+The three commercial CCI adapters above (ENR / AGC / Turner) track non-residential / mixed escalation. **`nahb_construction_cost` complements them with a residential single-family cross-check** — the NAHB Cost of Constructing a Home special-study series, conducted biennially in recent cycles (2019 / 2022 / 2024; 2026 publication expected).
+
+### How it differs from the three CCIs
+
+| Dimension | ENR / AGC / Turner CCI | NAHB Cost of Constructing a Home |
+|---|---|---|
+| Unit | Dimensionless **index** | **Absolute USD** per typical home |
+| Scope | Commercial / mixed / nonresidential | **Single-family residential** |
+| Cadence | Monthly (ENR / AGC) or quarterly (Turner) | **Biennial** (recent cycles) |
+| Period format | `YYYY-MM` / `YYYY-QN` | `YYYY` |
+| Macro-escalator role | Wired into `apply_macro_cci_multiplier(...)` as ratios | NOT wired into the macro hook (different unit) |
+| Cross-check role | Per-bid total-cost ratio vs commercial macro | Per-bid total-cost level vs residential single-family |
+
+### When to use
+
+- **Residential single-family bids** — use NAHB as the macro plausibility check on the total construction cost figure. If the BPC estimate for a typical-spec home lands wildly outside the NAHB latest year's national average (after adjustment for SF and finish level), revisit the estimate before bid submission.
+- **Cross-checking commercial CCI escalation** — NAHB's biennial figure gives an independent national signal that is helpful when ENR/AGC/Turner are stale (e.g. AGC's headline is currently percent-change-only).
+
+### Free-tier access posture (verified 2026-05-28)
+
+- NAHB publishes each survey's article under `housing-economics-plus/special-studies/special-studies-pages/cost-of-constructing-a-home-in-YYYY` and a free PDF special study. URLs are year-specific; **the brief's pre-2024 URLs in earlier roadmap notes were 404 as of 2026-05-28**. The adapter pins to the 2024 article URL and bumps when 2026 publishes.
+- The adapter **parses "Total Construction Cost $NNN,NNN" + the most recent 4-digit year** from the article body. If the live HTTP fetch fails (4xx / 5xx / unparseable HTML / layout change), it **falls back to a hardcoded historical table** covering every published survey since 1998 (1998 / 2002 / 2004 / 2007 / 2009 / 2011 / 2013 / 2015 / 2017 / 2019 / 2022 / 2024). The hardcoded table is provenance-tagged in the snapshot's `raw["provenance"]` field as `"hardcoded historical fallback"` vs `"live article parse"`, so operators can tell at a glance whether they got a fresh fetch.
+- `fetch_history()` is implemented from the hardcoded table — the article URL convention is too inconsistent across years for a generic per-year scraper to be reliable.
+
+### Snapshot shape
+
+```
+source:        nahb_construction_cost
+series_id:     residential-single-family-national
+label:         NAHB Cost of Constructing a Home (national, single-family)
+unit:          USD                            # NOT "index"
+value:         428215.0                       # total construction cost
+region:        US
+csi_division:  null                           # whole-house aggregate
+naics:         236115                         # New Single-Family Housing
+period:        "2024"                         # study year, biennial
+license:       NAHB attribution required
+source_url:    https://www.nahb.org/.../cost-of-constructing-a-home-in-2024
+raw.provenance: "live article parse" | "hardcoded historical fallback"
+```
+
+### Source-of-truth references for the NAHB adapter
+
+- `core/pricing/sources/nahb_construction_cost.py` — adapter + hardcoded historical table.
+- `core/pricing/sources/construction_indexes.py` — backward-compat re-export shim (the Worker P stub used to live here; the real class is now in `nahb_construction_cost.py`).
+- `tests/test_pricing_sources_nahb.py` — offline tests via `httpx.MockTransport`.
+
+---
+
+## Macro escalation chain — when to use what (Phase C — shipped 2026-05-28)
+
+The escalation engine now supports a **two-step macro escalation chain**:
+
+1. **Step 1 — per-CSI BLS PPI escalation.** `escalate_cost_database(...)` in `core/pricing/escalation.py`. Reads `config/cost_database.json`, picks a BLS PPI series per entry via the CSI-section / keyword / division fallback chain, applies `ppi(target) / ppi(base)` per entry. Writes `config/cost_database_escalated.json`.
+2. **Step 2 (optional) — macro CCI multiplier.** `apply_macro_cci_multiplier(...)` in `core/pricing/escalation.py`. Reads the per-CSI escalated DB, applies a single uniform `latest_cci / baseline_cci` multiplier across every entry. Writes `config/cost_database_escalated_with_cci.json` (input file untouched). Source fallback chain: **`enr_cci` → `agc_cci` → `turner_cci`** (configurable; first source with on-disk snapshots wins).
+
+The two outputs are kept side-by-side so the bid reviewer can compare per-CSI-only escalation (Step 1) against the per-CSI + macro CCI cross-check (Steps 1 → 2).
+
+### When to use Step 2 (macro CCI multiplier)
+
+| Situation | Apply macro CCI? | Why |
+|---|---|---|
+| Per-CSI BLS PPI coverage is dense and current (commodity bids) | **No** | Per-entry signal is already specific; layering a macro multiplier may double-count market conditions. |
+| Bid spans a long baseline-to-target window (> 24 months) | **Yes** | BLS PPI captures commodity drift; CCI captures the cumulative labor + market drift that PPI misses. |
+| Bid sensitive to total contract value (cost-plus, CMAR, etc.) | **Yes** | A second independent signal hardens the total-cost cross-check. |
+| Mixed-use or unusual scope where per-CSI mapping is weak (lots of `99 99 99` generic-fallback hits) | **Yes** | Per-CSI factor is mostly the generic-construction-inputs PPI anyway; layering a CCI macro signal is a meaningful improvement. |
+| Residential single-family bids | **Yes, with NAHB cross-check** | Step 2 with `enr_cci` is still appropriate; additionally compare the total escalated cost to the NAHB latest survey value (residential plausibility window). |
+
+### Usage from Python
+
+```python
+from pathlib import Path
+from core.pricing.escalation import (
+    escalate_cost_database,
+    apply_macro_cci_multiplier,
+)
+
+# Step 1 — per-CSI BLS PPI escalation
+escalate_cost_database(
+    input_path=Path("config/cost_database.json"),
+    output_path=Path("config/cost_database_escalated.json"),
+    base_period="2024-01",
+    target_period="2026-04",
+)
+
+# Step 2 (optional) — macro CCI multiplier on top
+apply_macro_cci_multiplier(
+    escalated_db_path=Path("config/cost_database_escalated.json"),
+    base_period="2024-01",                   # match the CCI period format:
+                                              # ENR/AGC: YYYY-MM; Turner: YYYY-QN
+    cci_source="enr_cci",                     # default; first source tried
+    fallback_sources=("agc_cci", "turner_cci"),
+    # out_path defaults to config/cost_database_escalated_with_cci.json
+)
+```
+
+### Function semantics
+
+- **Multiplier formula:** `multiplier = latest_cci_value / baseline_cci_value`. Applied uniformly to every cost-DB entry's `unit_cost`.
+- **Baseline lookup:** exact-period match first; falls back to the most recent snapshot whose period is lexicographically ≤ `base_period`. Raises `EscalationMissingBaseline` if no usable baseline exists (i.e. all available snapshots are newer than `base_period` or all baseline candidates have non-positive values).
+- **Latest lookup:** the snapshot with the lexicographically greatest period in the chosen source's history.
+- **Source fallback:** tries `cci_source` first (default `enr_cci`); if that source has zero snapshots on disk (or in the injected `snapshots_by_source` for tests), falls through `fallback_sources` in order. Raises `PricingSourceUnavailable` (from `core.pricing.sources._cci_common`) if every source in the chain has zero snapshots.
+- **Period format constraint:** the caller's `base_period` must match the chosen source's period cadence — `YYYY-MM` for ENR/AGC, `YYYY-QN` for Turner. Cross-format lookup ("2024-01" against a Turner-only history of "2024-Q1") will not match exactly and will fall through to the prior-period lookup; pick the format that matches the source you expect to win.
+- **Audit fields added to every output entry:** `macro_cci_multiplier`, `macro_cci_source`, `macro_cci_baseline_period`, `macro_cci_latest_period`. The per-CSI escalation's audit fields (`escalation_factor`, `ppi_series_used`, `escalated_from_period`) survive untouched.
+- **`_meta` annotations:** `macro_cci_applied_at`, `macro_cci_multiplier`, `macro_cci_source`, `macro_cci_baseline_value`, `macro_cci_latest_value` are appended to the output's `_meta` dict for traceability.
+- **Idempotency:** running twice with the same inputs produces byte-identical outputs (no clock-dependent fields are written into per-entry rows). The function is safe to re-run.
+
+### NAHB is intentionally NOT in the fallback chain
+
+`apply_macro_cci_multiplier` operates on **ratios** of dimensionless index values. NAHB Cost of Constructing a Home publishes **absolute USD** per home, not an index. While a NAHB-based ratio is meaningful for a residential-only cross-check (see the NAHB section above), it is a different statistical object than the CCI ratios — mixing them in a single macro-multiplier chain would silently introduce a residential bias on a commercial-leaning DB. Use NAHB as a separate plausibility check on the total escalated cost instead.
+
+### Source-of-truth references for the macro chain
+
+- `core/pricing/escalation.py` — both `escalate_cost_database(...)` (Step 1) and `apply_macro_cci_multiplier(...)` (Step 2). `EscalationMissingBaseline` exception is defined here.
+- `tests/test_pricing_escalation.py` — Step 1 tests.
+- `tests/test_pricing_escalation_cci.py` — Step 2 tests (multiplier, fallback chain, idempotency, full-chain integration smoke).
 
 ---
 

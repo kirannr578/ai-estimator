@@ -4,18 +4,18 @@ Phase B parsers are exercised against synthetic text / CSV input — no
 network, no real fixture PDF (those will be added in Phase B-full once the
 TWC PDF auto-fetch ships and we have a permissively-licensed sample on hand).
 
-Phase C tests confirm each stub adapter is importable, has the expected
-fields, and returns an empty list (sentinel that the stub is wired but
-intentionally non-functional).
+Phase C tests confirm each remaining stub adapter is importable, has the
+expected fields, and returns an empty list (sentinel that the stub is
+wired but intentionally non-functional). The NAHB, ENR, AGC, and Turner
+Phase C adapters now ship as full implementations and are exercised in
+their own ``tests/test_pricing_sources_{nahb,enr,agc,turner}_cci.py``
+files — only the TX SmartBuy / HD Pro stubs remain here.
 """
 
 from __future__ import annotations
 
 import pytest
 
-from core.pricing.sources.construction_indexes import (
-    NAHBCostOfConstructingAHomeSource,
-)
 from core.pricing.sources.gsa_schedule import (
     GSAScheduleSource,
     _infer_csi_division,
@@ -141,11 +141,11 @@ def test_gsa_schedule_source_fetch_is_noop_stub() -> None:
 @pytest.mark.parametrize("cls", [
     TXSmartBuyAwardsSource,
     HDProCatalogSource,
-    # ENR / AGC / Turner now ship as full implementations under their own
-    # modules (`enr_cci`, `agc_cci`, `turner_cci`); see Phase C ship note in
-    # `docs/ROADMAP_TAKEOFF_AUTOMATION.md`. NAHB remains a stub pending
-    # demand for the annual residential cost breakdown.
-    NAHBCostOfConstructingAHomeSource,
+    # ENR / AGC / Turner / NAHB now all ship as full implementations under
+    # their own modules (`enr_cci`, `agc_cci`, `turner_cci`,
+    # `nahb_construction_cost`); see Phase C ship notes in
+    # `docs/ROADMAP_TAKEOFF_AUTOMATION.md`. Only the TX SmartBuy + HD Pro
+    # adapters remain as stubs.
 ])
 def test_phase_c_stub_is_importable_and_returns_empty(cls) -> None:
     src = cls()

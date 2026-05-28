@@ -15,7 +15,11 @@ Each module exports a `PricingSource` subclass. Public adapters today:
 - ``enr_cci``       (Phase C) — ENR 20-City Construction Cost Index
 - ``agc_cci``       (Phase C) — AGC PPI-based Construction Cost Index
 - ``turner_cci``    (Phase C) — Turner Building Cost Index
-- ``construction_indexes`` (Phase C, stub) — NAHB Cost of Constructing a Home
+- ``nahb_construction_cost`` (Phase C) — NAHB Cost of Constructing a Home
+                                          (residential macro complement)
+- ``construction_indexes`` — historical bin / re-export shim for the NAHB
+                              adapter (kept for backward compatibility
+                              with pre-Phase-C-completion imports)
 
 All adapters MUST:
 - Use TLS verification (no ``verify=False``).

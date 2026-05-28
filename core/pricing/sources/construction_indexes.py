@@ -1,45 +1,30 @@
-"""NAHB Cost of Constructing a Home — Phase C STUB.
+"""Construction-cost index aggregator module — historical bin / re-export.
 
-This module previously also stubbed the ENR / AGC / Turner cost-index
-adapters. Those three are now shipped as dedicated modules:
+This module previously stubbed all four Phase C cost-index adapters
+(ENR / AGC / Turner / NAHB). All four now ship as dedicated modules:
 
-- ``core/pricing/sources/enr_cci.py`` — ENR 20-City CCI
-- ``core/pricing/sources/agc_cci.py`` — AGC PPI-based CCI
-- ``core/pricing/sources/turner_cci.py`` — Turner Building Cost Index
+- ``core/pricing/sources/enr_cci.py``                — ENR 20-City CCI
+- ``core/pricing/sources/agc_cci.py``                — AGC PPI-based CCI
+- ``core/pricing/sources/turner_cci.py``             — Turner Building Cost Index
+- ``core/pricing/sources/nahb_construction_cost.py`` — NAHB Cost of Constructing a Home
 
-Only NAHB remains as a stub here pending demand for its residential cost
-breakdown.
+For backward compatibility with callers that import
+``NAHBCostOfConstructingAHomeSource`` from this module (notably the
+Phase C stub regression tests that pre-date the dedicated module), we
+re-export the real adapter here. New code should import directly from
+``core.pricing.sources.nahb_construction_cost`` instead.
 
-Source:     NAHB "Cost of Constructing a Home" — annual report. Free PDF at
-            https://www.nahb.org/news-and-economics/housing-economics/cost-of-constructing-a-home
-License:    NAHB — publisher attribution required.
-
-[Phase C — NOT YET IMPLEMENTED — annual NAHB report parser]
+The stub class that previously lived here returned an empty list from
+``fetch()`` to signal "wired but not implemented". With NAHB now
+shipped as a real adapter, that sentinel behavior is gone. Tests that
+asserted empty-fetch behavior for NAHB have been migrated to
+``tests/test_pricing_sources_nahb.py`` and assert real-fetch behavior.
 """
 
 from __future__ import annotations
 
-import logging
-from typing import Any
+from core.pricing.sources.nahb_construction_cost import (
+    NAHBCostOfConstructingAHomeSource,
+)
 
-from core.pricing.snapshots import PricingSnapshot
-from core.pricing.sources.base import PricingSource
-
-LOG = logging.getLogger(__name__)
-
-
-class NAHBCostOfConstructingAHomeSource(PricingSource):
-    name = "nahb_cost_of_home"
-    requires_env_vars: list[str] = []
-    license_str = "NAHB — publisher attribution required"
-    homepage_url = (
-        "https://www.nahb.org/news-and-economics/housing-economics/"
-        "cost-of-constructing-a-home"
-    )
-
-    def default_series(self) -> list[str]:
-        return []
-
-    def fetch(self, series_ids: list[str], **filters: Any) -> list[PricingSnapshot]:
-        LOG.info("NAHBCostOfConstructingAHomeSource is a stub. See module docstring.")
-        return []
+__all__ = ["NAHBCostOfConstructingAHomeSource"]
