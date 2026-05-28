@@ -11,7 +11,7 @@ from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 
-from .schemas import Estimate, SheetExtraction
+from .schemas import CostBand, Estimate, SheetExtraction
 from .takeoff import ProjectModel
 
 
@@ -20,6 +20,38 @@ HEADER_FONT = Font(bold=True, color="FFFFFF")
 DIVISION_FILL = PatternFill("solid", fgColor="D9E1F2")
 SUPPRESSED_FILL = PatternFill("solid", fgColor="F2F2F2")  # light grey for unit-mismatch rows
 SUPPRESSED_FONT = Font(italic=True, color="808080")
+
+# Phase T6 — Hand-Takeoff Queue sheet header tint. Light orange / amber
+# pulled from the PDF exporter's WARNING palette so the two surfaces
+# read as the same "needs manual eyes" colour family. Exposed as a
+# module-level constant so the exporter tests can pin the exact hex.
+HAND_TAKEOFF_HEADER_FILL = PatternFill("solid", fgColor="FFC107")
+HAND_TAKEOFF_HEADER_FONT = Font(bold=True, color="000000")
+OPERATOR_REVIEW_HEADER_FILL = PatternFill("solid", fgColor="FFE066")
+OPERATOR_REVIEW_HEADER_FONT = Font(bold=True, color="000000")
+
+
+_BAND_LABELS: dict[CostBand, str] = {
+    CostBand.AUTO_APPROVE: "AUTO",
+    CostBand.OPERATOR_REVIEW: "REVIEW",
+    CostBand.HAND_TAKEOFF: "HAND",
+}
+
+
+def _band_label(li) -> str:
+    """Resolve the short ``AUTO/REVIEW/HAND`` label for a CostLine.
+
+    Tolerates both the enum and the raw string value (Pydantic stores
+    ``use_enum_values=False`` here, but persisted JSON round-trips can
+    arrive with the string form depending on ``model_dump`` mode).
+    """
+    band = li.cost_band if hasattr(li, "cost_band") else CostBand.AUTO_APPROVE
+    if isinstance(band, CostBand):
+        return _BAND_LABELS[band]
+    try:
+        return _BAND_LABELS[CostBand(band)]
+    except Exception:
+        return str(band)
 
 
 _SUPPORTING_DOC_KIND_PATTERNS: tuple[tuple[str, str], ...] = (
@@ -109,6 +141,78 @@ def _write_header(ws, row: int, headers: list[str]) -> None:
         cell.alignment = Alignment(vertical="center")
 
 
+# Column schema shared by the two Phase T6 queue sheets. Kept as a
+# module-level tuple so tests can reference it and any future column
+# addition lands in one place.
+_QUEUE_SHEET_HEADERS: tuple[str, ...] = (
+    "CSI Code",
+    "Description",
+    "Qty",
+    "Unit",
+    "Unit Cost",
+    "Total Cost",
+    "Confidence",
+    "Source",
+    "Notes",
+)
+
+
+def _render_queue_sheet(
+    wb,
+    *,
+    title: str,
+    lines: list,
+    header_fill: PatternFill,
+    header_font: Font,
+    empty_note: str,
+) -> None:
+    """Render one of the Phase T6 queue sheets (Operator-Review / Hand-Takeoff).
+
+    Always creates the worksheet even when ``lines`` is empty so callers
+    + tests can rely on the tab existing. The header row carries the
+    queue-specific tint so the action-required signal travels with the
+    workbook regardless of theme.
+
+    ``Source`` column shows comma-joined ``source_sheet_ids`` (typically
+    the originating drawing-sheet IDs) — this is what an estimator scans
+    when deciding which PDF page to flip to for a manual count.
+    """
+    ws = wb.create_sheet(title)
+    for i, h in enumerate(_QUEUE_SHEET_HEADERS, start=1):
+        cell = ws.cell(row=1, column=i, value=h)
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.alignment = Alignment(vertical="center")
+
+    if not lines:
+        # Friendly empty-state note in A2 so the reader knows the tab is
+        # intentionally empty (not a broken render).
+        ws.cell(row=2, column=1, value=empty_note).alignment = Alignment(
+            wrap_text=True, vertical="top"
+        )
+        ws.freeze_panes = "A2"
+        _autosize(ws, max_width=80)
+        return
+
+    for r_idx, li in enumerate(lines, start=2):
+        ws.cell(row=r_idx, column=1, value=li.csi_section or li.csi_division)
+        ws.cell(row=r_idx, column=2, value=li.description).alignment = Alignment(
+            wrap_text=True, vertical="top"
+        )
+        ws.cell(row=r_idx, column=3, value=li.quantity).number_format = "#,##0.00"
+        ws.cell(row=r_idx, column=4, value=li.unit)
+        ws.cell(row=r_idx, column=5, value=li.unit_cost).number_format = "$#,##0.00"
+        ws.cell(row=r_idx, column=6, value=li.total_cost).number_format = "$#,##0.00"
+        ws.cell(row=r_idx, column=7, value=li.confidence).number_format = "0.00"
+        ws.cell(row=r_idx, column=8, value=", ".join(li.source_sheet_ids))
+        ws.cell(row=r_idx, column=9, value=li.notes or "").alignment = Alignment(
+            wrap_text=True, vertical="top"
+        )
+
+    ws.freeze_panes = "A2"
+    _autosize(ws, max_width=80)
+
+
 def export_estimate_xlsx(
     estimate: Estimate,
     project: ProjectModel,
@@ -140,10 +244,27 @@ def export_estimate_xlsx(
     ws["B9"].number_format = "$#,##0.00"
     ws["B9"].font = Font(bold=True, size=12)
 
-    ws["A11"] = "By CSI division"
-    ws["A11"].font = Font(bold=True)
-    _write_header(ws, 12, ["Div", "Title", "Subtotal"])
-    row = 13
+    # Phase T6 — band-aware totals + queue counts. Placed immediately
+    # under the headline grand total so an estimator reviewing the
+    # Project Summary sheet sees the breakdown next to the number it
+    # explains.
+    ws["A10"] = "Auto-Approve Total"
+    ws["B10"] = estimate.total_auto_approve;       ws["B10"].number_format = "$#,##0.00"
+    ws["A11"] = "Operator-Review Total"
+    ws["B11"] = estimate.total_operator_review;    ws["B11"].number_format = "$#,##0.00"
+    ws["A12"] = "Hand-Takeoff Total (informational, not in grand total)"
+    ws["B12"] = estimate.total_hand_takeoff;       ws["B12"].number_format = "$#,##0.00"
+    ws["A13"] = "Grand Total (Auto-Only)"
+    ws["B13"] = estimate.grand_total_auto_only;    ws["B13"].number_format = "$#,##0.00"
+    ws["A14"] = "Grand Total (Auto + Review)"
+    ws["B14"] = estimate.grand_total_with_review;  ws["B14"].number_format = "$#,##0.00"
+    ws["A15"] = f"Lines Needing Manual Takeoff: {estimate.hand_takeoff_count}"
+    ws["A16"] = f"Lines Needing Operator Review: {estimate.operator_review_count}"
+
+    ws["A18"] = "By CSI division"
+    ws["A18"].font = Font(bold=True)
+    _write_header(ws, 19, ["Div", "Title", "Subtotal"])
+    row = 20
     for div in sorted(estimate.by_division):
         ws.cell(row=row, column=1, value=div)
         ws.cell(row=row, column=2, value=csi_titles.get(div, ""))
@@ -194,12 +315,13 @@ def export_estimate_xlsx(
 
     _autosize(ws)
 
-    # ----- Line items -----
+    # ----- Line items (a.k.a. "Cost Estimate") -----
     ws = wb.create_sheet("Line Items")
     headers = [
         "Div", "CSI Section", "Category", "Description",
         "Raw Qty", "Waste", "Quantity", "Unit",
-        "Unit Cost", "Total", "Suppressed", "Confidence", "Source Sheets",
+        "Unit Cost", "Total", "Band", "Suppressed",
+        "Confidence", "Source Sheets",
         "Cost Source", "CWICR Similarity", "Cost-DB Key", "Notes",
     ]
     _write_header(ws, 1, headers)
@@ -241,15 +363,16 @@ def export_estimate_xlsx(
         ws.cell(row=row, column=8, value=li.unit)
         ws.cell(row=row, column=9, value=li.unit_cost).number_format = "$#,##0.00"
         ws.cell(row=row, column=10, value=li.total_cost).number_format = "$#,##0.00"
-        ws.cell(row=row, column=11, value="YES" if li.suppressed else "")
-        ws.cell(row=row, column=12, value=li.confidence).number_format = "0.00"
-        ws.cell(row=row, column=13, value=", ".join(li.source_sheet_ids))
-        ws.cell(row=row, column=14, value=src_family)
-        sim_cell = ws.cell(row=row, column=15, value=cwicr_sim)
+        ws.cell(row=row, column=11, value=_band_label(li))
+        ws.cell(row=row, column=12, value="YES" if li.suppressed else "")
+        ws.cell(row=row, column=13, value=li.confidence).number_format = "0.00"
+        ws.cell(row=row, column=14, value=", ".join(li.source_sheet_ids))
+        ws.cell(row=row, column=15, value=src_family)
+        sim_cell = ws.cell(row=row, column=16, value=cwicr_sim)
         if cwicr_sim is not None:
             sim_cell.number_format = "0.00"
-        ws.cell(row=row, column=16, value=raw_src)
-        ws.cell(row=row, column=17, value=li.notes or "")
+        ws.cell(row=row, column=17, value=raw_src)
+        ws.cell(row=row, column=18, value=li.notes or "")
 
         if li.suppressed:
             # Grey-shade the entire row and italicize so the reader sees at a
@@ -262,6 +385,35 @@ def export_estimate_xlsx(
 
     ws.freeze_panes = "A2"
     _autosize(ws)
+
+    # ----- Operator Review Queue + Hand Takeoff Queue (Phase T6) -----
+    # Two parallel sheets, identical schema. Both are ALWAYS created (even
+    # when the queue is empty) so downstream consumers can rely on the
+    # tabs existing. Rendered after the main Line Items sheet so the
+    # reader's eye flows: full estimate → review queue → manual-takeoff
+    # worklist.
+    _render_queue_sheet(
+        wb,
+        title="Operator Review Queue",
+        lines=list(estimate.operator_review_line_items),
+        header_fill=OPERATOR_REVIEW_HEADER_FILL,
+        header_font=OPERATOR_REVIEW_HEADER_FONT,
+        empty_note="No operator-review lines — all priced rows cleared the "
+                   "0.85 auto-approve threshold.",
+    )
+    _render_queue_sheet(
+        wb,
+        title="Hand Takeoff Queue",
+        # HAND queue surfaces BOTH low-confidence priced lines and any
+        # suppressed (unit-mismatch) lines, since both need manual eyes.
+        # ``Estimate.hand_takeoff_line_items`` already filters to the
+        # HAND_TAKEOFF band regardless of suppression.
+        lines=list(estimate.hand_takeoff_line_items),
+        header_fill=HAND_TAKEOFF_HEADER_FILL,
+        header_font=HAND_TAKEOFF_HEADER_FONT,
+        empty_note="No hand-takeoff lines — every row had ≥ 0.65 confidence "
+                   "and no unit-mismatch suppression triggered.",
+    )
 
     # ----- Rooms -----
     if project.rooms:
@@ -528,6 +680,18 @@ def export_estimate_json(estimate: Estimate, project: ProjectModel) -> str:
         "profit_pct": estimate.profit_pct,
         "profit": estimate.profit,
         "grand_total": estimate.grand_total,
+        # Phase T6 — band-aware aggregates surfaced alongside the headline
+        # number so JSON consumers (downstream proposal builders, the CLI
+        # `--client-pdf` flag, the Streamlit Estimate tab) can render the
+        # AUTO / REVIEW / HAND breakdown without re-walking line_items.
+        "grand_total_with_review": estimate.grand_total_with_review,
+        "grand_total_auto_only": estimate.grand_total_auto_only,
+        "total_auto_approve": estimate.total_auto_approve,
+        "total_operator_review": estimate.total_operator_review,
+        "total_hand_takeoff": estimate.total_hand_takeoff,
+        "auto_approve_count": estimate.auto_approve_count,
+        "operator_review_count": estimate.operator_review_count,
+        "hand_takeoff_count": estimate.hand_takeoff_count,
         "by_division": estimate.by_division,
         "by_cost_category": estimate.by_cost_category,
         "line_items": [li.model_dump() for li in estimate.line_items],

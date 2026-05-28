@@ -1026,6 +1026,132 @@ if "estimate" in st.session_state:
 
     # --- Estimate tab ---
     with tabs[5]:
+        # Phase T6 — surface the manual-takeoff worklist at the top of
+        # the tab BEFORE the cost breakdown, so an estimator's first
+        # signal is "do you have hand-takeoff work to do?".
+        if estimate.hand_takeoff_count > 0:
+            st.warning(
+                f"\u26A0 {estimate.hand_takeoff_count} line"
+                f"{'s' if estimate.hand_takeoff_count != 1 else ''} need "
+                f"manual takeoff — see Review Queues below.",
+                icon="\u26A0\uFE0F",
+            )
+
+        st.subheader("Confidence band breakdown (Phase T6)")
+        st.caption(
+            "Auto-Approve (\u2265 0.85) rolls into the headline grand total. "
+            "Operator-Review (0.65\u20130.85) also rolls in but needs a manual "
+            "eyeball before submitting. Hand-Takeoff (< 0.65, or unit-mismatch "
+            "suppressed) is excluded from the grand total and surfaced below "
+            "as a worklist."
+        )
+        bc1, bc2, bc3 = st.columns(3)
+        bc1.metric(
+            "Auto-Approve",
+            f"${estimate.total_auto_approve:,.0f}",
+            f"{estimate.auto_approve_count} line"
+            f"{'s' if estimate.auto_approve_count != 1 else ''}",
+        )
+        bc2.metric(
+            "Operator-Review",
+            f"${estimate.total_operator_review:,.0f}",
+            f"{estimate.operator_review_count} line"
+            f"{'s' if estimate.operator_review_count != 1 else ''}",
+        )
+        bc3.metric(
+            "Hand-Takeoff",
+            f"${estimate.total_hand_takeoff:,.0f}",
+            f"{estimate.hand_takeoff_count} line"
+            f"{'s' if estimate.hand_takeoff_count != 1 else ''} (not in total)",
+            delta_color="off",
+        )
+
+        gtc1, gtc2 = st.columns(2)
+        gtc1.metric(
+            "Grand Total (Auto + Review)",
+            f"${estimate.grand_total_with_review:,.0f}",
+            help="Headline number — the 'if reviewer signs off' total.",
+        )
+        gtc2.metric(
+            "Grand Total (Auto-Only)",
+            f"${estimate.grand_total_auto_only:,.0f}",
+            help="Conservative floor — markups computed against the AUTO-only subtotal.",
+        )
+
+        with st.expander(
+            "Review Queues "
+            f"(Review: {estimate.operator_review_count}, "
+            f"Hand: {estimate.hand_takeoff_count})",
+            expanded=estimate.hand_takeoff_count > 0,
+        ):
+            st.markdown("##### Operator Review Queue")
+            st.caption(
+                "Confidence 0.65\u20130.84 — included in totals but flagged "
+                "for an eyeball before submitting."
+            )
+            review_lines = estimate.operator_review_line_items
+            if not review_lines:
+                st.caption("(empty — every priced row cleared the 0.85 auto-approve threshold.)")
+            else:
+                review_df = pd.DataFrame([
+                    {
+                        "CSI": li.csi_section or li.csi_division,
+                        "Description": li.description,
+                        "Qty": li.quantity,
+                        "Unit": li.unit,
+                        "Unit Cost": li.unit_cost,
+                        "Total": li.total_cost,
+                        "Conf": li.confidence,
+                        "Source": ", ".join(li.source_sheet_ids),
+                        "Notes": li.notes or "",
+                    }
+                    for li in review_lines
+                ])
+                st.dataframe(
+                    review_df, hide_index=True, use_container_width=True,
+                    column_config={
+                        "Unit Cost": st.column_config.NumberColumn(format="$%.2f"),
+                        "Total":     st.column_config.NumberColumn(format="$%.2f"),
+                        "Conf":      st.column_config.NumberColumn(format="%.2f"),
+                        "Qty":       st.column_config.NumberColumn(format="%.2f"),
+                    },
+                )
+
+            st.markdown("##### Hand Takeoff Queue")
+            st.caption(
+                "Confidence < 0.65 (or unit-mismatch suppressed) \u2014 excluded "
+                "from the grand total. Each row needs an in-person takeoff."
+            )
+            hand_lines = estimate.hand_takeoff_line_items
+            if not hand_lines:
+                st.caption("(empty \u2014 no rows under 0.65 confidence and no unit-mismatch suppression.)")
+            else:
+                hand_df = pd.DataFrame([
+                    {
+                        "CSI": li.csi_section or li.csi_division,
+                        "Description": li.description,
+                        "Qty": li.quantity,
+                        "Unit": li.unit,
+                        "Unit Cost": li.unit_cost,
+                        "Total": li.total_cost,
+                        "Conf": li.confidence,
+                        "Source": ", ".join(li.source_sheet_ids),
+                        "Action": "Manual takeoff required",
+                        "Notes": li.notes or "",
+                    }
+                    for li in hand_lines
+                ])
+                st.dataframe(
+                    hand_df, hide_index=True, use_container_width=True,
+                    column_config={
+                        "Unit Cost": st.column_config.NumberColumn(format="$%.2f"),
+                        "Total":     st.column_config.NumberColumn(format="$%.2f"),
+                        "Conf":      st.column_config.NumberColumn(format="%.2f"),
+                        "Qty":       st.column_config.NumberColumn(format="%.2f"),
+                    },
+                )
+
+        st.divider()
         by_cat = estimate.by_cost_category
         if by_cat:
             st.subheader("Labor / material / sub split")

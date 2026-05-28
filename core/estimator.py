@@ -30,7 +30,14 @@ from .pricing.cwicr_matcher import (
     is_cwicr_disabled,
     min_similarity_threshold,
 )
-from .schemas import CostCategory, CostLine, Estimate, TakeoffItem
+from .schemas import (
+    CostBand,
+    CostCategory,
+    CostLine,
+    Estimate,
+    TakeoffItem,
+    band_for_confidence,
+)
 from .takeoff import ProjectModel
 
 logger = logging.getLogger(__name__)
@@ -207,6 +214,7 @@ def _build_cwicr_line(
             cost_source=cost_source,
             notes=" | ".join(filter(None, [item.notes, mismatch_note])) or None,
             suppressed=True,
+            cost_band=band_for_confidence(confidence, suppressed=True),
         )
 
     total = round(unit_cost * ordered_qty, 2)
@@ -225,6 +233,7 @@ def _build_cwicr_line(
         source_sheet_ids=item.source_sheet_ids,
         cost_source=cost_source,
         notes=item.notes,
+        cost_band=band_for_confidence(confidence, suppressed=False),
     )
 
 
@@ -307,6 +316,10 @@ def price_takeoff(
         if db is not None:
             entry, key = db.lookup(t)
         if entry is None:
+            # No-match line: total_cost is $0 regardless of band, so the
+            # band assignment only affects which queue this line lands in
+            # downstream (operator-review or hand-takeoff). A $0 line is
+            # still useful as a "needs pricing" worklist marker.
             line_items.append(CostLine(
                 csi_division=t.csi_division,
                 csi_section=t.csi_section,
@@ -322,6 +335,7 @@ def price_takeoff(
                 source_sheet_ids=t.source_sheet_ids,
                 cost_source="(no match)",
                 notes=(t.notes + " | " if t.notes else "") + "Unit cost not found - add to cost_database.json",
+                cost_band=band_for_confidence(t.confidence, suppressed=False),
             ))
             continue
 
@@ -379,6 +393,7 @@ def price_takeoff(
                 cost_source=key,
                 notes=" | ".join(filter(None, [t.notes, mismatch_note])) or None,
                 suppressed=True,
+                cost_band=band_for_confidence(t.confidence, suppressed=True),
             ))
             continue
 
@@ -398,10 +413,15 @@ def price_takeoff(
             source_sheet_ids=t.source_sheet_ids,
             cost_source=key,
             notes=t.notes,
+            cost_band=band_for_confidence(t.confidence, suppressed=False),
         ))
 
     # Sort: by division ascending, suppressed lines below priced lines within
-    # each division, then by total_cost descending.
+    # each division, then by total_cost descending. Band order is implicitly
+    # preserved within (division, suppressed) groups because higher-confidence
+    # bands also tend to carry larger total_cost values; we don't sort on band
+    # explicitly so the existing Excel "Line Items" reading order stays
+    # familiar.
     line_items.sort(
         key=lambda li: (li.csi_division, 1 if li.suppressed else 0, -li.total_cost)
     )

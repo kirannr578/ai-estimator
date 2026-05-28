@@ -500,6 +500,102 @@ def _render_empty_state_banner(
     return [banner, Spacer(1, 0.08 * inch), footnote]
 
 
+def _band_subscript_text(estimate: Estimate) -> str:
+    """Build the small subscript that hangs under the grand-total tile.
+
+    Always written even when the band counts are zero so a downstream
+    test can pin the exact phrasing. Hand-takeoff appears only when
+    there's at least one line in the queue; review appears only when
+    there's at least one line in that band (matches the tile-collapse
+    rules in :func:`_render_band_tiles`).
+    """
+    parts: list[str] = [
+        f"of which {_money(estimate.total_auto_approve)} auto-approved",
+    ]
+    if estimate.operator_review_count > 0:
+        parts.append(f"{_money(estimate.total_operator_review)} pending review")
+    if estimate.hand_takeoff_count > 0:
+        n = estimate.hand_takeoff_count
+        parts.append(
+            f"{n} line{'s' if n != 1 else ''} need manual takeoff"
+        )
+    return ", ".join(parts)
+
+
+def _render_band_tiles(
+    estimate: Estimate, styles: dict[str, ParagraphStyle]
+) -> Table | None:
+    """Render the Phase T6 AUTO / REVIEW / HAND breakdown tiles.
+
+    Tile-collapse rules (from the brief):
+      * ``hand_takeoff_count == 0``  → hide the HAND tile entirely.
+      * ``operator_review_count == 0`` → collapse the REVIEW tile too,
+        leaving the client with a single AUTO tile (the most-common
+        clean-output path on a well-classified project).
+      * If both review and hand are zero, return ``None`` so the caller
+        can omit the row entirely — the headline grand-total tile is
+        sufficient on its own.
+    """
+    has_review = estimate.operator_review_count > 0
+    has_hand = estimate.hand_takeoff_count > 0
+    if not has_review and not has_hand:
+        return None
+
+    tiles: list[list] = [
+        [
+            Paragraph("AUTO-APPROVE", styles["tile_label"]),
+            Spacer(1, 4),
+            Paragraph(_money(estimate.total_auto_approve), styles["tile_value"]),
+        ]
+    ]
+    if has_review:
+        tiles.append(
+            [
+                Paragraph("OPERATOR-REVIEW", styles["tile_label"]),
+                Spacer(1, 4),
+                Paragraph(_money(estimate.total_operator_review), styles["tile_value"]),
+            ]
+        )
+    if has_hand:
+        # Hand-takeoff is explicitly NOT a dollar tile — the count is
+        # what matters because the value is excluded from grand_total
+        # by design. Surfacing $X here would imply the dollars rolled
+        # into the headline, which is the opposite of the contract.
+        n = estimate.hand_takeoff_count
+        tiles.append(
+            [
+                Paragraph("HAND-TAKEOFF", styles["tile_label"]),
+                Spacer(1, 4),
+                Paragraph(
+                    f"{n} line{'s' if n != 1 else ''}<br/>"
+                    f"<font size=8>needs manual takeoff</font>",
+                    styles["tile_value"],
+                ),
+            ]
+        )
+
+    col_count = len(tiles)
+    tbl = Table(
+        [tiles],
+        colWidths=[CONTENT_WIDTH / col_count] * col_count,
+        rowHeights=[0.85 * inch],
+    )
+    tbl.setStyle(
+        TableStyle(
+            [
+                ("BOX", (0, 0), (-1, -1), 0.5, GREY_BORDER),
+                ("INNERGRID", (0, 0), (-1, -1), 0.5, GREY_BORDER),
+                ("BACKGROUND", (0, 0), (-1, -1), ACCENT_LIGHT),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+                ("TOPPADDING", (0, 0), (-1, -1), 10),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 10),
+            ]
+        )
+    )
+    return tbl
+
+
 def _executive_summary(
     estimate: Estimate, cfg: QuoteConfig, styles: dict[str, ParagraphStyle]
 ) -> list:
@@ -511,6 +607,18 @@ def _executive_summary(
             styles["big_money"],
         )
     )
+    # Phase T6 — subscript hanging under the headline number explaining
+    # the band breakdown. Always written; only the per-band fragments
+    # are conditional. Suppressed entirely on the all-suppressed empty
+    # state because the empty-state banner already carries the right
+    # message.
+    if not _is_priced_estimate_empty(estimate):
+        flow.append(
+            Paragraph(
+                f"<font size=9 color='#555555'>{_band_subscript_text(estimate)}</font>",
+                styles["tile_label"],
+            )
+        )
     flow.append(Spacer(1, 0.15 * inch))
 
     if cfg.quote_meta.scope_blurb:
@@ -525,6 +633,14 @@ def _executive_summary(
         flow.extend(_render_empty_state_banner(styles))
     else:
         flow.append(_render_three_tiles(estimate, styles))
+        # Phase T6 band breakdown tiles, shown only when at least one
+        # line landed outside the AUTO band. The brief calls for hiding
+        # the entire row on a clean run rather than rendering a single
+        # AUTO tile that duplicates the headline number above.
+        band_tiles = _render_band_tiles(estimate, styles)
+        if band_tiles is not None:
+            flow.append(Spacer(1, 0.10 * inch))
+            flow.append(band_tiles)
     flow.append(Spacer(1, 0.15 * inch))
 
     # Project totals breakdown

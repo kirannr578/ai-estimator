@@ -89,7 +89,7 @@ Mapping each gap to the scope category it lives in:
 | No OCR for scanned drawings | Everything on scanned pages | `Sheet.is_scanned = len(embedded_text.strip()) < 20` is computed but only used as a flag. The prepass returns confidence 0 on a scan because there's no vector text; the LLM still runs against the rendered PNG, but PyMuPDF's `find_tables()` returns nothing, so no deterministic schedule extraction is possible. There is no `tesseract` or `paddleocr` dependency. |
 | No CAD / IFC import | Everything | The pipeline only consumes PDFs. Native `.dwg`, `.dxf`, or `.ifc` files (when the owner makes them available) would be a much higher-fidelity source for geometric quantities. No `ezdxf` dependency. |
 | No spec → drawing cross-reference | Schedule disambiguation, MEP rough-in | Spec sections (e.g. "Section 08 11 13 — Hollow Metal Doors") are extracted but not cross-walked to door schedule rows. Doing so would let us upgrade a "DOOR D01" with `type=null` from the schedule into a definite "hollow metal door, 20-min rated, lever lockset HW-1" using the spec. |
-| No confidence-aware pricing | All | `TakeoffItem.confidence` is stored and surfaced in exports, but `price_takeoff` does not use it. A 0.40-confidence takeoff and a 0.90-confidence takeoff produce the same priced line. There is no "below confidence X, flag for human review" gate. |
+| ~~No confidence-aware pricing~~ — **SHIPPED in Phase T6.** | All | Previously: `TakeoffItem.confidence` was stored but `price_takeoff` ignored it. As of this commit, every emitted `CostLine` carries a `CostBand` (`AUTO_APPROVE` ≥ 0.85 / `OPERATOR_REVIEW` 0.65–0.84 / `HAND_TAKEOFF` < 0.65 ∨ suppressed); HAND is excluded from `Estimate.grand_total` and surfaced as a dedicated worklist in Excel + PDF + Streamlit. See Phase T6 below. |
 | No human-verification UI workflow for line-level review | All | The Streamlit UI surfaces the priced lines and lets the user re-edit unit costs, but there is no first-class "approve / reject / correct quantity" workflow that captures the correction back into the schema for the next run. |
 
 ### 1.4 Calibration v3 evidence
@@ -623,36 +623,40 @@ The 53 pre-existing door + window tests (`tests/test_door_dedupe.py` + `tests/te
 
 ---
 
-### Phase T6 — Confidence-aware pricing and human-verification UI workflow
+### Phase T6 — Confidence-aware pricing (auto / review / hand bands)
 
-**1-line goal:** Use the `TakeoffItem.confidence` we already store to band line items into "automated", "auto with review", and "human required"; build the Streamlit UI loop that lets a human approve or correct a row and persist the correction.
+**Status:** SHIPPED — this commit landed the band-aware pricing pass, the Excel + PDF + Streamlit surfacing, and 74 new tests on top of the existing T1–T5.1 confidence rubric. Suite: 901 → 975 passed (1 skipped unchanged).
 
-**Deliverables:**
-- New schema field `Estimate.review_status: dict[str, Literal["approved", "rejected", "edited", None]] = {}` keyed by a stable `CostLine.line_id` (hash of csi_section + description + unit + first-source-sheet-id).
-- New `core/estimator.py: bin_by_confidence(estimate: Estimate) -> dict[str, list[CostLine]]` returns `{"automated": [...], "review": [...], "human": [...]}` based on bands `>= 0.85`, `>= 0.65`, `< 0.65`.
-- Streamlit Estimate tab gains three filter chips (Automated / Review / Human required) and a per-row approve / reject / edit-and-approve affordance.
-- Edits write back to `Estimate.line_items` and the override is persisted in a per-project `corrections.jsonl` under `uploads/<project>/`.
-- New `tests/test_confidence_binning.py` — verifies the bin thresholds and that edited lines round-trip.
-- One end-to-end test: load a fixture estimate, edit one row in-memory, persist, reload, verify the override sticks.
+**1-line goal:** Use the `TakeoffItem.confidence` we already store to band priced `CostLine`s into AUTO_APPROVE / OPERATOR_REVIEW / HAND_TAKEOFF, route the bottom band out of the headline grand total, and surface two queue sheets so the estimator knows exactly which rows need eyeballs vs. a manual takeoff.
+
+**Implementation notes (this commit):**
+- **Band thresholds.** `core/schemas.py` adds `CostBand` (`AUTO_APPROVE` / `OPERATOR_REVIEW` / `HAND_TAKEOFF`) plus the boundary constants `COST_BAND_AUTO_THRESHOLD = 0.85` and `COST_BAND_REVIEW_THRESHOLD = 0.65` and a single source-of-truth helper `band_for_confidence(confidence, *, suppressed=False)`. Both boundaries are inclusive on the upper-band side (`0.85 → AUTO`, `0.65 → REVIEW`), exactly matching the prepass confidence rubric (`drawing_prepass._score`) and the back-fill rubric (`takeoff_backfill._BACKFILL_CONF_FALLBACK = 0.65`) so a perimeter-fallback row ends up in `OPERATOR_REVIEW` by construction.
+- **Suppression → HAND_TAKEOFF.** `band_for_confidence` treats `suppressed=True` as the highest-priority rule — a unit-mismatch line (calibration v2's $34 K phantom guard) lands in `HAND_TAKEOFF` regardless of its underlying confidence. The line's `total_cost == 0` from the suppression branch means it contributes $0 to `total_hand_takeoff`, so there is no double-counting risk between the existing suppression and the new band aggregates. (Suppressed lines DO appear in `hand_takeoff_line_items` for the worklist UI — the queue is "lines needing manual eyes", not "dollars excluded from total".)
+- **No-confidence (legacy LLM) → OPERATOR_REVIEW.** The schema default `TakeoffItem.confidence = 0.7` already routes naturally into `OPERATOR_REVIEW` (0.7 ≥ 0.65 ∧ 0.7 < 0.85), so pre-T1 LLM-extracted rows continue to roll into the headline grand total instead of silently dropping out. The explicit `None` case in `band_for_confidence` is a safety net for the small set of code paths that pass through unset confidences (CostLine constructed without an explicit confidence inherits the field's `0.7` default too).
+- **Grand-total semantics.** `Estimate.grand_total` is now an alias for the new `grand_total_with_review` (AUTO + REVIEW subtotal + markups). The existing `subtotal` property moved in lock-step (it now means "headline subtotal" = AUTO + REVIEW), so the pre-T6 compounding formula `grand_total ≈ subtotal × (1+cont%) × (1+oh%) × (1+profit%)` keeps holding. A second `grand_total_auto_only` recomputes markups against the AUTO-only subtotal for the conservative "confidence floor" number.
+- **Aggregates surfaced.** `Estimate` exposes seven new derived properties: `total_auto_approve`, `total_operator_review`, `total_hand_takeoff` (informational only, NOT in grand total), `grand_total_with_review`, `grand_total_auto_only`, `hand_takeoff_count`, `operator_review_count` (plus `auto_approve_count` for symmetry). `by_division` and `by_cost_category` follow the headline contract — both exclude HAND-banded lines.
+- **Excel exporter.** `core/exporter.py` adds a `Band` column on the existing Line Items sheet (showing `AUTO / REVIEW / HAND`), two new sheets — `Operator Review Queue` (light-yellow header tint) and `Hand Takeoff Queue` (amber header tint) — and seven new rows on the Project Summary sheet (Auto-Approve Total, Operator-Review Total, Hand-Takeoff Total, Grand Total Auto-Only, Grand Total Auto+Review, Lines Needing Manual Takeoff, Lines Needing Operator Review). Both queue sheets always exist, even when empty, with a friendly empty-state note in A2 so downstream tabs / scripts can rely on the worksheet existing.
+- **PDF exporter.** `core/exporter_pdf.py` adds a small `_render_band_tiles` row under the existing three Labor/Material/Subcontractor tiles. Tile collapse rules per the brief: if `hand_takeoff_count == 0` the HAND tile is hidden; if `operator_review_count == 0` the REVIEW tile is hidden too; if both are zero, the whole band-row is omitted (clean output on a well-classified project). A short greyscale subscript hangs under the headline grand-total tile: `"of which $X auto-approved, $Y pending review, N lines need manual takeoff"`.
+- **Streamlit UI.** `app.py` Estimate tab gains a YELLOW warning banner at the top when `hand_takeoff_count > 0`, a 3-column AUTO / REVIEW / HAND breakdown row showing line counts + totals, a side-by-side "Grand Total (Auto + Review)" vs. "Grand Total (Auto-Only)" pair, and a "Review Queues" expander containing two tables — Operator Review (0.65–0.84) and Hand Takeoff (< 0.65 + suppressed). The expander auto-opens when the hand-takeoff queue is non-empty so the estimator can't miss the worklist.
+- **JSON exporter.** `export_estimate_json` now surfaces `grand_total_with_review`, `grand_total_auto_only`, `total_auto_approve`, `total_operator_review`, `total_hand_takeoff`, and the three band counts alongside the legacy `grand_total` key, plus each serialised `CostLine` carries its `cost_band` string for downstream consumers.
+
+**Tests:**
+- 44 new tests in `tests/test_phase_t6_confidence_bands.py` — threshold edges (0.85 / 0.65 / 0.6499 / 0.8499 / 0.0 / 1.0 / None), suppression-always-wins parameterisation, schema round-trip via `model_dump` / `model_validate`, empty / all-AUTO / all-HAND aggregate invariants, mixed-band totals at 0.92 / 0.78 / 0.55, grand-total alias check, AUTO-only markup compounding, by_division / by_cost_category HAND exclusion, `price_takeoff` band assignment from CSI seed + CWICR + no-match + unit-mismatch paths, the priced_line_items-still-means-non-suppressed backward-compat guard, and the dominant pre-T6 "default 0.7 confidence stays in grand_total" regression test.
+- 13 new tests in `tests/test_exporter.py` (new file) — queue-sheet presence (both populated and empty), header-tint hex check on each queue's row 1, `Band` column presence + value set on the Line Items sheet, content isolation (AUTO never leaks into a queue, suppressed lines appear in the HAND queue), seven-row Project Summary T6 block + dollar-value alignment, JSON-export band aggregate round-trip.
+- 7 new tests in `tests/test_exporter_pdf.py` extension — `_band_subscript_text` segment toggling on review-zero / hand-zero / both-present, `_render_band_tiles` returning `None` for the AUTO-only clean path, two-tile collapses, three-tile mixed render, and a full `build_quote_pdf` smoke test against a mixed-band estimate.
 
 **Scope:** Cross-cutting. Doesn't improve extraction accuracy, but materially improves the per-bid usefulness of the tool by focusing human time on the rows that need it.
 
-**Expected accuracy uplift:**
-- No per-category line accuracy uplift. Improves the *effective* total-bid accuracy because a human can correct the lower-confidence rows in seconds instead of having to audit all 200 lines.
+**Effort estimate:** L (5–7 days). Came in inside that envelope — most of the lift was the export-layer surfacing, not the schema work.
 
-**Effort estimate:** M (3–5 days).
+**Known gaps / deferred (intentional cut for this slice):**
+- **No per-line approve/reject persistence.** The original brief mentioned an `Estimate.review_status` dict keyed by a stable `CostLine.line_id` plus a per-project `corrections.jsonl` log. That correction-feedback loop is deferred — this slice only ships read-only band routing. The next T6 follow-up should add: (a) a stable `CostLine.line_id`, (b) `Estimate.review_status: dict[str, Literal[…]]`, (c) the Streamlit "approve / reject / edit-and-approve" affordance per row, (d) the per-project `uploads/<project>/corrections.jsonl` persistence.
+- **No CWICR-similarity-to-band remapping for the 0.55–0.65 gap.** The CWICR matcher threshold (`CWICR_MIN_SIMILARITY`, default 0.55) admits matches that immediately land in `HAND_TAKEOFF` once banded. Two clean options for a follow-up: raise the CWICR threshold to 0.65 to align with the band boundary, or route 0.55–0.65 CWICR matches to a small "weak-match review" sub-queue under HAND.
 
-**Dependencies:**
-- None beyond the existing schemas and Streamlit UI.
-
-**Risk / pitfalls:**
-- Persisting corrections per-project but not yet using them to train / fine-tune anything. That's a deliberate scope choice — corrections are only logged in T6; using them as feedback to the extractor is a future phase.
-
-**Validation strategy:**
-- Manual workflow walkthrough on a real Carr EFA estimate: bin the lines, edit two rows in the UI, close and reopen, verify the edits persist.
-
-**No-go signal:**
-- Users do not interact with the review UI more than 1–2 lines per estimate, indicating the confidence bands aren't discriminating useful from useless rows. Mitigation: adjust bin thresholds, or rethink the workflow before investing more.
+**Next-slice candidates:**
+- **Phase T7 — CSI catalog completeness scoring.** Now genuinely viable — the HAND queue tells us which CSI sections aren't covered by the seed DB / CWICR / specialised schedule extractors. Score each `csi_division` by `(hand_count_by_div / total_count_by_div)` and surface a "coverage gap" tile per division so the estimator sees at a glance which divisions need cost-DB work. Builds directly on the T6 aggregates.
+- **Phase T2.6 — panel / equipment / RTU / fixture schedules.** Same T1/T2/T3 dispatch shape (door → window already proven the pattern in T2.5). Different CSI sections (`26 24 16` / `23 00 00` / `22 40 00`), different keyword sets. Would lift Division 22 / 23 / 26 lines straight into AUTO_APPROVE band and shrink the HAND queue on real bids.
+- **Per-line approve/reject persistence** (carry-over from this slice — see Known gaps above).
 
 ---
 

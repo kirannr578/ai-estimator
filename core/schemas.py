@@ -32,6 +32,75 @@ class CostCategory(str, Enum):
     OTHER = "other"
 
 
+class CostBand(str, Enum):
+    """Confidence band assigned to a priced ``CostLine`` (Phase T6).
+
+    The band drives downstream routing in exports and the Streamlit UI:
+
+    * ``AUTO_APPROVE`` — confidence ≥ 0.85; rolls into the headline cost
+      and is the default for the conservative grand-total (``grand_total_auto_only``).
+    * ``OPERATOR_REVIEW`` — 0.65 ≤ confidence < 0.85; rolls into the
+      headline cost ("if reviewer signs off" total) but is flagged in
+      exports + UI so the estimator eyeballs the row before submitting.
+    * ``HAND_TAKEOFF`` — confidence < 0.65 OR the line was
+      ``suppressed=True`` by the unit-mismatch path; excluded from every
+      grand-total and surfaced as a "needs manual takeoff" worklist.
+
+    Thresholds are deliberately the same constants used by the prepass
+    confidence rubric (``drawing_prepass._score``) and the back-fill
+    confidence rubric (``takeoff_backfill._BACKFILL_CONF_FALLBACK``) so a
+    perimeter-fallback row ends up in OPERATOR_REVIEW by construction.
+    """
+
+    AUTO_APPROVE = "auto_approve"
+    OPERATOR_REVIEW = "operator_review"
+    HAND_TAKEOFF = "hand_takeoff"
+
+
+# Phase T6 band thresholds. Exposed at module-level so tests + downstream
+# callers (e.g. ``app.py``) can reference the exact boundaries rather than
+# hard-coding them in two places.
+COST_BAND_AUTO_THRESHOLD: float = 0.85
+COST_BAND_REVIEW_THRESHOLD: float = 0.65
+
+
+def band_for_confidence(
+    confidence: float | None,
+    *,
+    suppressed: bool = False,
+) -> CostBand:
+    """Map a CostLine's ``confidence`` (+ suppression flag) to a band.
+
+    The single source of truth for the threshold semantics — used by
+    ``price_takeoff`` when constructing CostLines and by the exporter /
+    Streamlit code when re-banding hand-edited rows.
+
+    Rules (in priority order):
+
+    1. ``suppressed=True`` always wins → ``HAND_TAKEOFF``. A unit-mismatch
+       line carries ``total_cost=0`` already (see
+       ``core.estimator._build_cwicr_line`` / the seed-DB suppression
+       branch) so it cannot inflate any total, but routing it to
+       ``HAND_TAKEOFF`` keeps the worklist honest about manual eyes
+       needed.
+    2. ``confidence is None`` → ``OPERATOR_REVIEW`` (conservative default
+       for the legacy LLM-extracted, pre-T1 codepath where the source
+       ``TakeoffItem`` carried no confidence at all).
+    3. ``confidence >= 0.85`` → ``AUTO_APPROVE``.
+    4. ``confidence >= 0.65`` → ``OPERATOR_REVIEW``.
+    5. otherwise                → ``HAND_TAKEOFF``.
+    """
+    if suppressed:
+        return CostBand.HAND_TAKEOFF
+    if confidence is None:
+        return CostBand.OPERATOR_REVIEW
+    if confidence >= COST_BAND_AUTO_THRESHOLD:
+        return CostBand.AUTO_APPROVE
+    if confidence >= COST_BAND_REVIEW_THRESHOLD:
+        return CostBand.OPERATOR_REVIEW
+    return CostBand.HAND_TAKEOFF
+
+
 class Discipline(str, Enum):
     ARCHITECTURAL = "A"
     STRUCTURAL = "S"
@@ -612,6 +681,12 @@ class CostLine(BaseModel):
     cost_source: str = ""                  # which cost-db key was used
     notes: Optional[str] = None
     suppressed: bool = False               # True -> excluded from Estimate totals
+    # Phase T6 — confidence band assigned by ``price_takeoff``. Defaults
+    # to ``AUTO_APPROVE`` for backward compatibility with hand-constructed
+    # ``CostLine`` instances in tests + persisted fixtures that pre-date
+    # T6. Real CostLines emitted by the pricing pipeline always carry an
+    # explicit band derived via ``band_for_confidence``.
+    cost_band: CostBand = CostBand.AUTO_APPROVE
 
 
 class Estimate(BaseModel):
@@ -636,14 +711,108 @@ class Estimate(BaseModel):
     def suppressed_line_items(self) -> list[CostLine]:
         return [li for li in self.line_items if li.suppressed]
 
+    # -- Phase T6 band-aware helpers -----------------------------------
+    #
+    # ``priced_line_items`` already strips suppressed lines, so band
+    # roll-ups below operate on it (suppressed lines always live in the
+    # HAND_TAKEOFF band and carry ``total_cost == 0`` already, so they
+    # contribute nothing to dollar aggregates regardless — this is the
+    # double-counting guard the brief asks for).
+
+    @property
+    def auto_approve_line_items(self) -> list[CostLine]:
+        return [li for li in self.priced_line_items if li.cost_band == CostBand.AUTO_APPROVE]
+
+    @property
+    def operator_review_line_items(self) -> list[CostLine]:
+        return [li for li in self.priced_line_items if li.cost_band == CostBand.OPERATOR_REVIEW]
+
+    @property
+    def hand_takeoff_line_items(self) -> list[CostLine]:
+        """All HAND_TAKEOFF lines, regardless of suppression.
+
+        Suppressed lines are forced to HAND_TAKEOFF by ``price_takeoff``
+        but live in ``suppressed_line_items`` (not ``priced_line_items``).
+        The Streamlit "Hand Takeoff Queue" and the Excel queue sheet want
+        BOTH paths, because the estimator's mental model of "needs manual
+        eyes" includes unit-mismatch lines.
+        """
+        return [li for li in self.line_items if li.cost_band == CostBand.HAND_TAKEOFF]
+
+    @property
+    def headline_line_items(self) -> list[CostLine]:
+        """Lines whose ``total_cost`` rolls into the headline ``grand_total``.
+
+        Phase T6 contract: AUTO_APPROVE + OPERATOR_REVIEW lines only.
+        HAND_TAKEOFF lines (low-confidence raw takeoffs or unit-mismatch
+        suppressed lines) are excluded so the headline number reflects
+        only what a reviewer would actually sign off on. The hand-takeoff
+        totals stay available via ``total_hand_takeoff`` for the
+        worklist UI and Excel queue sheet.
+        """
+        return [
+            li for li in self.priced_line_items
+            if li.cost_band in (CostBand.AUTO_APPROVE, CostBand.OPERATOR_REVIEW)
+        ]
+
+    # -- Phase T6 band-aware dollar aggregates --------------------------
+
+    @property
+    def total_auto_approve(self) -> float:
+        """Sum of ``total_cost`` for AUTO_APPROVE-banded lines."""
+        return round(sum(li.total_cost for li in self.auto_approve_line_items), 2)
+
+    @property
+    def total_operator_review(self) -> float:
+        """Sum of ``total_cost`` for OPERATOR_REVIEW-banded lines."""
+        return round(sum(li.total_cost for li in self.operator_review_line_items), 2)
+
+    @property
+    def total_hand_takeoff(self) -> float:
+        """Sum of ``total_cost`` for HAND_TAKEOFF-banded lines.
+
+        **Informational only — NOT in any grand total.** Suppressed lines
+        (which are forced to HAND_TAKEOFF by ``price_takeoff``) carry
+        ``total_cost == 0`` already, so this sum captures only the
+        low-confidence (< 0.65) lines that DID get priced but were
+        bumped out of the headline by the band assignment.
+        """
+        return round(sum(li.total_cost for li in self.hand_takeoff_line_items), 2)
+
+    @property
+    def hand_takeoff_count(self) -> int:
+        return len(self.hand_takeoff_line_items)
+
+    @property
+    def operator_review_count(self) -> int:
+        return len(self.operator_review_line_items)
+
+    @property
+    def auto_approve_count(self) -> int:
+        return len(self.auto_approve_line_items)
+
     @property
     def subtotal(self) -> float:
-        return round(sum(li.total_cost for li in self.priced_line_items), 2)
+        """Subtotal of the headline ``grand_total`` (AUTO + REVIEW).
+
+        Phase T6 changed the semantics: HAND_TAKEOFF lines are now
+        excluded in addition to the long-standing exclusion of
+        ``suppressed=True`` lines (which now also resolve to
+        HAND_TAKEOFF by construction). Tests that built lines with the
+        default ``CostLine.confidence == 0.7`` (→ OPERATOR_REVIEW) are
+        unaffected.
+        """
+        return round(sum(li.total_cost for li in self.headline_line_items), 2)
+
+    @property
+    def subtotal_auto_only(self) -> float:
+        """AUTO-only subtotal — the conservative confidence-floor basis."""
+        return self.total_auto_approve
 
     @property
     def by_division(self) -> dict[str, float]:
         out: dict[str, float] = {}
-        for li in self.priced_line_items:
+        for li in self.headline_line_items:
             out[li.csi_division] = round(out.get(li.csi_division, 0.0) + li.total_cost, 2)
         return out
 
@@ -651,7 +820,7 @@ class Estimate(BaseModel):
     def by_cost_category(self) -> dict[str, float]:
         """Roll up line totals by labor/material/equipment/sub/other."""
         out: dict[str, float] = {c.value: 0.0 for c in CostCategory}
-        for li in self.priced_line_items:
+        for li in self.headline_line_items:
             key = li.cost_category.value if isinstance(li.cost_category, CostCategory) else str(li.cost_category)
             out[key] = round(out.get(key, 0.0) + li.total_cost, 2)
         return {k: v for k, v in out.items() if v > 0}
@@ -673,7 +842,40 @@ class Estimate(BaseModel):
 
     @property
     def grand_total(self) -> float:
+        """Headline contract value (AUTO + REVIEW + markups).
+
+        Phase T6: alias for :pyattr:`grand_total_with_review`. Tests that
+        check ``grand_total`` against the existing
+        ``subtotal * (1 + cont%) * (1 + oh%) * (1 + profit%)`` formula
+        keep passing because ``subtotal`` itself moved to "headline-only"
+        in lock-step.
+        """
         return round(self.subtotal + self.contingency + self.overhead + self.profit, 2)
+
+    @property
+    def grand_total_with_review(self) -> float:
+        """Explicit name for the headline grand total (= ``grand_total``).
+
+        Surfaced as a separate property so the Excel + PDF + UI layers can
+        clearly label the "if reviewer signs off" number alongside the
+        more-conservative ``grand_total_auto_only``.
+        """
+        return self.grand_total
+
+    @property
+    def grand_total_auto_only(self) -> float:
+        """Conservative grand total: AUTO_APPROVE lines + markups, only.
+
+        The "confidence floor" — every dollar in this number came out of
+        a high-confidence (≥ 0.85) line. Markups (contingency / overhead
+        / profit) are recomputed against the AUTO-only subtotal so the
+        compounding stays internally consistent.
+        """
+        base = self.subtotal_auto_only
+        cont = round(base * self.contingency_pct / 100.0, 2)
+        oh = round((base + cont) * self.overhead_pct / 100.0, 2)
+        prof = round((base + cont + oh) * self.profit_pct / 100.0, 2)
+        return round(base + cont + oh + prof, 2)
 
 
 # Resolve forward reference (TakeoffItem used inside SheetExtraction).
