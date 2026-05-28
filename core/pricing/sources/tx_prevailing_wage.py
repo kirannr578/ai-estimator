@@ -1,38 +1,77 @@
-"""TX Workforce Commission prevailing wage adapter (Phase B — partial).
+"""Texas state-agency prevailing-wage WD parser — per-project (Ch. 2258).
 
-Source:     Texas Workforce Commission publishes per-county prevailing wage
-            tables annually (and a state composite). Distribution is via PDF
-            from https://www.twc.texas.gov/programs/wages/prevailing-wage
-            and an XLSX from the TWC Labor Market Information portal.
-License:    State of Texas public records — TWC Open Records policy applies.
-            Tables are public-domain reference data for state-funded
-            construction-prevailing-wage compliance.
-ToS:        https://www.twc.texas.gov/twc-website-privacy-and-security-policy
-            Polite use; cite source.
+Statutory framework
+-------------------
+Under **Tex. Gov't Code Ch. 2258 ("Prevailing Wage Rates")**, the general
+prevailing rate of per diem wages for a Texas public-works contract is
+determined and published by the **individual procuring public body** (the
+contracting state agency, university system, county jail authority, or
+political subdivision) — **NOT** by the Texas Workforce Commission centrally.
+Each agency must publish its wage schedule *as part of each solicitation* and
+incorporate it into the resulting contract.
 
-[Phase B — partial implementation]
+What this module is (and isn't)
+-------------------------------
+**This parser handles project-specific WD PDFs that arrive as solicitation
+attachments from TX state agencies.** It is NOT a centralized TWC source —
+there is no centralized TWC per-county WD repository to fetch from (and
+earlier roadmap entries that assumed one were based on a faulty premise).
 
-What ships here:
-- A working ``parse_wage_table_text`` that takes pre-extracted PDF text and
-  returns ``PricingSnapshot``s. Driven by a per-county fixture PDF, the
-  pipeline is: ``pymupdf`` -> raw text -> ``parse_wage_table_text``.
-- ``fetch_from_pdf(pdf_path, *, county, year)`` wires the above to a local
-  PDF file (no HTTP — TWC URLs require browsing through a search interface
-  the public API does not expose cleanly).
+For federally-funded TX work (Davis-Bacon Act, McNamara-O'Hara Service
+Contract Act, federal-aid highway projects, HUD-assisted projects, etc.),
+use ``core/pricing/sources/davis_bacon.py`` instead — that one IS centralized
+via the SAM.gov Wage Determination library.
 
-What's NOT in scope until Phase B-full ships:
-- Auto-download the per-county PDF from twc.texas.gov (their site uses a
-  JavaScript search form that's not amenable to a polite HTTP fetch).
-- A canonical SOC mapping for every TX trade label variant.
-- A bundled offline-test fixture PDF (no public-domain TWC wage table is
-  present in the repo today — see Open Item below).
+For the full structural rationale (why TWC is not a central source, why the
+per-project workflow is correct, what a future per-agency harvester would
+look like, and which TX agencies it would target) see:
 
-TODO (Phase B-full):
-- Add a bundled fixture under ``tests/fixtures/tx_twc_<county>_<year>.pdf``
-  once the user provides one (or the agent extracts one from an active bid).
-- Replace the brittle line-pattern parser with a `pymupdf.find_tables()`
-  call once we have a fixture to verify against.
-- Add a polite scraper for the TWC search results page.
+    firm/playbooks/pricing-data-sources.md
+        ^ section "Structural Note — Texas Prevailing Wage"
+
+And the placeholder for the future per-agency harvester:
+
+    core/pricing/sources/tx_agency_wd.py
+
+The expected operator workflow
+------------------------------
+1. WD PDF arrives with the solicitation (RFP / RFQ / CSP / RFCSP / IFB).
+2. Operator drops it into ``bids/<slug>/wage-determination/``.
+3. Call ``fetch_from_pdf(pdf_path, county=..., year=...)`` (or
+   ``parse_wage_table_text(...)`` for pre-extracted text) to produce
+   ``PricingSnapshot``s tagged with the source solicitation context.
+4. Snapshots participate in the same escalation + CWICR matching workflow
+   as the centralized federal Davis-Bacon snapshots.
+
+License / source
+----------------
+License:    State of Texas public records — Ch. 2258 wage schedules attached
+            to TX state-agency solicitations are public records under the
+            Texas Public Information Act (Gov't Code Ch. 552).
+ToS:        Per the issuing agency's terms when downloading from its
+            solicitation portal. Polite use; cite the source solicitation.
+
+What ships here
+---------------
+- ``parse_wage_table_text(text, *, county, year, source_url="")`` — takes
+  pre-extracted PDF text and returns ``PricingSnapshot``s. Pipeline:
+  ``pymupdf`` -> raw text -> ``parse_wage_table_text``.
+- ``fetch_from_pdf(pdf_path, *, county, year)`` — wires the above to a local
+  PDF file already on disk in the bid workspace.
+- ``TXPrevailingWageSource`` — a ``PricingSource`` shell whose ``fetch()`` is
+  a deliberate no-op because there is nothing centralized to fetch from;
+  per-project use should call ``fetch_from_pdf`` directly.
+
+Known limitations (acceptable; per-project workflow remains correct)
+--------------------------------------------------------------------
+- No canonical SOC mapping for every TX trade label variant; we fall back to
+  the Davis-Bacon classification-to-SOC mapping in ``davis_bacon.py``.
+- The line-pattern parser is intentionally permissive because each TX agency
+  formats its WD attachment slightly differently. The parser drops lines it
+  cannot confidently classify rather than guessing.
+- No bundled fixture PDF in the repo (TX state-agency WDs are public records
+  but are tied to specific solicitations; a bid-time fixture would couple
+  the test suite to a specific opportunity).
 """
 
 from __future__ import annotations
@@ -160,24 +199,39 @@ def fetch_from_pdf(
 
 
 class TXPrevailingWageSource(PricingSource):
-    """Phase B partial — fetch is a no-op until auto-download lands."""
+    """``PricingSource`` shell for TX state-agency prevailing wage.
+
+    ``fetch()`` is a deliberate no-op: under Tex. Gov't Code Ch. 2258,
+    prevailing wage on a TX public-works contract is set per-project by the
+    individual procuring agency. There is no centralized TWC repository to
+    pull from. Per-project use should call ``fetch_from_pdf`` directly
+    against the WD PDF that arrives with each solicitation.
+
+    See the module docstring (and the ``firm/playbooks/pricing-data-sources.md``
+    "Structural Note — Texas Prevailing Wage" callout) for the full rationale.
+    """
 
     name = "tx_prevailing_wage"
     requires_env_vars: list[str] = []
-    license_str = "State of Texas public record — TWC prevailing wage"
-    homepage_url = "https://www.twc.texas.gov/programs/wages/prevailing-wage"
+    license_str = "State of Texas public record — Ch. 2258 per-project WD"
+    homepage_url = "https://statutes.capitol.texas.gov/Docs/GV/htm/GV.2258.htm"
 
     def default_series(self) -> list[str]:
-        # Per-county PDFs aren't enumerable from a public index; callers pass
-        # county names instead. Empty default list keeps the refresh runner
-        # from invoking us automatically until the auto-download lands.
+        # Per-project WDs aren't enumerable from any centralized public index
+        # — by statute, each TX procuring agency publishes its own per
+        # solicitation. Empty default list keeps the refresh runner from
+        # invoking us automatically; per-project callers use fetch_from_pdf.
         return []
 
     def fetch(self, series_ids: list[str], **filters: Any) -> list[PricingSnapshot]:
-        # [Phase B — not yet implemented] — auto-fetch from twc.texas.gov.
-        # Use `fetch_from_pdf` for now when a local PDF is available.
+        # Deliberate no-op — Ch. 2258 is per-project, not centralized.
+        # Use `fetch_from_pdf(pdf_path, county=..., year=...)` against the
+        # WD PDF attached to the specific TX state-agency solicitation.
         LOG.info(
-            "TXPrevailingWageSource.fetch is a no-op until Phase B-full "
-            "ships the TWC auto-downloader. Use fetch_from_pdf(...) directly."
+            "TXPrevailingWageSource.fetch is a no-op by design: Tex. Gov't "
+            "Code Ch. 2258 places prevailing-wage publication on the "
+            "individual procuring agency per-solicitation, not on TWC "
+            "centrally. Use fetch_from_pdf(...) against the per-project "
+            "WD PDF. See firm/playbooks/pricing-data-sources.md."
         )
         return []

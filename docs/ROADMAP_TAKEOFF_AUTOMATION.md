@@ -402,7 +402,11 @@ Plus:
 - `firm/playbooks/pricing-data-sources.md` — full operator-facing playbook.
 - `firm/compliance/material-suppliers.md` — registry skeleton for the eventual internal-supplier track.
 
-**Tier 1 Phase B — partial.** TWC TX prevailing wage + GSA Schedule adapters ship as parsers (offline-tested on synthetic text / CSV); auto-download from upstream is TODO.
+**Tier 1 Phase B — partial.** GSA Schedule adapter ships as a parser (offline-tested on synthetic CSV); auto-download from upstream is TODO.
+
+**Tier 1 Phase B — TX prevailing-wage centralized auto-download: DEPRECATED.** The earlier "TWC per-county WD auto-downloader" entry assumed a centralized TWC source that does not exist. Under **Tex. Gov't Code Ch. 2258**, each TX procuring agency sets and publishes its own prevailing-wage schedule on a **per-project** basis as part of every solicitation — there is no central TWC repository analogous to SAM.gov's federal Davis-Bacon WD library. The per-project parser in `core/pricing/sources/tx_prevailing_wage.py` is the right tool for its real use case (parsing the WD PDF attached to each TX state-agency solicitation). See `firm/playbooks/pricing-data-sources.md` → "Structural Note — Texas Prevailing Wage" for the full rationale.
+
+**Future enhancement — per-agency TX WD harvester.** Rather than a (non-existent) central feed, a future harvester would scrape active-solicitation pages of major TX procuring agencies — **TxDOT, TFC, TBPC, TWDB, the UT / Texas A&M / Texas Tech / UH university systems, large municipalities (Houston, Dallas, San Antonio, Austin, Fort Worth), large counties, TDCJ, HHSC** — and extract the WD PDFs they attach. A placeholder module exists at `core/pricing/sources/tx_agency_wd.py` to make the future shape explicit; **not implemented in current scope.**
 
 **Tier 1 Phase C — stubs.** TX SmartBuy / ESBD, HD Pro / Lowe's catalog, ENR CCI, AGC Inflation Alert, Turner BCI, NAHB Cost of Constructing a Home all ship as importable stubs with documented license + ToS posture and clear `[NOT YET IMPLEMENTED]` markers.
 

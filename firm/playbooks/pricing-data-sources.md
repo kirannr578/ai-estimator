@@ -30,7 +30,7 @@ This playbook documents:
 | FRED (Federal Reserve Economic Data) | `core/pricing/sources/fred.py` | FRED terms — attribution required | Free with email registration | Series-dependent (daily / weekly / monthly / annual) | 8 series: WTI crude (fuel proxy), construction inputs PPI, national construction earnings, industrial commodities PPI, TX CPI, construction loan rate, Case-Shiller home prices, sand & gravel PPI | **Shipped** |
 | EIA petroleum prices | `core/pricing/sources/eia.py` | U.S. Public Domain — EIA | Free with email registration | Weekly | Retail diesel + retail regular gas, PADD3 (Gulf Coast / Texas) | **Shipped** |
 | Davis-Bacon Wage Determinations | `core/pricing/sources/davis_bacon.py` | U.S. Public Domain — DOL WHD | None (public SAM.gov search) | On-demand per project | Active WD trade × hourly rate rows for any (state, county, project type) | **Shipped** |
-| TX Workforce Commission prevailing wage | `core/pricing/sources/tx_prevailing_wage.py` | State of Texas public record — TWC | None (PDF download) | Annual per county | Per-county trade × hourly rate from TWC PDFs | **Phase B — partial** (parser ships; auto-download TODO) |
+| TX state-agency prevailing wage (per-project WD parser) | `core/pricing/sources/tx_prevailing_wage.py` | State of Texas public record | None (PDF arrives with solicitation) | Per-solicitation | Trade × hourly rate parsed from the per-project WD PDF attached to each TX state-agency solicitation | **Shipped** (per-project parser; see "Structural Note — Texas Prevailing Wage" below) |
 | GSA Schedule price lists | `core/pricing/sources/gsa_schedule.py` | U.S. Public Domain — GSA | None | Quarterly | Construction materials catalogs (56V, 03FAC, 23V) | **Phase B — partial** (parser ships; auto-download TODO) |
 | TX SmartBuy / ESBD award postings | `core/pricing/sources/tx_smartbuy_awards.py` | State of Texas public record | None | Continuous | Historical award amounts for sub-pricing reference | **Phase C — stub** |
 | Home Depot Pro / Lowe's for Pros catalogs | `core/pricing/sources/hd_pro_catalog.py` | Retailer-proprietary (public prices only) | None for public pages | On-demand | ~50 high-volume building-material SKUs | **Phase C — stub** |
@@ -173,10 +173,61 @@ Place keys in `.env` at the repo root (gitignored). NEVER commit keys to the rep
 
 - **CWICR (the existing 55k-row open cost-database matcher under `core/pricing/cwicr_matcher.py`) is composite — Labor + Material + Equipment in one number.** It is NOT directly comparable to a BLS PPI material-only index. Don't mix CWICR rows and PPI-escalated rows on the same line; pick one source per entry.
 - **BLS PPI is for tracking inflation, NOT for setting absolute prices.** PPI series are dimensionless index numbers anchored to a base year (typically 1982 = 100, or 1990 = 100 depending on series). The escalation engine uses index *ratios* — `ppi(target) / ppi(base)` — to scale `cost_database.json` entries, never to set them in absolute dollars.
-- **OEWS wages are the median hourly mean across the metro, NOT trade-union or Davis-Bacon prevailing rates.** For federal-funded work (Davis-Bacon Act, McNamara-O'Hara Service Contract Act), pull the WD via `core/pricing/sources/davis_bacon.py` instead. For state-funded TX work, use `tx_prevailing_wage` once Phase B-full ships.
+- **OEWS wages are the median hourly mean across the metro, NOT trade-union or Davis-Bacon prevailing rates.** For federal-funded work (Davis-Bacon Act, McNamara-O'Hara Service Contract Act), pull the WD via `core/pricing/sources/davis_bacon.py` instead. For state-funded TX work, parse the per-project WD PDF that arrives with the solicitation via `tx_prevailing_wage.py` — see the **Structural Note — Texas Prevailing Wage** below for why there is no centralized TWC per-county feed to point at.
 - **EIA PADD3 retail fuel is a regional average for the entire Gulf Coast (TX, LA, MS, AL, AR, NM)**, not a Texas-only number. For a Houston / Dallas / Austin spot price, manual lookup on EIA's interactive map remains necessary.
 - **Davis-Bacon WDs change mid-year via modifications.** A WD pulled in Q1 may be superseded by Q3. Always re-pull at bid time using `scripts/refresh_pricing.py --sources davis_bacon ...`.
 - **Each free API has a daily quota.** The 24h HTTP cache prevents accidentally re-running the refresher 10 times in a day from exhausting them. Honor the cache; if you need to bypass, delete the specific entry under `config/pricing_snapshots/_http_cache/<source>/`.
+
+---
+
+## Structural Note — Texas Prevailing Wage
+
+> **Why this section exists.** A previous roadmap entry assumed TWC publishes a centralized per-county prevailing-wage PDF directory that we could auto-crawl. **That premise was wrong.** The `par_pricing_twc` worker that tried to crawl such a directory errored with `[invalid_argument]` because the directory does not exist. Investigation surfaced the statutory framework below; this note is the durable record so the mistake is not repeated.
+
+### The statutory framework
+
+Under **Tex. Gov't Code Ch. 2258 ("Prevailing Wage Rates")**, prevailing wage on a Texas public-works contract is set by the **individual procuring public body** (the contracting state agency, university system, county jail authority, or political subdivision) — **not** by the Texas Workforce Commission centrally. Each agency must determine and publish the general prevailing rate of per diem wages in the locality for each craft or type of worker called for, **as part of each solicitation**, and incorporate that schedule into the contract.
+
+Practical implications:
+
+- **TWC does NOT publish a centralized per-county wage-determination repository.** There is nothing analogous to SAM.gov's federal Davis-Bacon WD library at the state level. TWC publishes occupational wage *statistics* (OEWS-style), which are statistical averages, **not** Ch. 2258 prevailing-wage determinations.
+- A "Tom Green County prevailing wage as of 2026-Q2" PDF does not exist as a single document — only the WD schedules that individual TX state agencies attached to their active 2026-Q2 Tom Green County solicitations exist.
+- Any roadmap entry that referenced a "TWC per-county wage PDF auto-downloader" was based on that faulty premise and is **deprecated**.
+
+### Federal Davis-Bacon is different — it IS centralized
+
+The federal Davis-Bacon Act (40 U.S.C. § 3142) routes through the U.S. Department of Labor Wage and Hour Division, which publishes active WDs in the **SAM.gov Wage Determination library**. That centralized repository is what `core/pricing/sources/davis_bacon.py` adapts. For federally-funded TX work (federal contracts, federal-aid highway projects, HUD-assisted projects, etc.), `davis_bacon.py` is the right entry point — not `tx_prevailing_wage.py`.
+
+### The correct workflow for TX state-agency solicitations
+
+1. **WD PDF arrives with the solicitation** as an attachment to the RFP / RFQ / CSP / RFCSP / IFB. It is the issuing agency's Ch. 2258 wage schedule for that specific procurement, locality, fiscal year, and trade scope.
+2. **Operator drops the PDF** into the bid workspace under `bids/<slug>/wage-determination/`.
+3. **Parse with `core/pricing/sources/tx_prevailing_wage.py`** (`fetch_from_pdf(pdf_path, county=..., year=...)` or `parse_wage_table_text(...)` for already-extracted text) to extract trade × hourly rate rows into `PricingSnapshot`s.
+4. **Tag the snapshot** with the source solicitation number, county, fiscal year, and issuing agency (today via `series_id` + `region` + `period`; consider a structured `solicitation` field in a future schema bump).
+5. The snapshot then participates in the **same escalation + CWICR matching workflow** as the centralized federal Davis-Bacon snapshots — it is just sourced per-project rather than pulled from a central library.
+
+### Future enhancement — per-agency WD harvester (NOT in current scope)
+
+A future enhancement would be a **per-agency** harvester that scrapes the active-solicitation pages of the major Texas procuring agencies and extracts the WD PDFs they attach. Candidate target agencies, in rough order of TX public-works volume:
+
+- **TxDOT** (Texas Department of Transportation) — highway, bridge, traffic-control projects.
+- **TFC** (Texas Facilities Commission) — state-office construction and renovation.
+- **TBPC** (Texas Building & Procurement Commission, historical predecessor to TFC for some scopes).
+- **TWDB** (Texas Water Development Board) — water/wastewater infrastructure.
+- **University systems** — UT System, Texas A&M System, Texas Tech System, University of Houston System Office of Facilities Planning & Construction.
+- **Large municipalities** — City of Houston, Dallas, San Antonio, Austin, Fort Worth, El Paso.
+- **Large counties** — Harris, Dallas, Bexar, Travis, Tarrant (jail authorities, county-facility projects).
+- **TDCJ** (Texas Department of Criminal Justice) — correctional facility construction.
+- **HHSC** (Health and Human Services Commission) — state hospital and supported-living-center projects.
+
+A skeleton placeholder for this work lives at `core/pricing/sources/tx_agency_wd.py` so the future shape is explicit and easy to find. **No HTTP fetching is implemented** — the placeholder documents the concept and raises `NotImplementedError` if invoked. This is documentation-as-code: the right time to build the harvester is when there is concrete demand from > 3 active TX state-agency bids per quarter, not before.
+
+### Bottom line
+
+- **`tx_prevailing_wage.py` works correctly for its real use case** — parsing the per-project WD PDF that arrives with each TX state-agency solicitation.
+- **There is no centralized TWC source to point a Phase B-full auto-downloader at.** That branch of the roadmap is closed by statute, not by engineering scope.
+- **Federal Davis-Bacon (`davis_bacon.py`) is the centralized one** for federally-funded work.
+- The per-agency harvester is the only future-direction worth pursuing for additional TX coverage, and only when bid volume justifies it.
 
 ---
 
@@ -184,10 +235,11 @@ Place keys in `.env` at the repo root (gitignored). NEVER commit keys to the rep
 
 | What | Why | When |
 |---|---|---|
-| Phase B-full: TWC PDF auto-download | Avoids manual quarterly download | Highest-value next step |
-| Phase B-full: GSA Advantage CSV auto-download | Pulls catalog without manual step | Same |
-| Phase C: TX SmartBuy / ESBD scraper | Historical sub-pricing reference | After Phase B-full |
-| Phase C: HD Pro / Lowe's pro catalog | Spot-check single-SKU pricing | After Phase B-full; **only if ToS posture clear** |
+| ~~Phase B-full: TWC PDF auto-download~~ | **DEPRECATED** — based on faulty premise; no centralized TWC per-county WD source exists. See "Structural Note — Texas Prevailing Wage" above. | n/a (closed) |
+| Per-agency TX WD harvester (TxDOT, TFC, TWDB, university systems, large municipalities) | Pull per-project WD PDFs from major TX procuring agencies' active-solicitation pages | Future — placeholder at `core/pricing/sources/tx_agency_wd.py`; pursue when > 3 active TX state-agency bids/quarter warrant it |
+| Phase B-full: GSA Advantage CSV auto-download | Pulls catalog without manual step | Highest-value next step |
+| Phase C: TX SmartBuy / ESBD scraper | Historical sub-pricing reference | After GSA Advantage |
+| Phase C: HD Pro / Lowe's pro catalog | Spot-check single-SKU pricing | After GSA Advantage; **only if ToS posture clear** |
 | Phase C: ENR / AGC / Turner / NAHB PDF parsers | Cross-check vs BLS PPI escalation | Lowest priority — overlaps with PPI |
 | **Tier 2: RSMeans / Gordian** | Production-grade composite cost DB | Decision pending calibration data + commercial approval |
 | **Tier 3: BPC internal cost DB** | Eliminates external dependency | Started when BPC has > 12 months of internal cost capture; see `firm/compliance/material-suppliers.md` |
