@@ -524,37 +524,41 @@ def test_no_inline_source_tag_literals_in_production_paths() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_manual_override_after_batch_apply_uses_legacy_format() -> None:
-    """:func:`apply_manual_override` is the T6.1 single-line primitive; it
-    does NOT use ``format_batch_operator_note`` and therefore does NOT
-    stamp a source tag at position 0. After a batch apply (which DOES
-    stamp ``[sub-quote]`` at position 0) followed by a direct manual
-    override, the notes string carries the legacy
-    ``<prior> | operator override: <note>`` shape — the leading
-    ``[sub-quote]`` from the batch apply is preserved as the head of
-    the prior-notes string, so an auditor can still see provenance,
-    just not at position 0.
+def test_manual_override_after_batch_apply_stamps_manual_override_tag() -> None:
+    """Phase T6.4.c.2 — :func:`apply_manual_override` now routes through
+    ``format_manual_override_note`` so the canonical
+    :data:`SOURCE_TAG_MANUAL_OVERRIDE` (``"[manual-override]"``) tag
+    lands at **position 0** of the post-override notes string, even
+    when the prior notes already carried a ``[sub-quote]`` /
+    ``[sub-quote-llm]`` / ``[vendor-csv]`` / ``[batch]`` tag from an
+    earlier batch apply.
 
-    This is the documented edge case: manual-override-after-batch
-    intentionally does not roll the tag back to position 0; a future
-    slice can wire :data:`SOURCE_TAG_MANUAL_OVERRIDE` into a
-    ``format_manual_override_note`` if the calibration set demands it.
+    The prior batch-applied tag is preserved verbatim in the
+    ``" | previous: ..."`` suffix so an auditor can walk back through
+    the full provenance chain. This closes the loose end flagged in
+    T6.4.c's "Edge cases NOT handled" section.
     """
     estimate = _estimate([_line()])
     plan, _ = _plan_one_matched("Interior latex paint walls", 3.50)
     after_batch, _ = apply_batch_plan(
         estimate, plan, source_tag=SOURCE_TAG_SUBQUOTE_TABULAR
     )
-    # Now apply a manual single-line override.
     after_manual = apply_manual_override(
         after_batch, 0, new_unit_cost=4.00, operator_note="bumped per Q-99"
     )
     notes = after_manual.line_items[0].notes
     assert notes is not None
-    # Legacy format: prior_notes (which IS the [sub-quote]-tagged string) +
-    # " | operator override: bumped per Q-99".
+    # T6.4.c.2 contract: [manual-override] at position 0.
+    assert notes.startswith("[manual-override] ")
+    # Free-text reason verbatim.
+    assert "bumped per Q-99" in notes
+    # Prior [sub-quote] tag preserved in the | previous: ... suffix.
+    assert " | previous: " in notes
     assert SOURCE_TAG_SUBQUOTE_TABULAR in notes
-    assert notes.endswith("operator override: bumped per Q-99")
+    # Prior batch tag lives in the suffix, not the head.
+    head, _, suffix = notes.partition(" | previous: ")
+    assert SOURCE_TAG_SUBQUOTE_TABULAR not in head
+    assert suffix.startswith(SOURCE_TAG_SUBQUOTE_TABULAR + " ")
 
 
 # ---------------------------------------------------------------------------

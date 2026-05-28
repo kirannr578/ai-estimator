@@ -319,7 +319,12 @@ def test_apply_operator_override_round_trip_basic() -> None:
 
 def test_apply_operator_override_no_attribution_passes_none_note() -> None:
     """All three attribution fields empty → ``apply_manual_override``
-    still stamps the bare ``MANUAL_OVERRIDE_NOTE_PREFIX`` sentinel."""
+    still stamps the canonical T6.4.c.2 head: ``[manual-override]``
+    tag at position 0, ``operator override`` sentinel, and the new
+    ``unit_cost`` as a bracketed field. The wrapper passes ``None``
+    as the history-row attribution note (no vendor / quote-ref /
+    free-text), but the line's notes field still carries the
+    canonical override-provenance head."""
     est = _estimate([_line(notes=None)])
     new_est, note = _apply_operator_override(
         est, line_idx=0, new_unit_cost=3.0,
@@ -327,7 +332,9 @@ def test_apply_operator_override_no_attribution_passes_none_note() -> None:
     )
     assert note is None
     li = new_est.line_items[0]
-    assert li.notes == MANUAL_OVERRIDE_NOTE_PREFIX
+    assert li.notes == (
+        f"[manual-override] {MANUAL_OVERRIDE_NOTE_PREFIX}: [unit_cost: $3.00]"
+    )
 
 
 def test_apply_operator_override_does_not_mutate_input_estimate() -> None:

@@ -174,12 +174,16 @@ def test_operator_note_appended_with_sentinel_prefix() -> None:
 
 
 def test_no_operator_note_still_stamps_minimal_sentinel() -> None:
-    """When operator_note is None, the sentinel itself is still appended
-    so a downstream reader can detect the override — but only on the
-    FIRST override, to keep the notes blob bounded under retries."""
+    """When operator_note is None, the formatter still stamps the
+    canonical ``[manual-override]`` tag + ``operator override``
+    sentinel at position 0 (Phase T6.4.c.2). The new unit_cost is
+    rendered as a bracketed field so a downstream reader can
+    attribute the override even without an operator-written reason."""
     est = _estimate([_line(notes=None)])
     out = apply_manual_override(est, 0, new_unit_cost=3.0)
-    assert out.line_items[0].notes == MANUAL_OVERRIDE_NOTE_PREFIX
+    assert out.line_items[0].notes == (
+        f"[manual-override] {MANUAL_OVERRIDE_NOTE_PREFIX}: [unit_cost: $3.00]"
+    )
 
 
 def test_operator_note_appended_to_empty_notes_field() -> None:
@@ -187,8 +191,11 @@ def test_operator_note_appended_to_empty_notes_field() -> None:
     out = apply_manual_override(
         est, 0, new_unit_cost=3.0, operator_note="from RSMeans 2025",
     )
+    # T6.4.c.2: tag at position 0; sentinel; new unit_cost bracketed
+    # field; free-text reason verbatim.
     assert out.line_items[0].notes == (
-        f"{MANUAL_OVERRIDE_NOTE_PREFIX}: from RSMeans 2025"
+        f"[manual-override] {MANUAL_OVERRIDE_NOTE_PREFIX}: "
+        f"[unit_cost: $3.00] from RSMeans 2025"
     )
 
 

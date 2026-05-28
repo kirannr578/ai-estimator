@@ -751,6 +751,128 @@ def attach_alternates_to_estimate(
 MANUAL_OVERRIDE_NOTE_PREFIX: str = "operator override"
 
 
+# Phase T6.4.c.2 — canonical manual-override source tag.
+#
+# This constant MIRRORS
+# :data:`core.pricing.batch_override.SOURCE_TAG_MANUAL_OVERRIDE` (the
+# project-wide canonical source-of-truth). The mirror exists ONLY
+# because :mod:`core.pricing.batch_override` already imports
+# :func:`apply_manual_override` from this module at top level (the
+# batch-apply loop drives one manual override per matched row), so a
+# top-level ``from .pricing.batch_override import SOURCE_TAG_MANUAL_OVERRIDE``
+# here would cause a circular import. The two constants are pinned to
+# the SAME string literal by
+# :func:`tests.test_manual_override_tag.test_local_tag_constant_matches_canonical`
+# so a future rename in :mod:`core.pricing.batch_override` lights up
+# immediately.
+SOURCE_TAG_MANUAL_OVERRIDE: str = "[manual-override]"
+
+
+def format_manual_override_note(
+    *,
+    unit_cost: float | None = None,
+    qty: float | None = None,
+    reason: str = "",
+    source_tag: str = SOURCE_TAG_MANUAL_OVERRIDE,
+    prior_notes: str | None = None,
+) -> str:
+    """Phase T6.4.c.2 — format a manual-override operator note with the
+    canonical source tag at **position 0** of the returned string.
+
+    Closes the last loose end from the T6.4.c source-tag propagation
+    contract: every override path (batch CSV, sub-quote tabular,
+    sub-quote LLM-vision, AND the T6.1 single-line manual primitive)
+    now lands its provenance tag at the start of ``CostLine.notes``
+    so a downstream auditor sees the attribution at a glance even
+    when an Excel / PDF column is narrow.
+
+    Format::
+
+        <source_tag> operator override: [unit_cost: $X.XX] [qty: Y] <reason>[ | previous: <prior_notes>]
+
+    The shape mirrors the head produced by
+    :func:`core.pricing.batch_override._rewrite_notes_with_tag_first`
+    (a deliberate symmetry — see *Design choice* below). Empty fields
+    are skipped without leaving double-space gaps. A bare call with
+    no args + no prior + default tag yields the minimal
+    ``"[manual-override] operator override"`` sentinel.
+
+    Args:
+        unit_cost: New per-unit cost. Renders as
+            ``"[unit_cost: $X.XX]"`` (always 2-decimal) when set.
+            ``None`` omits the field entirely.
+        qty: New quantity. Renders as ``"[qty: Y]"`` (``:g`` formatted
+            so ``100.0`` → ``"100"``, ``12.5`` → ``"12.5"``) when set.
+            ``None`` omits the field. :func:`apply_manual_override`
+            does not currently change quantity so it always passes
+            ``None`` here; the parameter exists for forward-compat
+            with a future qty-tweak primitive and for direct callers.
+        reason: Free-text operator note. Stripped; empty values are
+            skipped. No orphan colon when empty.
+        source_tag: Canonical source tag. Defaults to
+            :data:`SOURCE_TAG_MANUAL_OVERRIDE` (``"[manual-override]"``);
+            parametrised so a future calibration tier
+            (``"[manual-override-llm]"`` etc.) can slot in without a
+            code change.
+        prior_notes: The line's ``notes`` field BEFORE the override.
+            ``None`` / empty → no ``"| previous: ..."`` suffix. When
+            ``prior_notes`` already starts with the same head string,
+            the function short-circuits and returns ``prior_notes``
+            unchanged (idempotency).
+
+    Returns:
+        A new notes string with ``source_tag`` at position 0,
+        ``operator override`` sentinel immediately after, the
+        bracketed-fields portion, the reason text, and the
+        ``" | previous: ..."`` suffix (when applicable).
+
+    Design choice — own formatter vs reusing
+    ``_rewrite_notes_with_tag_first``: the batch helper is private
+    (leading underscore) and its contract requires a ``note_payload``
+    string already shaped by :func:`format_batch_operator_note` (the
+    ``[vendor: …] [quote-ref: …] [csv-row: N] …`` layout, irrelevant
+    to a single-line manual override). Reaching across module
+    privacy to reuse it would couple ``apply_manual_override`` to
+    the batch pipeline's internal layout. The symmetry that matters
+    — tag at position 0, ``operator override`` sentinel,
+    ``| previous: …`` suffix, idempotency on identical head — is
+    replicated here inline. The two functions can drift
+    independently if the manual primitive ever needs a field (e.g.
+    ``[approver: …]``) the batch path doesn't.
+
+    Re-apply semantics: **most-recent-wins** with chain-preserving
+    suffix. When called twice with the SAME args, the second call
+    returns the first's output unchanged (idempotent — the head
+    string equality check short-circuits). When called twice with
+    DIFFERENT args, the new head sits at position 0 and the prior
+    string is preserved in the ``" | previous: …"`` suffix; the
+    operator can read the full chain of overrides by walking the
+    suffix. This matches the T6.4.c batch contract verbatim.
+    """
+    parts: list[str] = []
+    if unit_cost is not None:
+        parts.append(f"[unit_cost: ${float(unit_cost):.2f}]")
+    if qty is not None:
+        parts.append(f"[qty: {float(qty):g}]")
+    reason_clean = reason.strip() if reason else ""
+    if reason_clean:
+        parts.append(reason_clean)
+
+    if parts:
+        head = f"{source_tag} {MANUAL_OVERRIDE_NOTE_PREFIX}: " + " ".join(parts)
+    else:
+        head = f"{source_tag} {MANUAL_OVERRIDE_NOTE_PREFIX}"
+
+    prior = (prior_notes or "").strip()
+    if not prior:
+        return head
+
+    if prior == head or prior.startswith(head + " | previous: "):
+        return prior
+
+    return f"{head} | previous: {prior}"
+
+
 def _resolve_override_index(
     estimate: Estimate,
     line_id: int | str,
@@ -874,20 +996,17 @@ def apply_manual_override(
     new_uc = round(float(new_unit_cost), 2)
     new_total = round(new_uc * line.quantity, 2)
 
-    note_addition: str | None = None
-    if operator_note:
-        note_addition = f"{MANUAL_OVERRIDE_NOTE_PREFIX}: {operator_note.strip()}"
-    elif line.cost_source_tier != CostSourceTier.MANUAL_OVERRIDE:
-        # Stamp a minimal sentinel so downstream readers can detect
-        # the override even when the operator didn't write a note.
-        note_addition = MANUAL_OVERRIDE_NOTE_PREFIX
-
-    if note_addition:
-        new_notes = (
-            f"{line.notes} | {note_addition}" if line.notes else note_addition
-        )
-    else:
-        new_notes = line.notes
+    # Phase T6.4.c.2 — always stamp ``[manual-override]`` at position 0
+    # of ``CostLine.notes`` (mirrors the T6.4.c batch / sub-quote tag
+    # propagation). The formatter handles idempotency: re-applying the
+    # same override leaves notes unchanged; a re-apply with new args
+    # puts the new head first and preserves prior notes in the
+    # ``| previous: ...`` suffix.
+    new_notes = format_manual_override_note(
+        unit_cost=new_uc,
+        reason=(operator_note or "").strip(),
+        prior_notes=line.notes,
+    )
 
     # Recompute the band against the NEW combined_confidence. Manual
     # override clears the suppression flag — hand-pricing IS the
