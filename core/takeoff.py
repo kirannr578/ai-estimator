@@ -27,8 +27,10 @@ from dataclasses import dataclass
 from rapidfuzz import fuzz
 
 from .extraction.door_dedupe import dedupe_doors_against_synthesis
+from .extraction.finish_dedupe import dedupe_finishes_against_synthesis
 from .extraction.takeoff_synthesis import (
     synthesize_door_takeoff_items,
+    synthesize_finish_takeoff_items,
     synthesize_window_takeoff_items,
 )
 from .extraction.window_dedupe import dedupe_windows_against_synthesis
@@ -613,6 +615,11 @@ def reconcile(
     # for the same reason. T2.5 dedupe runs alongside T3 once everything
     # is merged.
     synthesized_window_items: list[TakeoffItem] = []
+    # Phase T4: per-sheet finish-schedule pre-pass → typed TakeoffItem
+    # rows. Each FinishRecord fans out into 3-7 items (one per finished
+    # surface: floor / base / wall / ceiling). Survives _merge_takeoffs
+    # for the same reason as doors + windows; T4 dedupe runs after.
+    synthesized_finish_items: list[TakeoffItem] = []
 
     for ex in extractions:
         rooms.extend(ex.rooms)
@@ -640,6 +647,13 @@ def reconcile(
             synthesized_window_items.extend(
                 synthesize_window_takeoff_items(
                     ex.prepass.window_schedule,
+                    sheet_id=ex.sheet_id,
+                )
+            )
+        if ex.prepass is not None and ex.prepass.finish_schedule is not None:
+            synthesized_finish_items.extend(
+                synthesize_finish_takeoff_items(
+                    ex.prepass.finish_schedule,
                     sheet_id=ex.sheet_id,
                 )
             )
@@ -680,6 +694,11 @@ def reconcile(
     # T2.5: append synthesised window-schedule rows. Same pattern as T2
     # doors; tagged ``source=window_schedule_prepass``.
     all_takeoffs.extend(synthesized_window_items)
+    # T4: append synthesised finish-schedule rows. Each FinishRecord
+    # already fanned out into 3-7 per-surface items inside
+    # ``synthesize_finish_takeoff_items``; tagged
+    # ``source=finish_schedule_prepass``.
+    all_takeoffs.extend(synthesized_finish_items)
     # T3: drop legacy LLM door aggregates ("Hollow metal doors", "Solid-core
     # wood doors", "Doors (type unspecified)") and same-mark LLM door rows
     # when a deterministic synthesised row already covers them. Pure on
@@ -690,6 +709,12 @@ def reconcile(
     # synthesised window covers the project. No-op when no synthesised
     # window exists (safety rule, mirrors T3).
     all_takeoffs = dedupe_windows_against_synthesis(all_takeoffs)
+    # T4 dedupe: same pattern for finishes. Retires per-material
+    # finish aggregates ("Carpet flooring", "Interior wall painting
+    # (two coats)", "Resilient base, 4"", ...) when ANY synthesised
+    # finish row covers the project. No-op safety rule mirrors T3 /
+    # T2.5; never touches door or window rows (CSI prefix discriminator).
+    all_takeoffs = dedupe_finishes_against_synthesis(all_takeoffs)
 
     project_info = _consolidate_project_info(bid_packages)
     scope_matrix = _build_scope_matrix(bid_packages)

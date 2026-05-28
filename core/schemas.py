@@ -424,6 +424,52 @@ class WindowScheduleResult(BaseModel):
     raw_table_text: str = ""                   # joined-headers debug string
 
 
+class FinishRecord(BaseModel):
+    """One room's finishes extracted from a finish-schedule table (Phase T4).
+
+    A finish schedule typically has columns
+    ``ROOM #, ROOM NAME, FLOOR, BASE, WALL N/S/E/W, CEILING,
+    CEILING HEIGHT, REMARKS``. Unlike door / window records (1:1 with
+    a TakeoffItem) every FinishRecord fans out into 3-7 TakeoffItems
+    downstream — one per finished surface.
+
+    ``wall_finishes`` is keyed by compass direction (``"N"`` / ``"S"`` /
+    ``"E"`` / ``"W"``); when the schedule uses a single ``WALL`` column
+    the dict is populated with one ``"ALL"`` key, which the synthesiser
+    collapses into a single wall item rather than four.
+    """
+
+    room_number: str                           # "101", "M101", ...
+    room_name: Optional[str] = None
+    floor_finish: Optional[str] = None         # "VCT-1", "CPT-1", "POL CONC", ...
+    base_finish: Optional[str] = None          # "RB-1", "CB-1", ...
+    wall_finishes: dict[str, str] = Field(default_factory=dict)
+    ceiling_finish: Optional[str] = None       # "ACT-1", "GYP", "EXPOSED", ...
+    ceiling_height_ft: Optional[float] = None
+    ceiling_height_raw: Optional[str] = None
+    area_sf: Optional[float] = None            # cross-referenced from a room
+                                                 # schedule by Phase T5; left
+                                                 # optional in T4.
+    remarks: Optional[str] = None
+    raw_cells: dict[str, str] = Field(default_factory=dict)
+    source_page: int = 0
+
+
+class FinishScheduleResult(BaseModel):
+    """Aggregate finish-schedule pre-pass result for a drawing page (Phase T4).
+
+    Attached alongside (not replacing) the generic :class:`Schedule` rows
+    on :class:`DrawingPrepassResult` so the existing prepass surface keeps
+    working while downstream takeoff (Phase T4 synthesis) consumes the
+    richer typed records.
+    """
+
+    pages: list[int] = Field(default_factory=list)
+    rooms: list[FinishRecord] = Field(default_factory=list)
+    confidence: float = 0.0                    # 0..1
+    raw_table_text: str = ""                   # joined-headers debug string
+
+
 class DrawingPrepassResult(BaseModel):
     """Snapshot of everything the deterministic pre-pass could pull off
     a single drawing page without invoking the vision LLM."""
@@ -435,6 +481,7 @@ class DrawingPrepassResult(BaseModel):
     confidence: float = 0.0                    # 0..1
     door_schedule: Optional[DoorScheduleResult] = None  # T1 typed door records
     window_schedule: Optional[WindowScheduleResult] = None  # T2.5 typed window records
+    finish_schedule: Optional[FinishScheduleResult] = None  # T4 typed finish records
 
 
 class SheetExtraction(BaseModel):

@@ -47,6 +47,8 @@ from typing import Final
 from core.schemas import (
     DoorRecord,
     DoorScheduleResult,
+    FinishRecord,
+    FinishScheduleResult,
     TakeoffItem,
     WindowRecord,
     WindowScheduleResult,
@@ -55,13 +57,16 @@ from core.schemas import (
 __all__ = [
     "SYNTHESIS_SOURCE_TAG",
     "SYNTHESIS_SOURCE_TAG_WINDOW",
+    "SYNTHESIS_SOURCE_TAG_FINISH",
     "synthesize_door_takeoff_items",
     "synthesize_window_takeoff_items",
+    "synthesize_finish_takeoff_items",
 ]
 
 
 SYNTHESIS_SOURCE_TAG: Final[str] = "door_schedule_prepass"
 SYNTHESIS_SOURCE_TAG_WINDOW: Final[str] = "window_schedule_prepass"
+SYNTHESIS_SOURCE_TAG_FINISH: Final[str] = "finish_schedule_prepass"
 
 
 # ---------------------------------------------------------------------------
@@ -423,4 +428,354 @@ def synthesize_window_takeoff_items(
             source_sheet_ids=list(sheets),
             notes=_window_notes_for(window),
         ))
+    return items
+
+
+# ---------------------------------------------------------------------------
+# Finish helpers (Phase T4)
+# ---------------------------------------------------------------------------
+#
+# Per-room expansion shape (THE structural difference vs. T2 + T2.5):
+# each ``FinishRecord`` → multiple ``TakeoffItem`` rows, one per finished
+# surface (floor / base / wall / ceiling). Wall finishes fan out to 1 row
+# when uniform (or when the schedule uses a single ``WALL`` column),
+# else N rows — one per unique compass-direction finish.
+#
+# CSI mapping by code prefix (keyword → CSI section). Floor / base /
+# wall / ceiling families each have their own lookup table so a finish
+# code like ``TILE-1`` routes correctly depending on which surface it
+# was assigned to (floor tile is ``09 30 13``, wall tile is also
+# ``09 30 13``, base tile lives in the same family — but the synth row
+# is still per-surface so dedupe stays unambiguous).
+#
+# Quantity is **always 0.0 at this phase** — Phase T6 will compute SF
+# from a room area cross-reference. T4 emits the line with a unit (SF
+# for every finish surface), confidence, description, and notes so the
+# takeoff sheet shows it and Phase T6 can fill the quantity.
+
+
+# (csi_division, csi_section, family-label-for-description) for FLOOR finishes.
+_CSI_FLOOR_VCT:        Final[tuple[str, str, str]] = ("09", "09 65 19", "Vinyl Composition Tile (VCT)")
+_CSI_FLOOR_SHEET_VINYL: Final[tuple[str, str, str]] = ("09", "09 65 16", "Sheet Vinyl")
+_CSI_FLOOR_CARPET:     Final[tuple[str, str, str]] = ("09", "09 68 13", "Carpet")
+_CSI_FLOOR_TILE:       Final[tuple[str, str, str]] = ("09", "09 30 13", "Ceramic Tile")
+_CSI_FLOOR_WOOD:       Final[tuple[str, str, str]] = ("09", "09 64 29", "Wood Flooring")
+_CSI_FLOOR_POL_CONC:   Final[tuple[str, str, str]] = ("03", "03 35 43", "Polished Concrete")
+_CSI_FLOOR_GENERIC:    Final[tuple[str, str, str]] = ("09", "09 60 00", "Flooring")
+
+# Order matters: more-specific tokens BEFORE substrings. ``SHEET`` /
+# ``SHT`` win over ``VINYL`` so ``SHEET VINYL`` lands on ``09 65 16``,
+# not ``09 65 19`` (VCT). ``POL`` / ``SEAL`` / ``SC`` (sealed concrete)
+# beat plain ``CONC`` for the polished/sealed routing.
+_FLOOR_CSI_MAPPING: Final[tuple[tuple[tuple[str, ...], tuple[str, str, str]], ...]] = (
+    # Polished / sealed concrete first — cross-division (03 35 43).
+    # Both space- and dash-joined forms are accepted ("POL CONC" /
+    # "POL-CONC" / "POLISHED CONCRETE"). ``POL`` alone is included for
+    # the bare-token case; it's a distinctive enough finish code prefix
+    # that no other floor family collides with it.
+    (("POL CONC", "POL-CONC", "POLISHED", "SEAL CONC", "SEAL-CONC",
+      "SEALED", "SC", "POL"), _CSI_FLOOR_POL_CONC),
+    # Sheet vinyl before LVT / VCT
+    (("SHEET VINYL", "SHT VINYL", "SHEET"), _CSI_FLOOR_SHEET_VINYL),
+    # VCT / vinyl tile / LVT / LVP
+    (("VCT", "VINYL", "LVT", "LVP"), _CSI_FLOOR_VCT),
+    # Carpet
+    (("CPT", "CARPET"), _CSI_FLOOR_CARPET),
+    # Ceramic / porcelain tile
+    (("TILE", "CT", "CER", "PORC"), _CSI_FLOOR_TILE),
+    # Hardwood / wood floors
+    (("HW", "WD", "WOOD"), _CSI_FLOOR_WOOD),
+)
+
+# (csi_division, csi_section, family-label) for BASE finishes.
+_CSI_BASE_RUBBER:  Final[tuple[str, str, str]] = ("09", "09 65 13", "Resilient Base")
+_CSI_BASE_TILE:    Final[tuple[str, str, str]] = ("09", "09 30 13", "Ceramic Base")
+_CSI_BASE_WOOD:    Final[tuple[str, str, str]] = ("09", "09 64 33", "Wood Base")
+_CSI_BASE_GENERIC: Final[tuple[str, str, str]] = ("09", "09 60 00", "Base")
+
+_BASE_CSI_MAPPING: Final[tuple[tuple[tuple[str, ...], tuple[str, str, str]], ...]] = (
+    # Resilient (rubber / vinyl) base
+    (("RB", "RUBBER", "RES", "VB", "TB"), _CSI_BASE_RUBBER),
+    # Ceramic base
+    (("CB", "CER", "CT"), _CSI_BASE_TILE),
+    # Wood base
+    (("WB", "WOOD", "WD"), _CSI_BASE_WOOD),
+)
+
+# (csi_division, csi_section, family-label) for WALL finishes.
+_CSI_WALL_PAINT:   Final[tuple[str, str, str]] = ("09", "09 91 23", "Interior Paint")
+_CSI_WALL_VWC:     Final[tuple[str, str, str]] = ("09", "09 72 00", "Wall Covering")
+_CSI_WALL_FRP:     Final[tuple[str, str, str]] = ("06", "06 64 00", "FRP Panels")
+_CSI_WALL_TILE:    Final[tuple[str, str, str]] = ("09", "09 30 13", "Ceramic Wall Tile")
+_CSI_WALL_GENERIC: Final[tuple[str, str, str]] = ("09", "09 70 00", "Wall Finish")
+
+_WALL_CSI_MAPPING: Final[tuple[tuple[tuple[str, ...], tuple[str, str, str]], ...]] = (
+    # FRP / fiber-reinforced plastic panels — cross-division (06 64 00)
+    # checked before WC so ``FRP`` doesn't accidentally route as
+    # ``Wall Covering``.
+    (("FRP",), _CSI_WALL_FRP),
+    # Wall covering / vinyl wall covering
+    (("WC", "VWC", "WALLCOVERING", "WALL COVERING"), _CSI_WALL_VWC),
+    # Ceramic / porcelain wall tile
+    (("TILE", "CT", "CER", "PORC"), _CSI_WALL_TILE),
+    # Paint (last, broad keyword)
+    (("PT", "PAINT", "EP"), _CSI_WALL_PAINT),
+)
+
+# (csi_division, csi_section, family-label) for CEILING finishes.
+_CSI_CEIL_ACT:      Final[tuple[str, str, str]] = ("09", "09 51 13", "Acoustic Ceiling Tile (ACT)")
+_CSI_CEIL_GYP:      Final[tuple[str, str, str]] = ("09", "09 29 00", "Gypsum Board Ceiling")
+_CSI_CEIL_WOOD:     Final[tuple[str, str, str]] = ("09", "09 64 29", "Wood Ceiling")
+_CSI_CEIL_EXPOSED:  Final[tuple[str, str, str]] = ("09", "09 00 00", "Exposed Structure (marker)")
+_CSI_CEIL_GENERIC:  Final[tuple[str, str, str]] = ("09", "09 50 00", "Ceiling Finish")
+
+_CEIL_CSI_MAPPING: Final[tuple[tuple[tuple[str, ...], tuple[str, str, str]], ...]] = (
+    # Acoustic ceiling tile
+    (("ACT", "ACOUSTIC", "ACP", "ACOU"), _CSI_CEIL_ACT),
+    # Exposed / open structure — marker only
+    (("EXPOSED", "OPEN", "EXP"), _CSI_CEIL_EXPOSED),
+    # Wood ceiling (rare; checked before GYP because ``WD CEIL`` would
+    # otherwise be partially matched by neither family without an
+    # explicit entry).
+    (("WD CEIL", "WOOD"), _CSI_CEIL_WOOD),
+    # Gypsum board / GWB / GYP BD
+    (("GYP", "GWB", "GYP BD", "GB"), _CSI_CEIL_GYP),
+)
+
+
+def _normalise_code(code: str | None) -> str:
+    return (code or "").upper().strip()
+
+
+def _classify_floor(code: str | None) -> tuple[str, str, str]:
+    """Return ``(csi_division, csi_section, family_label)`` for a floor code."""
+    hay = _normalise_code(code)
+    if not hay:
+        return _CSI_FLOOR_GENERIC
+    for keywords, mapping in _FLOOR_CSI_MAPPING:
+        for kw in keywords:
+            if kw in hay:
+                return mapping
+    return _CSI_FLOOR_GENERIC
+
+
+def _classify_base(code: str | None) -> tuple[str, str, str]:
+    """Return ``(csi_division, csi_section, family_label)`` for a base code."""
+    hay = _normalise_code(code)
+    if not hay:
+        return _CSI_BASE_GENERIC
+    for keywords, mapping in _BASE_CSI_MAPPING:
+        for kw in keywords:
+            if kw in hay:
+                return mapping
+    return _CSI_BASE_GENERIC
+
+
+def _classify_wall(code: str | None) -> tuple[str, str, str]:
+    """Return ``(csi_division, csi_section, family_label)`` for a wall code."""
+    hay = _normalise_code(code)
+    if not hay:
+        return _CSI_WALL_GENERIC
+    for keywords, mapping in _WALL_CSI_MAPPING:
+        for kw in keywords:
+            if kw in hay:
+                return mapping
+    return _CSI_WALL_GENERIC
+
+
+def _classify_ceiling(code: str | None) -> tuple[str, str, str]:
+    """Return ``(csi_division, csi_section, family_label)`` for a ceiling code."""
+    hay = _normalise_code(code)
+    if not hay:
+        return _CSI_CEIL_GENERIC
+    for keywords, mapping in _CEIL_CSI_MAPPING:
+        for kw in keywords:
+            if kw in hay:
+                return mapping
+    return _CSI_CEIL_GENERIC
+
+
+def _finish_confidence(record: FinishRecord, code: str | None) -> float:
+    """Confidence rubric: 0.92 with both room + code; 0.80 with one; 0.60 neither."""
+    has_room = bool(
+        (record.room_number and record.room_number.strip())
+        or (record.room_name and record.room_name.strip())
+    )
+    has_code = bool(code and code.strip())
+    if has_room and has_code:
+        return 0.92
+    if has_room or has_code:
+        return 0.80
+    return 0.60
+
+
+def _room_label(record: FinishRecord) -> str:
+    """Render a ``Room <#> <Name>`` label, omitting whichever piece is missing."""
+    num = (record.room_number or "").strip()
+    name = (record.room_name or "").strip()
+    if num and name:
+        return f"Room {num} {name}"
+    if num:
+        return f"Room {num}"
+    if name:
+        return f"Room {name}"
+    return "Room (unmarked)"
+
+
+def _describe_finish(surface: str, code: str | None, record: FinishRecord,
+                       family: str) -> str:
+    """Build a human-readable description for a finish TakeoffItem.
+
+    Examples::
+
+        "Floor VCT-1 – Room 101 Office"
+        "Wall N PT-1 – Room 102 Lobby"
+        "Ceiling ACT – Room (unmarked)"
+    """
+    label = (code or "").strip() or family
+    return f"{surface} {label} – {_room_label(record)}"
+
+
+def _finish_notes_for(surface_token: str, code: str | None,
+                        record: FinishRecord) -> str:
+    """Stable, source-tagged notes string for finish dedupe to grep.
+
+    Format mirrors the door + window notes shape: ``key=value`` pairs
+    joined by ``"; "``. The first pair is always
+    ``source=finish_schedule_prepass`` so a prefix-match is cheap.
+    Includes ``room=<num>``, ``surface=<floor|base|wall_N|wall_S|...|
+    wall_ALL|ceiling>`` and ``code=<code>`` — the triple the finish
+    dedupe pass uses to match per-room+surface synthesis.
+    """
+    bits: list[str] = [f"source={SYNTHESIS_SOURCE_TAG_FINISH}"]
+    if record.room_number:
+        bits.append(f"room={record.room_number}")
+    if record.room_name:
+        bits.append(f"room_name={record.room_name}")
+    bits.append(f"surface={surface_token}")
+    if code:
+        bits.append(f"code={code}")
+    if record.ceiling_height_ft is not None and surface_token.startswith("ceiling"):
+        bits.append(f"ceiling_height_ft={record.ceiling_height_ft:g}")
+    return "; ".join(bits)
+
+
+def _emit(items: list[TakeoffItem], *,
+           surface_label: str, surface_token: str, code: str | None,
+           record: FinishRecord,
+           classifier,
+           sheets: list[str]) -> None:
+    """Helper to build + append one finish TakeoffItem."""
+    division, section, family = classifier(code)
+    items.append(TakeoffItem(
+        csi_division=division,
+        csi_section=section,
+        description=_describe_finish(surface_label, code, record, family),
+        quantity=0.0,
+        unit="SF",
+        confidence=_finish_confidence(record, code),
+        source_sheet_ids=list(sheets),
+        notes=_finish_notes_for(surface_token, code, record),
+    ))
+
+
+def synthesize_finish_takeoff_items(
+    schedule: FinishScheduleResult | None,
+    *,
+    sheet_id: str | None = None,
+) -> list[TakeoffItem]:
+    """Convert each ``FinishRecord`` on ``schedule`` into per-surface ``TakeoffItem``s.
+
+    Unlike door / window synthesis (1:1), each finish record fans out
+    into **multiple** items:
+
+    * One **floor** item when ``floor_finish`` is set.
+    * One **base** item when ``base_finish`` is set.
+    * One **wall** item per unique compass-direction code when
+      ``wall_finishes`` has multiple distinct values; one item when
+      the codes are uniform (or the schedule used a single ``WALL``
+      column → ``wall_finishes == {"ALL": code}``).
+    * One **ceiling** item when ``ceiling_finish`` is set. The
+      ``EXPOSED`` / ``OPEN`` ceiling routes to a marker section
+      (``09 00 00``) so the row still surfaces — Phase T6 may suppress
+      it from pricing without losing the audit trail.
+
+    A record with no finishes at all emits zero items.
+
+    Each emitted item carries ``quantity=0.0`` (Phase T6 will compute
+    SF from a room area cross-reference), ``unit="SF"``, a CSI section
+    chosen per-surface, and a confidence per the rubric in the module
+    docstring. ``sheet_id`` (when provided) is stored on
+    ``source_sheet_ids`` so downstream consumers can trace each row
+    back to the originating sheet.
+    """
+    if schedule is None or not schedule.rooms:
+        return []
+    sheets: list[str] = [sheet_id] if sheet_id else []
+    items: list[TakeoffItem] = []
+    for record in schedule.rooms:
+        if record.floor_finish:
+            _emit(
+                items,
+                surface_label="Floor",
+                surface_token="floor",
+                code=record.floor_finish,
+                record=record,
+                classifier=_classify_floor,
+                sheets=sheets,
+            )
+        if record.base_finish:
+            _emit(
+                items,
+                surface_label="Base",
+                surface_token="base",
+                code=record.base_finish,
+                record=record,
+                classifier=_classify_base,
+                sheets=sheets,
+            )
+        # Walls: collapse to one item when codes are uniform or schedule
+        # used a single ``WALL`` column (key=``ALL``). Otherwise emit one
+        # per unique compass direction.
+        walls = record.wall_finishes or {}
+        if walls:
+            if "ALL" in walls or len(set(walls.values())) == 1:
+                code = walls.get("ALL") or next(iter(walls.values()))
+                _emit(
+                    items,
+                    surface_label="Wall",
+                    surface_token="wall_ALL",
+                    code=code,
+                    record=record,
+                    classifier=_classify_wall,
+                    sheets=sheets,
+                )
+            else:
+                # Stable compass order — N, S, E, W — so output is
+                # deterministic regardless of dict insertion order.
+                for direction in ("N", "S", "E", "W"):
+                    if direction not in walls:
+                        continue
+                    code = walls[direction]
+                    if not code:
+                        continue
+                    _emit(
+                        items,
+                        surface_label=f"Wall {direction}",
+                        surface_token=f"wall_{direction}",
+                        code=code,
+                        record=record,
+                        classifier=_classify_wall,
+                        sheets=sheets,
+                    )
+        if record.ceiling_finish:
+            _emit(
+                items,
+                surface_label="Ceiling",
+                surface_token="ceiling",
+                code=record.ceiling_finish,
+                record=record,
+                classifier=_classify_ceiling,
+                sheets=sheets,
+            )
     return items
