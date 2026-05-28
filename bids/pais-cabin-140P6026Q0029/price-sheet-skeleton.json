@@ -1,65 +1,134 @@
 {
-  "$schema_note": "BPC federal-SBA-RFQ-LPTA price-sheet skeleton. Mirrors the Schedule of Prices from RFP Section B. One row per CLIN. Required total at bottom. Every CLIN priced — leaving a CLIN blank is non-responsive.",
+  "$schema_note": "BPC price-sheet skeleton populated for PAIS — Backcountry Cabin Roof Repairs (140P6026Q0029). Mirrors RFQ Section B Schedule of Prices: 3 base CLINs (0001, 0002, 0003) + 2 optional CLINs (Option 001, Option 002). Every CLIN must be priced (leaving any blank is non-responsive per Section L). Best-value SAP — bid bond NOT required (see compliance_attestations).",
   "project": {
-    "name": "{{PROJECT_NAME}}",
-    "solicitation_number": "{{SOLICITATION_NUMBER}}",
-    "agency": "{{AGENCY}}",
-    "submission_date": "{{SUBMISSION_DATE}}"
+    "name": "PAIS — Backcountry Cabin Roof Repairs",
+    "solicitation_number": "140P6026Q0029",
+    "agency": "U.S. Department of the Interior, National Park Service (NPS) — Padre Island National Seashore",
+    "submission_date": "2026-06-18 (target — submit ≥ 30 min before 12:00 CT cutoff)"
   },
   "schedule_of_prices": [
     {
       "clin": "0001",
-      "description": "{{CLIN_0001_DESCRIPTION}}",
-      "quantity": 0,
-      "unit": "{{UNIT}}",
+      "description": "Door repair + corrosion-resistant reinforcement + new keyed deadbolts (3 exterior doors)",
+      "quantity": 3,
+      "unit": "EA",
       "unit_price_usd": 0,
-      "extended_price_usd": 0
+      "extended_price_usd": 0,
+      "self_or_sub": "self",
+      "notes": "[USER TO FILL — labor, hardware (HDG/SS), deadbolts]"
     },
     {
       "clin": "0002",
-      "description": "{{CLIN_0002_DESCRIPTION}}",
-      "quantity": 0,
-      "unit": "{{UNIT}}",
+      "description": "Roof leak repair — like-kind shingle replacement, sealant, stainless fasteners",
+      "quantity": 1,
+      "unit": "LS",
       "unit_price_usd": 0,
-      "extended_price_usd": 0
+      "extended_price_usd": 0,
+      "self_or_sub": "self",
+      "notes": "[USER TO FILL — extent of damage caps assumption; see 01-scope.md]"
     },
     {
-      "clin": "{{additional CLINs as RFP §B lists}}",
-      "description": "",
-      "quantity": 0,
-      "unit": "",
+      "clin": "0003",
+      "description": "Furnish + install ten (10) Bahama-style TDI Category 5 hurricane shutters w/ manual operation + lockable hardware",
+      "quantity": 10,
+      "unit": "EA",
       "unit_price_usd": 0,
-      "extended_price_usd": 0
+      "extended_price_usd": 0,
+      "self_or_sub": "sub",
+      "notes": "[USER TO FILL after ≥3 sub quotes received; engineer-stamped TDI CAT5 product data required]"
+    },
+    {
+      "clin": "OPTION-001",
+      "description": "Construct ramp extension on existing cabin deck — two new wood landings + integration of GFE aluminum ramp",
+      "quantity": 1,
+      "unit": "LS",
+      "unit_price_usd": 0,
+      "extended_price_usd": 0,
+      "self_or_sub": "self",
+      "notes": "[USER TO FILL — confirm GFE specs at site visit; PT lumber + SS/HDG fasteners; ADA slope assumed]"
+    },
+    {
+      "clin": "OPTION-002",
+      "description": "Construct breakaway 2x10 PT lumber sand-control enclosure on three sides of raised cabin perimeter",
+      "quantity": 1,
+      "unit": "LS",
+      "unit_price_usd": 0,
+      "extended_price_usd": 0,
+      "self_or_sub": "self",
+      "notes": "[USER TO FILL — verify perimeter LF at site visit; confirm which 3 of 4 sides via RFI #3]"
     }
   ],
   "alternates": [
     {
-      "alternate_number": "ALT-001",
-      "description": "{{IF_RFP_REQUESTS_ANY_ALTERNATES}}",
-      "add_or_deduct": "ADD|DEDUCT",
+      "alternate_number": "n/a",
+      "description": "RFQ does not request alternates. Section B has only base + 2 options structure. If proposing 'or-equal' substitutes (e.g. alternate TDI shutter brand) per FAR 52.211-6, do NOT add an alternate line — instead include 'or-equal' product literature in the QUOTE PACKAGE per Section L Part C.",
+      "add_or_deduct": "n/a",
       "price_usd": 0
     }
   ],
   "unit_prices_owner_directed_changes": [
     {
-      "item": "{{UNIT_PRICE_ITEM}}",
-      "unit": "{{UNIT}}",
+      "item": "Additional shutter (single TDI CAT5 Bahama unit, installed)",
+      "unit": "EA",
       "unit_price_usd": 0,
-      "notes": "Set high — these become change-order ceiling prices"
+      "notes": "Set high — change-order ceiling. Volume of 10 in base; if Govt directs +1 / +2 in-flight, this rate governs. Includes engineer-stamped product data + install labor."
+    },
+    {
+      "item": "Additional door reinforcement + deadbolt",
+      "unit": "EA",
+      "unit_price_usd": 0,
+      "notes": "Same kit as CLIN 0001. Set high."
+    },
+    {
+      "item": "Additional roof shingle replacement (sq ft)",
+      "unit": "SF",
+      "unit_price_usd": 0,
+      "notes": "If actual damage extent at the site visit reveals more shingle replacement than CLIN 0002 LS contemplates, this unit rate provides a clear change-order mechanism. Set high — backcountry premium."
+    },
+    {
+      "item": "Additional 2x10 PT perimeter enclosure",
+      "unit": "LF",
+      "unit_price_usd": 0,
+      "notes": "Add-LF rate for Option 002 if perimeter measurement at site visit exceeds takeoff."
+    },
+    {
+      "item": "BPC mobilization to/from site (round trip Frisco ↔ Corpus Christi backcountry)",
+      "unit": "EA (trip)",
+      "unit_price_usd": 0,
+      "notes": "If a punch-list re-mobilization is directed > 30 days post substantial completion."
     }
   ],
   "totals": {
+    "base_clins_subtotal_usd": 0,
+    "options_subtotal_usd": 0,
     "subtotal_clins_usd": 0,
-    "total_evaluated_price_usd": 0
+    "total_evaluated_price_usd": 0,
+    "total_evaluated_note": "Section M evaluation considers 'price' = total of base CLINs + exercised options, but per Section M, evaluation 'will consider all price information offered.' Submit total of base + both options as the headline TEP; show base + option subtotals separately for clarity."
   },
   "compliance_attestations": {
     "every_clin_priced": false,
+    "every_clin_priced_note": "Flip to true once all 5 lines (3 base + 2 option) are non-zero.",
     "bid_bond_attached": false,
-    "bid_bond_amount_pct_of_bid": 20.0,
+    "bid_bond_required": false,
+    "bid_bond_required_note": "FAR 52.228-1 NOT invoked. Best-value SAP under FAR Part 13 — no bid bond at submission. Post-award Payment Bond OR Irrevocable Letter of Credit (FAR 52.228-13) required within 10 days of award.",
+    "bid_bond_amount_pct_of_bid": 0,
     "bid_bond_amount_usd": 0,
     "no_exceptions_taken": true,
-    "addenda_acknowledged": ["{{ADDENDA_LIST}}"],
+    "no_exceptions_note": "Cover letter / transmittal must NOT take exception to any RFQ term. Best-value SAP scoring penalizes exception-taking the same as LPTA does.",
+    "addenda_acknowledged": ["SF-30 Amd 0001 (2026-05-20) — site visit + due-date extension"],
+    "addenda_acknowledged_note": "Re-check SAM.gov for additional amendments at Due-3 (6/15) and Due-1 (6/17). Add Amd 0002+ here if posted.",
     "sam_reps_certs_incorporated": true,
-    "buy_american_certificate_attached": true
+    "sam_reps_certs_clause": "FAR 52.204-19 (incorporates SAM Reps + Certs by reference)",
+    "buy_american_certificate_attached": true,
+    "buy_american_clause": "FAR 52.225-9 / FAR 52.225-11 (BPC compliant unless 'or-equal' triggers a foreign-construction-material certificate)",
+    "section_k_completed": true,
+    "section_k_required_provisions": [
+      "FAR 52.203-18 (Anti-Kickback, contractor employee responsibility) — applies to all contractors > simplified threshold; complete YES/NO",
+      "FAR 52.209-11 (Tax delinquency / felony conviction representation) — applies; complete YES/NO",
+      "FAR 52.209-13 (Violation of Tax Laws representation) — applies; complete YES/NO",
+      "FAR 52.219-1 Alt I (SBA size representation) — incorporated via 52.204-19 / SAM"
+    ],
+    "contractor_core_data_block_included": false,
+    "contractor_core_data_block_note": "Required by Section L Part C.6. Include UEI + CAGE + legal entity name + POC + email + phone."
   }
 }
