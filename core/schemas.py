@@ -956,6 +956,181 @@ class PlumbingScheduleResult(BaseModel):
     raw_table_text: str = ""                   # joined-headers debug string
 
 
+# ---------------------------------------------------------------------------
+# Phase T2.10 — Specialty equipment schedules
+# (Kitchen / Lab Casework / AV / Security)
+# ---------------------------------------------------------------------------
+#
+# Closes the typed-extraction long-tail.  Sixth class of consumer of the
+# shared ``header_index_excluding`` helper from
+# :mod:`core.extraction.header_utils` (door / panel / lighting / HVAC /
+# plumbing are the prior five).  Each domain is structurally simpler
+# than HVAC (fewer columns, no fuel/voltage matrix) so all four ship in
+# a single phase.
+
+
+class KitchenEquipmentRecord(BaseModel):
+    """One kitchen equipment record pulled off a K-series schedule (Phase T2.10).
+
+    Kitchen equipment schedules live on K-series sheets (K1.0 / K-EQ)
+    and route to MasterFormat Division 11 (Equipment), section
+    ``11 40 13`` Food Service Equipment.  Item types are detected
+    from tag prefix or description: RANGE / GRIDDLE / FRYER / OVEN
+    / REFRIGERATOR / FREEZER / WALK_IN / ICE_MACHINE / DISHWASHER /
+    MIXER / PREP_TABLE / HOOD / EXHAUST_FAN / SINK / OTHER.
+
+    High-dollar: $3K-$80K per unit; some single line items (walk-in
+    cooler) can dominate a small RFP.  Utility flags drive the
+    rough-in synthesis (gas + water + drain + electric → MEP
+    rough-in LS row).
+    """
+
+    tag: str                                   # "K-1", "FE-1", "RANGE-1", ...
+    item_type: str                             # "RANGE" | "FRYER" | "REFRIGERATOR" | ...
+    description: Optional[str] = None
+    manufacturer: Optional[str] = None
+    model_number: Optional[str] = None
+    width_in: Optional[float] = None
+    depth_in: Optional[float] = None
+    height_in: Optional[float] = None
+    btu_rating: Optional[int] = None           # gas equipment BTU/hr
+    utility_gas: Optional[bool] = None
+    utility_electric: Optional[bool] = None
+    utility_water: Optional[bool] = None
+    utility_drain: Optional[bool] = None
+    voltage: Optional[str] = None              # "120V", "208V", "480V/3PH"
+    quantity: Optional[int] = None             # from QTY column when present
+    notes: Optional[str] = None
+    confidence: float = 0.85
+    source_sheet: Optional[str] = None
+    source_page: int = 0
+
+
+class KitchenScheduleResult(BaseModel):
+    """Aggregate kitchen-equipment-schedule pre-pass result for one page."""
+
+    pages: list[int] = Field(default_factory=list)
+    equipment: list[KitchenEquipmentRecord] = Field(default_factory=list)
+    confidence: float = 0.0
+    raw_table_text: str = ""
+
+
+class LabCaseworkRecord(BaseModel):
+    """One lab casework / fume hood record pulled off a lab schedule (Phase T2.10).
+
+    Lab casework schedules live on lab plans / I-series interior
+    sheets and route to MasterFormat Division 12 (Furnishings),
+    section ``12 35 53`` Laboratory Casework, with cross-division
+    routing of fume hoods + safety equipment to ``11 53 13`` /
+    ``11 53 19`` Laboratory Equipment.  Item types: BASE_CABINET
+    / WALL_CABINET / TALL_CABINET / FUME_HOOD / LAB_BENCH /
+    SAFETY_CABINET / EYEWASH_STATION / OTHER.
+
+    Fume hoods are the dominant cost line ($15K-$50K per hood);
+    everything else is mid-dollar casework.
+    """
+
+    tag: str                                   # "BC-1", "WC-1", "FH-1", "LB-1", ...
+    item_type: str                             # "BASE_CABINET" | "FUME_HOOD" | ...
+    description: Optional[str] = None
+    manufacturer: Optional[str] = None
+    model_number: Optional[str] = None
+    width_in: Optional[float] = None
+    depth_in: Optional[float] = None
+    height_in: Optional[float] = None
+    material: Optional[str] = None             # "EPOXY" | "STAINLESS" | "PHENOLIC"
+    drawer_door_config: Optional[str] = None
+    utility_gas: Optional[bool] = None
+    utility_vacuum: Optional[bool] = None
+    utility_water: Optional[bool] = None
+    utility_electric: Optional[bool] = None
+    quantity: Optional[int] = None
+    notes: Optional[str] = None
+    confidence: float = 0.85
+    source_sheet: Optional[str] = None
+    source_page: int = 0
+
+
+class LabScheduleResult(BaseModel):
+    """Aggregate lab-casework-schedule pre-pass result for one page."""
+
+    pages: list[int] = Field(default_factory=list)
+    casework: list[LabCaseworkRecord] = Field(default_factory=list)
+    confidence: float = 0.0
+    raw_table_text: str = ""
+
+
+class AVDeviceRecord(BaseModel):
+    """One AV / IT device record pulled off a T-series schedule (Phase T2.10).
+
+    AV/IT equipment schedules live on T-series / A/V drawings and
+    route to MasterFormat Division 27 (Communications), section
+    ``27 41 16`` Integrated Audio-Video Systems.  Item types:
+    DISPLAY / PROJECTOR / CAMERA / MICROPHONE / SPEAKER / RACK /
+    CONTROL_PROCESSOR / NETWORK_SWITCH / OTHER.
+    """
+
+    tag: str                                   # "DISP-1", "PROJ-1", "CAM-1", "RACK-1"
+    item_type: str                             # "DISPLAY" | "PROJECTOR" | "CAMERA" | ...
+    description: Optional[str] = None
+    manufacturer: Optional[str] = None
+    model_number: Optional[str] = None
+    size_or_resolution: Optional[str] = None   # "75\"", "4K", "1080p"
+    wattage: Optional[float] = None
+    mounting: Optional[str] = None             # "WALL" | "CEILING" | "RACK" | "FLOOR"
+    power: Optional[str] = None                # "120V" | "PoE" | "12VDC"
+    signal_type: Optional[str] = None          # "HDMI" | "SDI" | "IP" | "USB"
+    quantity: Optional[int] = None
+    notes: Optional[str] = None
+    confidence: float = 0.85
+    source_sheet: Optional[str] = None
+    source_page: int = 0
+
+
+class AVScheduleResult(BaseModel):
+    """Aggregate AV-equipment-schedule pre-pass result for one page."""
+
+    pages: list[int] = Field(default_factory=list)
+    devices: list[AVDeviceRecord] = Field(default_factory=list)
+    confidence: float = 0.0
+    raw_table_text: str = ""
+
+
+class SecurityDeviceRecord(BaseModel):
+    """One security / access-control device record pulled off an S- or T-series schedule (Phase T2.10).
+
+    Security / access-control schedules live on S-series security
+    sheets or T-series telecom sheets and route to MasterFormat
+    Division 28 (Electronic Safety & Security), sections ``28 13``
+    Access Control and ``28 23`` Video Surveillance.  Item types:
+    CARD_READER / CAMERA / MOTION_SENSOR / DOOR_CONTACT / KEYPAD
+    / REQUEST_TO_EXIT / MAGLOCK / OTHER.
+    """
+
+    tag: str                                   # "DR-1", "CAM-1", "MS-1", "DC-1", ...
+    item_type: str                             # "CARD_READER" | "CAMERA" | ...
+    description: Optional[str] = None
+    manufacturer: Optional[str] = None
+    model_number: Optional[str] = None
+    mounting: Optional[str] = None             # "WALL" | "CEILING" | "DOOR_FRAME"
+    power: Optional[str] = None                # "PoE" | "12VDC" | "24VDC"
+    connection: Optional[str] = None           # "Cat6" | "RS-485" | "Wiegand"
+    quantity: Optional[int] = None
+    notes: Optional[str] = None
+    confidence: float = 0.85
+    source_sheet: Optional[str] = None
+    source_page: int = 0
+
+
+class SecurityScheduleResult(BaseModel):
+    """Aggregate security/access-control-schedule pre-pass result for one page."""
+
+    pages: list[int] = Field(default_factory=list)
+    devices: list[SecurityDeviceRecord] = Field(default_factory=list)
+    confidence: float = 0.0
+    raw_table_text: str = ""
+
+
 class DrawingPrepassResult(BaseModel):
     """Snapshot of everything the deterministic pre-pass could pull off
     a single drawing page without invoking the vision LLM."""
@@ -973,6 +1148,10 @@ class DrawingPrepassResult(BaseModel):
     lighting_schedule: Optional[LightingScheduleResult] = None  # T2.7 typed lighting fixtures
     hvac_schedule: Optional[HVACScheduleResult] = None  # T2.8 typed HVAC equipment
     plumbing_schedule: Optional[PlumbingScheduleResult] = None  # T2.9 typed plumbing fixtures
+    kitchen_schedule: Optional[KitchenScheduleResult] = None  # T2.10 Div 11 kitchen equipment
+    lab_schedule: Optional[LabScheduleResult] = None  # T2.10 Div 12 lab casework
+    av_schedule: Optional[AVScheduleResult] = None  # T2.10 Div 27 AV/IT devices
+    security_schedule: Optional[SecurityScheduleResult] = None  # T2.10 Div 28 security/access
 
 
 class SheetExtraction(BaseModel):
