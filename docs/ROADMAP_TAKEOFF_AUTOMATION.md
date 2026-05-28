@@ -199,6 +199,36 @@ Six phases. Phases T1–T5 follow the suggested ordering from the brief, with on
 
 ### Phase T2 — Sheet-type-specialized item extraction
 
+**Status:** IN PROGRESS — door-schedule → `TakeoffItem` synthesis landed in this commit. The per-sheet-class prompt-engineering work below is still pending.
+
+**Implementation notes (door-schedule → TakeoffItem synthesis slice, this commit):**
+- **New module:** `core/extraction/takeoff_synthesis.py` exposes a single pure function `synthesize_door_takeoff_items(schedule: DoorScheduleResult, *, sheet_id: str | None = None) -> list[TakeoffItem]`. One `TakeoffItem` per `DoorRecord`; `quantity=1.0`, `unit="EA"`; `csi_division="08"` on every row.
+- **CSI family heuristic** (keyword substring match on the upper-cased `type + material + frame` haystack, ordered specific → generic):
+  - `HM` / `HOLLOW METAL` → `08 11 13` Hollow Metal Doors and Frames
+  - `STOREFRONT` / `ALUMINUM` / `ALUM` → `08 11 16` Aluminum Frames
+  - `GLASS` / `GLAZED` → `08 80 00` Glazing
+  - `SCWD` / `WOOD` / `WD` / `SC` → `08 14 13` Wood Doors (matches the Phase T2 brief's choice of `08 14 13` over the older `08 14 16` used by `_derive_takeoffs`; the deterministic rows will eventually displace those LLM-derived aggregates in Phase T3)
+  - Unmatched → `08 10 00` Doors and Frames (generic)
+- **Confidence rubric:** `0.92` when both `mark` and `type` are present (truthy after `.strip()`); `0.80` when exactly one is present; `0.60` when neither is. Schedules surface a `mark`-only row whenever the `TYPE` column was missing or empty; those land at `0.80` and stay in the output for the caller to filter if desired.
+- **Source tagging:** the schema has no dedicated `source` field, so every synthesised row's `notes` field starts with `source=door_schedule_prepass` (exported as `SYNTHESIS_SOURCE_TAG` from the module). Phase T3's dedupe pass can grep that prefix.
+- **Description format:** `"Door 101A — HM 3'-0\" x 7'-0\""` when dimensions are present; falls back to `"Door 101 — HM"` when width or height is `None`; `"Door (unmarked) — Hollow Metal Door"` when `mark` is empty. Inches → feet-inches via a small private helper that tolerates fractional inches (`36.5 → 3'-0.5"`).
+- **Integration:** `core/takeoff.py: reconcile()` collects synthesised rows alongside the existing per-sheet accumulators and appends them **after** `_merge_takeoffs(...)` so each door survives as its own line. The append happens once per sheet whose `prepass.door_schedule` is populated; sheets without a door schedule produce zero new rows.
+- **Tests:** 27 new tests in `tests/test_takeoff_synthesis.py` covering happy path, CSI mapping (parametrised over 12 type strings + material-only fallback), the 4 confidence rubric cells, dimension formatting (feet-inches + fractional inches + partial-dim safety), and three end-to-end smoke tests through `reconcile()` (synthesised rows appear, missing-schedule emits no T2 rows, LLM rows are preserved).
+
+**Known limitations of this slice:**
+- **No cross-source dedupe.** The synthesised per-door rows live alongside the existing aggregate LLM-derived rows from `_derive_takeoffs` (e.g. "Hollow metal doors: 12 EA"). On a sheet that has both a deterministic door schedule and an LLM door-count, the headline subtotal will be inflated. Phase T3 fixes this — the synthesis pass tags every row with `source=door_schedule_prepass` precisely so T3 can find them.
+- **No pricing-time confidence band yet.** A `0.60`-confidence "Door (unmarked)" row prices identically to a `0.92` "Door 101A — HM 3'-0\" x 7'-0\"" row. Phase T6 (confidence-aware pricing) closes that loop.
+- **CSI section change for wood doors.** The synthesiser uses `08 14 13` per the T2 brief; the legacy `_derive_takeoffs` still emits `08 14 16` for its aggregate wood-doors line. The two rows will coexist until Phase T3 dedupes them; choose `08 14 13` as the surviving section when that happens.
+- **No hardware-set aggregation.** The T1 brief mentioned an aggregated hardware-set line on top of the per-door rows; this slice does not emit it. Hardware-set is preserved in the per-door row's `notes` so a downstream aggregator can roll it up. Phase T2.5 candidate.
+
+**Suggested next slices** (good candidates for the next T2 follow-up):
+- **Phase T3 dedupe — start now.** The synthesis tag (`source=door_schedule_prepass`) is in place; the obvious first dedupe rule is "for every CSI 08 division row not tagged with the prepass source, drop it when a same-mark synthesised row exists on the same sheet".
+- **Phase T2.5: window-schedule extraction** by reusing the dispatcher (mirror `core/extraction/door_schedule.py` swapping `FRAME/HARDWARE` for `GLAZING/OPERATION`); the synthesis pattern in `takeoff_synthesis.py` extends one-to-one to `WindowRecord → TakeoffItem`.
+- **Plumbing fixture / panel / RTU schedules** — same shape, different keyword sets and CSI sections (`22 40 00` / `26 24 16` / `23 00 00`).
+- **Aggregated hardware-set line** — sum `door.hardware_set` occurrences across all synthesised rows on a sheet, emit one `08 71 00 — Door hardware sets (HW-1)` line per set with `quantity = count`.
+
+---
+
 **1-line goal:** Tighter, per-sheet-class prompts that boost recall on plumbing, electrical, HVAC, and life-safety counts, with prompt-engineering specifically against the `LS` unit-default issue.
 
 **Deliverables:**

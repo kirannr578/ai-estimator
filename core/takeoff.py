@@ -26,6 +26,7 @@ from dataclasses import dataclass
 
 from rapidfuzz import fuzz
 
+from .extraction.takeoff_synthesis import synthesize_door_takeoff_items
 from .schemas import (
     Alternate,
     BidPackage,
@@ -597,6 +598,11 @@ def reconcile(
     bid_packages: list[BidPackage] = []
     warnings: list[str] = []
     summaries: dict[str, str] = sheet_summaries or {}
+    # Phase T2: per-sheet door-schedule pre-pass → typed TakeoffItem rows.
+    # Collected here (not merged via _merge_takeoffs) so each DoorRecord
+    # survives as its own line item; cross-source dedupe vs. LLM-derived
+    # rows is Phase T3 work.
+    synthesized_door_items: list[TakeoffItem] = []
 
     for ex in extractions:
         rooms.extend(ex.rooms)
@@ -613,6 +619,13 @@ def reconcile(
         warnings.extend(ex.warnings)
         if ex.summary:
             summaries.setdefault(ex.sheet_id, ex.summary)
+        if ex.prepass is not None and ex.prepass.door_schedule is not None:
+            synthesized_door_items.extend(
+                synthesize_door_takeoff_items(
+                    ex.prepass.door_schedule,
+                    sheet_id=ex.sheet_id,
+                )
+            )
 
     # --- dedupe domain entities ---
     rooms = _dedupe_rooms(rooms)
@@ -642,6 +655,11 @@ def reconcile(
     # --- build canonical takeoff list ---
     derived = _derive_takeoffs(rooms, doors, windows, structural, mep, site)
     all_takeoffs = _merge_takeoffs(derived + raw_takeoffs)
+    # T2: append synthesised door-schedule rows AFTER _merge_takeoffs so each
+    # DoorRecord survives as a distinct EA line. Each row is tagged with
+    # ``source=door_schedule_prepass`` at the start of its notes for the
+    # future T3 dedupe pass to find.
+    all_takeoffs.extend(synthesized_door_items)
 
     project_info = _consolidate_project_info(bid_packages)
     scope_matrix = _build_scope_matrix(bid_packages)
