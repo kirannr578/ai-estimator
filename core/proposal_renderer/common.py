@@ -426,6 +426,216 @@ def neutralize_placeholders_in_section(
     )
 
 
+# ---------------------------------------------------------------------------
+# Wide-table hardening (Day-2 fix)
+# ---------------------------------------------------------------------------
+#
+# `xhtml2pdf`'s `PmlTable` auto-layout can produce a negative column width
+# when a single row has enough character content that some columns get
+# starved by an over-eager neighbour. The Day-1 symptom was a TAMU Wehner
+# 4-col × 12-row table in `04-scope-of-work.md` that crashed both client
+# PDFs with `flowable given negative availWidth=-1.77e-15` on cell(0,0).
+#
+# Defense in depth:
+#
+# 1. **Pre-process layer.** `downgrade_wide_html_tables(html)` finds each
+#    rendered `<table>` block, measures column count + per-row text width,
+#    and wraps "wide" tables in a compact-font `<div>` so xhtml2pdf has
+#    enough headroom to fit every column without crushing one to 0pt.
+#
+# 2. **Safety net.** When the primary render still throws, the caller can
+#    re-render with `flatten_markdown_tables_to_definition_list(text)`
+#    applied first, which converts every markdown table to a flat
+#    `**Header:** value` paragraph list. This is uglier than a table but
+#    never triggers PmlTable layout at all.
+#
+# Thresholds are tuned conservatively against the live bid corpus —
+# tables with ≤ 5 cols and ≤ 120 chars per row render fine and stay
+# untouched.
+
+WIDE_TABLE_MAX_COLS = 5
+WIDE_TABLE_MAX_ROW_CHARS = 120
+WIDE_TABLE_COMPACT_FONT_PT = 7
+
+_HTML_TABLE_RE = re.compile(r"<table[^>]*>.*?</table>", re.DOTALL | re.IGNORECASE)
+_HTML_ROW_RE = re.compile(r"<tr[^>]*>(.*?)</tr>", re.DOTALL | re.IGNORECASE)
+_HTML_CELL_RE = re.compile(r"<t[dh][^>]*>(.*?)</t[dh]>", re.DOTALL | re.IGNORECASE)
+_HTML_TAG_STRIP_RE = re.compile(r"<[^>]+>")
+
+
+def _table_dimensions(table_html: str) -> tuple[int, int]:
+    """Return (max_col_count, max_row_text_chars) for an HTML table."""
+    rows = _HTML_ROW_RE.findall(table_html)
+    max_cols = 0
+    max_row_chars = 0
+    for row in rows:
+        cells = _HTML_CELL_RE.findall(row)
+        if not cells:
+            continue
+        max_cols = max(max_cols, len(cells))
+        row_text = " ".join(_HTML_TAG_STRIP_RE.sub("", c) for c in cells)
+        max_row_chars = max(max_row_chars, len(row_text))
+    return max_cols, max_row_chars
+
+
+def is_wide_html_table(
+    table_html: str,
+    *,
+    max_cols: int = WIDE_TABLE_MAX_COLS,
+    max_row_chars: int = WIDE_TABLE_MAX_ROW_CHARS,
+) -> bool:
+    """Return True if a rendered HTML `<table>` would likely trigger
+    `xhtml2pdf` auto-layout failures.
+
+    A table is "wide" when either:
+      * it has more columns than `max_cols`, OR
+      * any single row's combined cell text exceeds `max_row_chars`.
+
+    The defaults (5 cols / 120 chars) are tuned to the BPC proposal-
+    template corpus — they leave the typical 2-col `| Field | Value |`
+    tables, 3-col `| # | Item | Notes |` tables, and 6-col team /
+    past-perf tables untouched while catching the Wehner Wk-by-Wk
+    schedule and similar dense matrices.
+    """
+    cols, chars = _table_dimensions(table_html)
+    return cols > max_cols or chars > max_row_chars
+
+
+def downgrade_wide_html_tables(
+    html: str,
+    *,
+    max_cols: int = WIDE_TABLE_MAX_COLS,
+    max_row_chars: int = WIDE_TABLE_MAX_ROW_CHARS,
+    font_pt: int = WIDE_TABLE_COMPACT_FONT_PT,
+) -> str:
+    """Wrap every "wide" `<table>` in `html` with a compact-font `<div>`
+    so xhtml2pdf has room to lay out every column.
+
+    Narrow tables are returned unchanged so the normal CSS styling
+    (alternating row shading, header weight) keeps working on them.
+
+    Idempotent — tables already sitting inside a `compact-table-wrap`
+    div (from a previous pass) are not re-wrapped.
+    """
+
+    # Pre-compute the spans (start,end) of every existing wrap div so
+    # we can skip tables that are already inside one. This keeps the
+    # function idempotent without changing the markup signature.
+    wrap_open_re = re.compile(
+        r'<div class="compact-table-wrap"[^>]*>', re.IGNORECASE
+    )
+    wrap_spans: list[tuple[int, int]] = []
+    for m in wrap_open_re.finditer(html):
+        # Match the closing </div> that pairs with this open. Wraps are
+        # single-table, single-div — find the very next </div>.
+        end_m = re.search(r"</div>", html[m.end():], flags=re.IGNORECASE)
+        if end_m is None:
+            continue
+        wrap_spans.append((m.start(), m.end() + end_m.end()))
+
+    def _inside_existing_wrap(pos: int) -> bool:
+        return any(start <= pos < end for start, end in wrap_spans)
+
+    def _wrap(match: re.Match[str]) -> str:
+        table = match.group(0)
+        if _inside_existing_wrap(match.start()):
+            return table
+        if not is_wide_html_table(
+            table, max_cols=max_cols, max_row_chars=max_row_chars,
+        ):
+            return table
+        return (
+            f'<div class="compact-table-wrap" '
+            f'style="font-size: {font_pt}pt; line-height: 1.15;">'
+            f"{table}"
+            f"</div>"
+        )
+
+    return _HTML_TABLE_RE.sub(_wrap, html)
+
+
+# Markdown table block: a header row + an alignment-separator row + 0+
+# body rows, every line starts with `|`. We anchor on the separator row
+# (`|---|---|` shape) because that's the unambiguous marker.
+_MD_TABLE_BLOCK_RE = re.compile(
+    r"(?m)"
+    r"(?:^[ \t]*\|.+?\|[ \t]*\r?\n)"   # header row
+    r"(?:^[ \t]*\|[\s\-:|]+\|[ \t]*\r?\n)"  # separator row
+    r"(?:(?:^[ \t]*\|.+?\|[ \t]*(?:\r?\n|$))+)"  # one or more body rows
+)
+
+
+def _parse_md_table(block: str) -> tuple[list[str], list[list[str]]]:
+    """Parse a markdown table block into (header_cells, body_rows).
+    Each cell is whitespace-trimmed; backtick markers are kept."""
+    lines = [ln for ln in block.splitlines() if ln.strip().startswith("|")]
+    if len(lines) < 2:
+        return [], []
+    header = [c.strip() for c in lines[0].strip().strip("|").split("|")]
+    # lines[1] is the separator row — skip it
+    body_rows: list[list[str]] = []
+    for raw in lines[2:]:
+        cells = [c.strip() for c in raw.strip().strip("|").split("|")]
+        # Pad to header width so flattened output stays consistent
+        while len(cells) < len(header):
+            cells.append("")
+        body_rows.append(cells)
+    return header, body_rows
+
+
+def flatten_markdown_tables_to_definition_list(
+    text: str,
+    *,
+    max_cols: int = WIDE_TABLE_MAX_COLS,
+    max_row_chars: int = WIDE_TABLE_MAX_ROW_CHARS,
+    always: bool = False,
+) -> str:
+    """Replace every "wide" markdown table in `text` with a flat
+    definition-list rendering, leaving narrow tables untouched.
+
+    Each row becomes a `**Row N** \u2014 *<first cell>*` line followed by
+    `- **Header:** value` bullets for the remaining columns. Tables
+    without a header still flatten (header columns get synthetic names
+    `col 1`, `col 2`, ...).
+
+    `always=True` forces every markdown table to flatten regardless of
+    width — used by the safety-net fallback when even compact-font
+    tables blew up.
+    """
+
+    def _flatten(match: re.Match[str]) -> str:
+        block = match.group(0)
+        header, body = _parse_md_table(block)
+        if not header or not body:
+            return block
+        # Width check — operate on raw cell text widths, not HTML, since
+        # this preprocessor runs before HTML render.
+        max_row_chars_found = max(
+            (sum(len(c) for c in row) + 2 * len(row) for row in body),
+            default=0,
+        )
+        if not always and len(header) <= max_cols and max_row_chars_found <= max_row_chars:
+            return block
+
+        out_lines: list[str] = []
+        for i, row in enumerate(body, start=1):
+            first = row[0] if row else ""
+            label = header[0] if header else "col 1"
+            out_lines.append(f"**{label} {first}**")
+            for h, v in zip(header[1:], row[1:]):
+                out_lines.append(f"- **{h}:** {v}")
+            out_lines.append("")
+        # Make sure surrounding blank lines preserve the source block's
+        # paragraph separation (the regex captured trailing newlines).
+        flattened = "\n".join(out_lines).rstrip() + "\n"
+        return flattened
+
+    return _MD_TABLE_BLOCK_RE.sub(_flatten, text)
+
+
+# ---------------------------------------------------------------------------
+
+
 def primary_personnel(profile: dict[str, Any]) -> dict[str, str]:
     """Return name / email / phone for the firm's primary contact, used on
     PPTX cover slides and Q&A slides."""

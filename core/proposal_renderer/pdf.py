@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import html as html_lib
 import io
+import logging
 import re
 from datetime import date
 from pathlib import Path
@@ -42,10 +43,12 @@ from .common import (
     Section,
     collapse_whitespace,
     discover_sections,
+    downgrade_wide_html_tables,
     find_h1_blocks,
     find_h2_blocks,
     find_section,
     first_paragraph,
+    flatten_markdown_tables_to_definition_list,
     list_items,
     neutralize_placeholders_in_section,
     parse_bid_title,
@@ -53,6 +56,8 @@ from .common import (
     partition_sections,
     primary_personnel,
 )
+
+logger = logging.getLogger(__name__)
 
 CSS_DIR = Path(__file__).with_name("css")
 CLIENT_CSS_PATH = CSS_DIR / "client-proposal.css"
@@ -209,14 +214,17 @@ def _render_full_proposal(
     )
     toc_html = _render_toc(sections)
 
-    body_chunks: list[str] = []
-    for section in sections:
-        body_chunks.append(_render_section_with_divider(section))
-    body_html = "\n".join(body_chunks)
+    def _build_html(*, flatten_tables: bool) -> str:
+        body_chunks: list[str] = []
+        for section in sections:
+            body_chunks.append(
+                _render_section_with_divider(section, flatten_tables=flatten_tables)
+            )
+        body_html = "\n".join(body_chunks)
 
-    header_footer = _render_header_footer(bid_slug=bid_slug, bid_title=bid_title)
+        header_footer = _render_header_footer(bid_slug=bid_slug, bid_title=bid_title)
 
-    html = f"""<!DOCTYPE html>
+        return f"""<!DOCTYPE html>
 <html>
 <head>
 <meta charset="utf-8" />
@@ -231,7 +239,15 @@ def _render_full_proposal(
 </body>
 </html>
 """
-    _xhtml2pdf_render(html, out_path)
+
+    primary_html = _build_html(flatten_tables=False)
+    fallback_html = _build_html(flatten_tables=True)
+    _xhtml2pdf_render_with_fallback(
+        primary_html,
+        fallback_html,
+        out_path,
+        label=f"{bid_slug} / Full proposal ({out_path.name})",
+    )
 
 
 def _render_executive_summary(
@@ -284,10 +300,28 @@ def _render_executive_summary(
 </body>
 </html>
 """
-    _xhtml2pdf_render(html, out_path)
+    # Executive-summary brochures hand-craft small fixed-width tables —
+    # they don't go through `_markdown_to_html`. The safety-net fallback
+    # is identical to the primary; this still gives us a clean
+    # `RuntimeError` (vs an opaque xhtml2pdf trace) with the bid slug if
+    # any unexpected layout failure happens here.
+    _xhtml2pdf_render_with_fallback(
+        html,
+        html,
+        out_path,
+        label=f"{bid_slug} / Executive summary ({out_path.name})",
+    )
 
 
 def _xhtml2pdf_render(html: str, out_path: Path) -> None:
+    """Render `html` to a PDF at `out_path`. Raises on error.
+
+    This is the bare engine call kept for callers that build a single
+    HTML document and don't need the wide-table safety net. For the
+    full / executive-summary builders (which can hit
+    `PmlTable` negative-width crashes on wide tables), prefer
+    :func:`_xhtml2pdf_render_with_fallback`.
+    """
     out_path.parent.mkdir(parents=True, exist_ok=True)
     from xhtml2pdf import pisa
 
@@ -301,6 +335,62 @@ def _xhtml2pdf_render(html: str, out_path: Path) -> None:
         raise RuntimeError(
             f"xhtml2pdf reported {result.err} errors rendering {out_path}"
         )
+
+
+def _xhtml2pdf_attempt(html: str, out_path: Path) -> str | None:
+    """Single attempt — returns an error string on failure, None on success."""
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    from xhtml2pdf import pisa
+
+    try:
+        with out_path.open("wb") as fh:
+            result = pisa.CreatePDF(
+                io.StringIO(html),
+                dest=fh,
+                encoding="utf-8",
+            )
+    except Exception as exc:
+        return f"{type(exc).__name__}: {exc}"
+    if result.err:
+        return f"xhtml2pdf reported {result.err} errors"
+    return None
+
+
+def _xhtml2pdf_render_with_fallback(
+    primary_html: str,
+    fallback_html: str,
+    out_path: Path,
+    *,
+    label: str,
+) -> str:
+    """Render `primary_html` to a PDF at `out_path`. If the primary
+    render fails (e.g. `PmlTable` negative-width on a wide table),
+    log a warning and re-attempt with `fallback_html` — which is
+    expected to be the same content with every wide table flattened
+    to a definition-list rendering so xhtml2pdf has no table-layout
+    work to do.
+
+    Returns `"primary"` on first-attempt success, `"fallback"` on
+    safety-net success. Raises `RuntimeError` only if both renderings
+    fail (no PDF is produced in that case).
+    """
+    err = _xhtml2pdf_attempt(primary_html, out_path)
+    if err is None:
+        return "primary"
+    logger.warning(
+        "wide-table safety-net engaged for %s: primary xhtml2pdf render "
+        "failed (%s); retrying with markdown tables flattened to "
+        "definition-list form.",
+        label,
+        err,
+    )
+    err2 = _xhtml2pdf_attempt(fallback_html, out_path)
+    if err2 is None:
+        return "fallback"
+    raise RuntimeError(
+        f"both primary and fallback renders failed for {label}: "
+        f"primary={err!r}; fallback={err2!r}"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -400,7 +490,7 @@ def _render_toc(sections: list[Section]) -> str:
 """
 
 
-def _render_section_with_divider(section: Section) -> str:
+def _render_section_with_divider(section: Section, *, flatten_tables: bool = False) -> str:
     """Full proposal section: a navy section-divider page followed by
     the rendered markdown body.
 
@@ -427,14 +517,30 @@ def _render_section_with_divider(section: Section) -> str:
   </table>
 </div>
 """
-    body_html = _markdown_to_html(section.body)
+    body_html = _markdown_to_html(section.body, flatten_tables=flatten_tables)
     return divider_html + f'<div class="section">{body_html}</div>'
 
 
-def _markdown_to_html(body: str) -> str:
+def _markdown_to_html(body: str, *, flatten_tables: bool = False) -> str:
+    """Render a markdown body to HTML, with wide-table hardening.
+
+    `flatten_tables=False` (default): runs the normal Markdown→HTML
+    pipeline, then wraps any rendered `<table>` that exceeds the
+    wide-table thresholds in a compact-font `<div>` so xhtml2pdf has
+    enough headroom to layout every column.
+
+    `flatten_tables=True` (safety-net): rewrites every Markdown table
+    block in the source as a flat definition-list (`**Header:** value`
+    paragraphs) BEFORE the Markdown→HTML pass, so no `<table>` element
+    reaches xhtml2pdf at all. Used by
+    `_xhtml2pdf_render_with_fallback` after a primary render crash.
+    """
+    if flatten_tables:
+        body = flatten_markdown_tables_to_definition_list(body, always=True)
     raw_html = md_lib.markdown(body, extensions=MD_EXTENSIONS, output_format="html5")
     raw_html = _highlight_placeholders_in_html(raw_html)
     raw_html = _shade_table_rows(raw_html)
+    raw_html = downgrade_wide_html_tables(raw_html)
     return raw_html
 
 
