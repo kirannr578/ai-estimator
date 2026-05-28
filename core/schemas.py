@@ -50,6 +50,14 @@ class CostBand(str, Enum):
     confidence rubric (``drawing_prepass._score``) and the back-fill
     confidence rubric (``takeoff_backfill._BACKFILL_CONF_FALLBACK``) so a
     perimeter-fallback row ends up in OPERATOR_REVIEW by construction.
+
+    Phase T7: the threshold input is now ``combined_confidence``
+    (= ``qty_confidence × price_confidence``), so a low-quality cost
+    lookup can demote an otherwise-high-confidence quantity into a
+    lower band even when the takeoff itself was crisp. Backward-compat
+    is preserved by ``CostLine.price_confidence`` defaulting to ``1.0``,
+    which collapses ``combined`` back to ``qty_confidence`` for every
+    pre-T7 fixture / test that didn't set it explicitly.
     """
 
     AUTO_APPROVE = "auto_approve"
@@ -57,11 +65,125 @@ class CostBand(str, Enum):
     HAND_TAKEOFF = "hand_takeoff"
 
 
+class CostSourceTier(str, Enum):
+    """Catalog-completeness tier assigned to a priced ``CostLine`` (Phase T7).
+
+    Independent of the qty-confidence axis (which lives in
+    :class:`CostBand`) and the unit-mismatch axis (which lives in
+    ``CostLine.suppressed``). Together they form a 3-way classification
+    of "how good is this priced row?":
+
+    * **EXACT_MATCH** — the cost lookup landed a direct CWICR hit with
+      similarity ≥ 0.92, OR the takeoff hit the bundled seed
+      ``cost_database.json`` (which is hand-curated against MasterFormat
+      sections, so any seed-DB hit is treated as exact).
+    * **CATEGORY_MATCH** — CWICR similarity in [0.75, 0.92); same CSI
+      section family but the specific item description doesn't perfectly
+      align (e.g. takeoff says "interior latex paint", catalog says
+      "primer + 2 coats latex"). Price is usable but the reviewer should
+      eyeball the line.
+    * **INTERPOLATED** — CWICR similarity in [0.50, 0.75) (well above
+      the 0.55 minimum-similarity threshold but below category-match
+      quality). Treated as a region-adjusted neighbour: the price is a
+      rough proxy, not a direct quote.
+    * **PARAMETRIC** — fell back to the parametric path: CWICR similarity
+      below 0.50 (rare given ``CWICR_MIN_SIMILARITY`` defaults to 0.55)
+      or a future ``$/SF default for the trade``-style fallback. Lowest
+      price-confidence.
+    * **MANUAL_OVERRIDE** — the operator hand-set the unit cost via the
+      Streamlit "Recalculate totals" affordance (or via a downstream
+      override mechanism). ``price_confidence`` is forced to 1.0 by
+      convention — the operator vouches for the number.
+    * **MISSING** — no cost data was available at all (no CWICR hit,
+      no seed-DB hit). ``total_cost == 0``; mirrors the ``suppressed=True``
+      semantics for "informational, not in totals". Unit-mismatch
+      suppressed lines also resolve to MISSING because the cost
+      effectively wasn't usable.
+
+    The brief's similarity-to-tier mapping (Phase T7 spec):
+
+    +-----------------+-----------------+----------------------+
+    | similarity      | tier            | price_confidence     |
+    +=================+=================+======================+
+    | ≥ 0.92          | EXACT_MATCH     | similarity (0.92–1.0)|
+    +-----------------+-----------------+----------------------+
+    | [0.75, 0.92)    | CATEGORY_MATCH  | similarity × 0.85    |
+    +-----------------+-----------------+----------------------+
+    | [0.50, 0.75)    | INTERPOLATED    | 0.65                 |
+    +-----------------+-----------------+----------------------+
+    | < 0.50          | PARAMETRIC      | 0.45                 |
+    +-----------------+-----------------+----------------------+
+
+    ``EXACT_MATCH`` from the seed DB carries a fixed
+    ``price_confidence = 0.95`` — slightly discounted from 1.0 because
+    the seed catalog isn't comprehensive, even though every entry is
+    hand-curated.
+    """
+
+    EXACT_MATCH = "exact_match"
+    CATEGORY_MATCH = "category_match"
+    INTERPOLATED = "interpolated"
+    PARAMETRIC = "parametric"
+    MANUAL_OVERRIDE = "manual_override"
+    MISSING = "missing"
+
+
 # Phase T6 band thresholds. Exposed at module-level so tests + downstream
 # callers (e.g. ``app.py``) can reference the exact boundaries rather than
 # hard-coding them in two places.
 COST_BAND_AUTO_THRESHOLD: float = 0.85
 COST_BAND_REVIEW_THRESHOLD: float = 0.65
+
+# Phase T7 catalog-completeness thresholds. The CWICR similarity input is
+# bucketed into the four cost-source tiers below; the tier in turn drives
+# the ``price_confidence`` value that multiplies into ``combined_confidence``
+# for band assignment. Exposed as module-level constants so tests + the
+# CWICR ↔ tier bridge in ``core.estimator`` reference the same numbers.
+COST_TIER_EXACT_THRESHOLD: float = 0.92          # ≥ → EXACT_MATCH
+COST_TIER_CATEGORY_THRESHOLD: float = 0.75       # ≥ → CATEGORY_MATCH (and < EXACT)
+COST_TIER_INTERPOLATED_THRESHOLD: float = 0.50   # ≥ → INTERPOLATED (and < CATEGORY)
+
+# Per-tier ``price_confidence`` constants for the non-EXACT branches.
+# EXACT_MATCH maps to the *similarity* itself (so 0.95 sim → 0.95 price_conf).
+# Seed-DB hits (always EXACT_MATCH per the contract) get this fixed discount
+# instead — a tiny haircut from 1.0 because the seed catalog isn't
+# comprehensive even though every entry is hand-curated.
+COST_TIER_SEED_DB_PRICE_CONFIDENCE: float = 0.95
+COST_TIER_CATEGORY_MULTIPLIER: float = 0.85      # similarity × this → price_conf
+COST_TIER_INTERPOLATED_PRICE_CONFIDENCE: float = 0.65
+COST_TIER_PARAMETRIC_PRICE_CONFIDENCE: float = 0.45
+
+
+def price_confidence_from_similarity(
+    similarity: float,
+) -> tuple["CostSourceTier", float]:
+    """Map a CWICR similarity in [0, 1] to (tier, price_confidence).
+
+    Boundaries are inclusive on the upper-tier side, mirroring the
+    ``band_for_confidence`` convention:
+
+    * 0.92         → ``EXACT_MATCH``     (price_conf = similarity)
+    * 0.75 .. 0.92 → ``CATEGORY_MATCH``  (price_conf = similarity × 0.85)
+    * 0.50 .. 0.75 → ``INTERPOLATED``    (price_conf = 0.65)
+    * < 0.50       → ``PARAMETRIC``      (price_conf = 0.45)
+
+    The CWICR matcher's minimum-similarity threshold (default 0.55) means
+    the PARAMETRIC branch is rarely exercised in practice — a CWICR
+    candidate below 0.55 is rejected upstream and the caller falls
+    through to the seed DB instead. The branch is kept here so the
+    function's contract is total over [0, 1] for tests + future callers
+    that lower the threshold.
+    """
+    sim = max(0.0, min(1.0, float(similarity)))
+    if sim >= COST_TIER_EXACT_THRESHOLD:
+        return CostSourceTier.EXACT_MATCH, sim
+    if sim >= COST_TIER_CATEGORY_THRESHOLD:
+        return CostSourceTier.CATEGORY_MATCH, round(
+            sim * COST_TIER_CATEGORY_MULTIPLIER, 4
+        )
+    if sim >= COST_TIER_INTERPOLATED_THRESHOLD:
+        return CostSourceTier.INTERPOLATED, COST_TIER_INTERPOLATED_PRICE_CONFIDENCE
+    return CostSourceTier.PARAMETRIC, COST_TIER_PARAMETRIC_PRICE_CONFIDENCE
 
 
 def band_for_confidence(
@@ -746,6 +868,32 @@ class CostLine(BaseModel):
     # T6. Real CostLines emitted by the pricing pipeline always carry an
     # explicit band derived via ``band_for_confidence``.
     cost_band: CostBand = CostBand.AUTO_APPROVE
+    # Phase T7 — catalog-completeness scoring. ``confidence`` (above) is
+    # the qty-side confidence (how good was the takeoff?); these two fields
+    # are the price-side confidence (how good was the cost lookup?).
+    # ``price_confidence`` defaults to ``1.0`` and ``cost_source_tier``
+    # defaults to ``EXACT_MATCH`` so every pre-T7 fixture, hand-constructed
+    # CostLine, and persisted JSON round-trip has identical
+    # ``combined_confidence`` semantics as before T7 — the band assignment
+    # is unchanged for any code path that doesn't explicitly set these.
+    price_confidence: float = 1.0
+    cost_source_tier: CostSourceTier = CostSourceTier.EXACT_MATCH
+
+    @property
+    def combined_confidence(self) -> float:
+        """Phase T7 ``qty_confidence × price_confidence``.
+
+        This is the value the band thresholds (0.85 / 0.65) apply to
+        post-T7. Both factors are clamped into [0, 1] before
+        multiplying so a malformed input can't push combined out of
+        bounds. ``confidence is None`` (the legacy LLM-no-confidence
+        path) is treated as the schema default of 0.7 — same as
+        ``band_for_confidence(None)`` which routes to OPERATOR_REVIEW.
+        """
+        qty = 0.7 if self.confidence is None else float(self.confidence)
+        qty = max(0.0, min(1.0, qty))
+        price = max(0.0, min(1.0, float(self.price_confidence)))
+        return round(qty * price, 4)
 
 
 class Estimate(BaseModel):
@@ -935,6 +1083,55 @@ class Estimate(BaseModel):
         oh = round((base + cont) * self.overhead_pct / 100.0, 2)
         prof = round((base + cont + oh) * self.profit_pct / 100.0, 2)
         return round(base + cont + oh + prof, 2)
+
+    # -- Phase T7 catalog-completeness aggregates -----------------------
+    #
+    # Tier roll-ups walk *every* line in ``line_items`` (including
+    # ``MISSING`` / suppressed) so the breakdown reconciles back to the
+    # full extracted takeoff, not just the priced subset. ``total_by_tier``
+    # uses ``total_cost`` directly: MISSING lines contribute $0 already
+    # (suppression / no-match path zeros the cost), so they show up with
+    # a non-zero count but $0 total — which is exactly the
+    # "informational, not in subtotal" signal the brief calls for.
+
+    @property
+    def total_by_tier(self) -> dict[CostSourceTier, float]:
+        """Sum of ``total_cost`` per :class:`CostSourceTier`.
+
+        Includes all line items regardless of suppression / band so the
+        rollup reconciles to the source takeoff count. ``MISSING``
+        lines have ``total_cost == 0`` already, so the dollar number
+        for that tier is informational ($0 unless an operator hand-
+        priced a MISSING line and then forgot to update the tier).
+        """
+        out: dict[CostSourceTier, float] = {t: 0.0 for t in CostSourceTier}
+        for li in self.line_items:
+            tier = li.cost_source_tier
+            if not isinstance(tier, CostSourceTier):
+                try:
+                    tier = CostSourceTier(tier)
+                except ValueError:
+                    tier = CostSourceTier.MISSING
+            out[tier] = round(out[tier] + li.total_cost, 2)
+        return out
+
+    @property
+    def count_by_tier(self) -> dict[CostSourceTier, int]:
+        """Count of line items per :class:`CostSourceTier`.
+
+        Sums to ``len(line_items)`` exactly — every line lands in
+        exactly one tier bucket.
+        """
+        out: dict[CostSourceTier, int] = {t: 0 for t in CostSourceTier}
+        for li in self.line_items:
+            tier = li.cost_source_tier
+            if not isinstance(tier, CostSourceTier):
+                try:
+                    tier = CostSourceTier(tier)
+                except ValueError:
+                    tier = CostSourceTier.MISSING
+            out[tier] += 1
+        return out
 
 
 # Resolve forward reference (TakeoffItem used inside SheetExtraction).
