@@ -1,0 +1,156 @@
+{
+  "$schema_note": "BPC federal-SBA-RFQ-LPTA takeoff. Populated for PAIS — Backcountry Cabin Roof Repairs (140P6026Q0029). Quantities for CLIN 003 (10 shutters) are firm. CLIN 001 / CLIN 002 / Option 001 / Option 002 quantities are best-effort from drawings + SOW; verify at 6/4/2026 site visit. Unit prices left at 0 — to be filled at pricing assembly (see 08-pricing-strategy.md). NOTE: evaluation_method here is set to 'best-value-SAP' to reflect actual RFQ; the template defaults to 'LPTA' which is a known dogfood quirk (#2 in 00-overview.md).",
+  "project": {
+    "name": "PAIS — Backcountry Cabin Roof Repairs",
+    "solicitation_number": "140P6026Q0029",
+    "agency": "U.S. Department of the Interior, National Park Service (NPS) — Padre Island National Seashore",
+    "site_address": "Padre Island National Seashore — backcountry coastal cabin ~50 mi south of Hwy 361 on Park Road 22 (4WD-only access). Muster at NPS PAIS Facility Management Building, 20301 Park Road 22, Corpus Christi, TX 78418.",
+    "county": "Kenedy County, TX (place of performance) / Nueces County, TX (HQ muster)",
+    "naics": "236220",
+    "magnitude_low_usd": "[AWAITING SOURCE DOCS — no magnitude band stated]",
+    "magnitude_high_usd": "[AWAITING SOURCE DOCS — under SAT $250K per FAR 13.003 implied]",
+    "pop_days": 60,
+    "evaluation_method": "best-value-SAP",
+    "wage_determination_number": "[AWAITING SOURCE DOCS — Att 3 PDF uses encoded font; user to read PDF directly and transcribe WD number from page 1 banner]",
+    "wage_determination_date": "Jan/2026 (per Att 3 cover; specific revision date awaits manual transcription)",
+    "amendments": [
+      {
+        "number": "0001",
+        "date": "2026-05-20",
+        "summary": "Site visit rescheduled to 6/4/2026 @ 10:00 AM CT; quote due date extended to 6/18/2026 @ 12:00 CT; project renamed to 'PAIS — Backcountry Cabin Roof Repairs'."
+      }
+    ]
+  },
+  "rooms": [
+    {
+      "id": "R-CABIN",
+      "name": "Backcountry Cabin (single-structure scope)",
+      "sq_ft": "[AWAITING SOURCE DOCS — cabin footprint not stated in SOW; verify at site visit]",
+      "notes": "Single raised wood-framed coastal cabin. Subject to repairs only — no full re-roof, no new construction beyond Options. Three exterior doors (per CLIN 001). Roof is the entire roof surface (per CLIN 002 SOW: 'Repair leaks on the roof of the cabin'). Cabin is raised on piers (Option 002 enclosure language confirms) — approximate ground-to-floor clearance to be verified at site visit."
+    },
+    {
+      "id": "R-CABIN-DECK-RAMP",
+      "name": "Existing cabin deck + ramp (Option 001 scope)",
+      "sq_ft": "[AWAITING SOURCE DOCS — verify at site visit; SOW Option 001 references 'two new landings' + integration of GFE aluminum ramp]",
+      "notes": "Existing deck has a ramp; Option 001 extends the ramp (drawings Att 2 — 1 page) with two new landings and integrates a Government-Furnished Equipment (GFE) aluminum ramp. GFE specs / dimensions not in zip — RFI candidate."
+    },
+    {
+      "id": "R-CABIN-PERIMETER",
+      "name": "Cabin perimeter under-cabin enclosure (Option 002 scope)",
+      "sq_ft": "[AWAITING SOURCE DOCS — three sides of raised cabin perimeter; lengths to be verified at site visit]",
+      "notes": "Breakaway 2x10 PT lumber sand-control enclosure on three of the four sides of the raised cabin's perimeter (one side intentionally left open per SOW). Designed to break away under storm surge per coastal building practice."
+    }
+  ],
+  "scope_items": [
+    {
+      "clin": "0001",
+      "csi_division": "08 11 00 / 06 20 00 (Door + carpentry)",
+      "description": "Door repair and reinforcement — three (3) exterior doors. Repair existing damage; reinforce frames and hinges with corrosion-resistant (stainless or hot-dip galvanized) hardware suitable for coastal salt-air exposure; install three (3) new keyed deadbolts (master-keyed to NPS standard if directed).",
+      "quantity": 3,
+      "unit": "EA (doors)",
+      "self_or_sub": "self",
+      "trade": "Carpentry (BPC self-perform)",
+      "sub_name": "n/a (self-perform)",
+      "unit_price_usd": 0,
+      "extended_price_usd": 0,
+      "notes": "SOW Att 1 §5 / §6. Hardware to be 316 SS or hot-dip galvanized (HDG) — coastal salt-air. Master-keying directive to NPS standard is RFI candidate (`03-missing-documents.md` RFI #4). No drawings — door schedule to be built at site visit."
+    },
+    {
+      "clin": "0002",
+      "csi_division": "07 30 00 (Steep-slope roofing)",
+      "description": "Roof leak repair on cabin — like-kind shingle replacement on damaged areas, sealant at flashing and penetrations, stainless-steel fasteners throughout. NO full re-roof unless directed by amendment.",
+      "quantity": 1,
+      "unit": "LS",
+      "self_or_sub": "self",
+      "trade": "Roofing (BPC self-perform — supports ≥30% self-perform commitment)",
+      "sub_name": "n/a (self-perform)",
+      "unit_price_usd": 0,
+      "extended_price_usd": 0,
+      "notes": "SOW Att 1 §7. Marine-grade asphalt shingle with stainless fasteners. Existing-roof condition + extent of damage NOT specified — RFI #5 (request as-built or stipulate scope cap as % of roof area). NPS Preservation Brief 4 may apply if cabin is on Register — RFI #6."
+    },
+    {
+      "clin": "0003",
+      "csi_division": "08 56 73 (Storm-resistant / Hurricane shutters)",
+      "description": "Furnish + install ten (10) Bahama-style hurricane shutters meeting Texas Department of Insurance (TDI) Category 5 wind-load requirements. Manual operation, lockable hardware, fitted to existing window openings.",
+      "quantity": 10,
+      "unit": "EA (shutters)",
+      "self_or_sub": "sub",
+      "trade": "Hurricane shutters — TDI CAT5 manufacturer/installer",
+      "sub_name": "[USER TO FILL — solicit ≥3 quotes from TDI CAT5 Bahama shutter manufacturers; engineer-stamped product data required]",
+      "unit_price_usd": 0,
+      "extended_price_usd": 0,
+      "notes": "SOW Att 1 §8. Window opening dimensions not in SOW — verify at site visit (each shutter custom-sized). Long-lead item: 4–6 wk fabrication is typical; bake into schedule. Engineer-stamped TDI CAT5 product data must be submittal-ready at NTP. 'Or-equal' substitution allowed per FAR 52.211-6 — sub may propose 1 alternate brand."
+    },
+    {
+      "clin": "OPTION-001",
+      "csi_division": "06 10 00 (Rough carpentry — exterior decking + ramp)",
+      "description": "Construct ramp extension on existing cabin deck per Att 2 drawings — two (2) new wood landings + structural integration of a Government-Furnished Equipment (GFE) aluminum ramp section. PT lumber, stainless or HDG fasteners, ADA-compliant slope (1:12 max) and width (≥36 in clear).",
+      "quantity": 1,
+      "unit": "LS (2 landings + ramp integration)",
+      "self_or_sub": "self",
+      "trade": "Carpentry (BPC self-perform)",
+      "sub_name": "n/a (self-perform)",
+      "unit_price_usd": 0,
+      "extended_price_usd": 0,
+      "notes": "Drawings Att 2 = 1 page. GFE aluminum ramp dimensions / connection details NOT in zip — RFI #1. ADA compliance assumed but not stated — RFI #2. PT lumber CCA vs. ACQ chemistry assumption stated in `01-scope.md`."
+    },
+    {
+      "clin": "OPTION-002",
+      "csi_division": "06 10 00 (Rough carpentry — perimeter enclosure)",
+      "description": "Construct breakaway perimeter enclosure on three (3) sides of raised cabin using 2x10 PT lumber. Designed to break away under storm surge per coastal floodplain construction practice.",
+      "quantity": 1,
+      "unit": "LS",
+      "self_or_sub": "self",
+      "trade": "Carpentry (BPC self-perform)",
+      "sub_name": "n/a (self-perform)",
+      "unit_price_usd": 0,
+      "extended_price_usd": 0,
+      "notes": "SOW Att 1 §11 (Option 002). Three sides only — RFI #3 to confirm WHICH three sides (open side typically faces away from prevailing storm direction). Perimeter linear footage to be measured at site visit. Stainless or HDG fasteners only."
+    }
+  ],
+  "general_conditions": {
+    "duration_days": 60,
+    "super_rate_per_day": "[USER TO FILL — burdened rate per BPC labor schedule + DBA WD overlay]",
+    "pm_rate_per_day": "[USER TO FILL — burdened rate per BPC labor schedule]",
+    "temp_protection_lump_sum": "[USER TO FILL — minimal scope; tarp + sandbags as needed for in-progress roof work]",
+    "dumpster_haul_lump_sum": "[USER TO FILL — backcountry haul-out: dumpster CANNOT come to site; estimate as truck loads back to Corpus Christi C&D facility]",
+    "temp_utilities_lump_sum": "[USER TO FILL — generator (no grid power at site); fuel; potable water haul]",
+    "site_access_coordination_hours": "[USER TO FILL — daily 4WD ferrying labor + materials from HQ to backcountry cabin; budget 2hr/day round-trip drive on Park Road 22]",
+    "backcountry_logistics_lump_sum": {
+      "_note": "PAIS-specific GC line not in original template; see dogfood quirk #9.",
+      "vehicle_4wd_rental_or_owned": "[USER TO FILL — 60-day rental or BPC-owned 4WD with mileage]",
+      "lodging_corpus_christi_60_days": "[USER TO FILL — extended-stay or hotel; verify GSA per-diem compliance]",
+      "per_diem_meals_60_days": "[USER TO FILL — GSA M&IE rate × 60 days × crew size]",
+      "haul_out_dumpster_or_trailer": "[USER TO FILL]",
+      "wildlife_buffer_compliance_monitoring": "[USER TO FILL — sea-turtle nesting buffer if season overlaps; budget 1–2 monitor-hours/day if applicable]"
+    }
+  },
+  "markup": {
+    "bond_pct": 1.5,
+    "bond_pct_note": "Reduced from template default 2.0 → 1.5: post-award Payment Bond OR Irrevocable Letter of Credit (FAR 52.228-13 Alternative Payment Protections), not P&P bond at 100%. ILC commitment letter from bank, not surety bond. Confirm rate with bonding agent.",
+    "insurance_pct": 2.0,
+    "insurance_pct_note": "Reduced from template default 3.0 → 2.0: DOI 1452.228-70 limits ($100K/$500K/$500K) are LOWER than typical commercial GL — premium load is correspondingly lower if BPC's renewed COI matches. If renewed COI carries higher commercial-GL limits, this stays at 3.0.",
+    "contingency_pct": 7.0,
+    "contingency_pct_note": "Increased from template default 5.0 → 7.0: backcountry access risk + coastal corrosion premium + wildlife-season unknown + WD trade-rate uncertainty (Att 3 not transcribed yet). See `08-pricing-strategy.md` and `07-risk-register.md` §4.",
+    "overhead_pct": 9.0,
+    "profit_pct": 6.0,
+    "dba_labor_burden_pct": "[USER TO FILL — Davis-Bacon WD trade rates from Att 3 (manual transcription) vs. BPC merit-shop labor schedule; spread over labor portion of bid only]"
+  },
+  "self_perform_verification_far_52_236_1": {
+    "target_pct": 30.0,
+    "target_pct_note": "Increased from template 15% → 30% to match SOW direction toward self-performance and the firm's competitive positioning. SOW does not state a 52.236-1 minimum; this is BPC's voluntary commitment.",
+    "current_pct": 0.0,
+    "current_pct_note": "Re-compute after pricing rolls up: (CLIN 0001 + CLIN 0002 + OPTION-001 + OPTION-002 self-perform $) / (total bid $). Target ≥30%. CLIN 0003 (shutters) is sub-only.",
+    "self_perform_scope_items": ["0001", "0002", "OPTION-001", "OPTION-002"],
+    "sub_only_scope_items": ["0003"]
+  },
+  "submittals_register_hint": [
+    "TDI CAT5 engineer-stamped shutter product data (CLIN 003) — pre-fab",
+    "Marine-grade shingle product data + stainless-fastener spec (CLIN 002) — pre-install",
+    "PT lumber chemistry + grade certification (Options 001 + 002) — pre-install",
+    "GFE aluminum ramp connection shop drawings (Option 001) — once GFE specs received",
+    "Davis-Bacon WH-347 weekly certified payroll — recurring through POP",
+    "Buy American certificate (FAR 52.225-9) — at award",
+    "Payment Bond or ILC (FAR 52.228-13) — within 10 days of award"
+  ]
+}

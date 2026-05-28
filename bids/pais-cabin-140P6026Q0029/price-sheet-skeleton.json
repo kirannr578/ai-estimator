@@ -1,0 +1,65 @@
+{
+  "$schema_note": "BPC federal-SBA-RFQ-LPTA price-sheet skeleton. Mirrors the Schedule of Prices from RFP Section B. One row per CLIN. Required total at bottom. Every CLIN priced — leaving a CLIN blank is non-responsive.",
+  "project": {
+    "name": "{{PROJECT_NAME}}",
+    "solicitation_number": "{{SOLICITATION_NUMBER}}",
+    "agency": "{{AGENCY}}",
+    "submission_date": "{{SUBMISSION_DATE}}"
+  },
+  "schedule_of_prices": [
+    {
+      "clin": "0001",
+      "description": "{{CLIN_0001_DESCRIPTION}}",
+      "quantity": 0,
+      "unit": "{{UNIT}}",
+      "unit_price_usd": 0,
+      "extended_price_usd": 0
+    },
+    {
+      "clin": "0002",
+      "description": "{{CLIN_0002_DESCRIPTION}}",
+      "quantity": 0,
+      "unit": "{{UNIT}}",
+      "unit_price_usd": 0,
+      "extended_price_usd": 0
+    },
+    {
+      "clin": "{{additional CLINs as RFP §B lists}}",
+      "description": "",
+      "quantity": 0,
+      "unit": "",
+      "unit_price_usd": 0,
+      "extended_price_usd": 0
+    }
+  ],
+  "alternates": [
+    {
+      "alternate_number": "ALT-001",
+      "description": "{{IF_RFP_REQUESTS_ANY_ALTERNATES}}",
+      "add_or_deduct": "ADD|DEDUCT",
+      "price_usd": 0
+    }
+  ],
+  "unit_prices_owner_directed_changes": [
+    {
+      "item": "{{UNIT_PRICE_ITEM}}",
+      "unit": "{{UNIT}}",
+      "unit_price_usd": 0,
+      "notes": "Set high — these become change-order ceiling prices"
+    }
+  ],
+  "totals": {
+    "subtotal_clins_usd": 0,
+    "total_evaluated_price_usd": 0
+  },
+  "compliance_attestations": {
+    "every_clin_priced": false,
+    "bid_bond_attached": false,
+    "bid_bond_amount_pct_of_bid": 20.0,
+    "bid_bond_amount_usd": 0,
+    "no_exceptions_taken": true,
+    "addenda_acknowledged": ["{{ADDENDA_LIST}}"],
+    "sam_reps_certs_incorporated": true,
+    "buy_american_certificate_attached": true
+  }
+}
