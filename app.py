@@ -46,6 +46,16 @@ from core.exporter import export_estimate_json, export_estimate_xlsx
 from core.extractors import extract_bundle, extract_sheet
 from core.llm_client import LLMClient
 from core.pdf_processor import DocumentBundle, process_pdfs
+from core.pricing.batch_override import (
+    BatchMatchResult,
+    BatchMatchStatus,
+    BatchOverridePlan,
+    apply_batch_plan,
+    export_match_plan_csv,
+    format_batch_operator_note,
+    match_cost_lines,
+    parse_vendor_csv,
+)
 from core.schemas import (
     ClientInfo,
     CompanyInfo,
@@ -267,6 +277,121 @@ def _initialize_override_session_state(estimate: Estimate) -> None:
     """
     st.session_state["estimate_original"] = estimate.model_copy(deep=True)
     st.session_state["override_history"] = []
+
+
+# ---------------------------------------------------------------------------
+# Phase T6.3 — Batch operator override helpers
+# ---------------------------------------------------------------------------
+#
+# Two pure helpers wrap the ``core.pricing.batch_override`` module for the
+# Streamlit UI. The first summarises a match plan (counts + dollar adjustment
+# estimate) for the preview pane. The second turns a list of applied
+# ``BatchMatchResult`` into history rows compatible with the existing T6.2
+# override-history download.
+
+
+def _summarize_batch_plan(
+    plan: BatchOverridePlan,
+    estimate: Estimate | None = None,
+) -> dict[str, Any]:
+    """Aggregate a :class:`BatchOverridePlan` into UI-friendly counts + totals.
+
+    Returns a dict with::
+
+        total_rows            int   — sum of every bucket
+        matched_count         int
+        ambiguous_count       int
+        no_match_count        int
+        low_similarity_count  int
+        similarity_threshold  float
+        ambiguity_margin      float
+        estimated_total_adjustment  float   — when ``estimate`` is supplied;
+                                              0.0 otherwise. The dollar
+                                              delta that auto-applying every
+                                              MATCHED row would land, NOT
+                                              including operator-resolved
+                                              ambiguous rows.
+
+    Pure / side-effect-free so the unit tests don't need a Streamlit
+    harness. The Streamlit caller uses the same dict to render the
+    summary metrics row in the preview pane.
+    """
+    out: dict[str, Any] = {
+        "total_rows": plan.total_rows,
+        "matched_count": len(plan.matched),
+        "ambiguous_count": len(plan.ambiguous),
+        "no_match_count": len(plan.no_match),
+        "low_similarity_count": len(plan.low_similarity),
+        "similarity_threshold": plan.similarity_threshold,
+        "ambiguity_margin": plan.ambiguity_margin,
+        "estimated_total_adjustment": 0.0,
+    }
+    if estimate is None:
+        return out
+
+    adj = 0.0
+    for result in plan.matched:
+        if result.best_match_index is None:
+            continue
+        if not 0 <= result.best_match_index < len(estimate.line_items):
+            continue
+        line = estimate.line_items[result.best_match_index]
+        old_total = round(float(line.unit_cost) * float(line.quantity), 2)
+        new_total = round(float(result.row.unit_cost) * float(line.quantity), 2)
+        adj += new_total - old_total
+    out["estimated_total_adjustment"] = round(adj, 2)
+    return out
+
+
+def _format_batch_csv_for_history(
+    plan: BatchOverridePlan,
+    applied_rows: list[BatchMatchResult],
+) -> str:
+    """Serialise applied batch rows into a CSV body with [batch]-tagged notes.
+
+    Format mirrors :func:`_build_override_history_csv` (same eight
+    column names) so a downstream auditor can concatenate the batch
+    history block with the single-line history block without juggling
+    schemas. The ``operator_note`` column always starts with
+    ``[batch] ...`` via :func:`format_batch_operator_note`.
+
+    ``applied_rows`` should be the subset of ``plan.matched`` (plus any
+    operator-resolved ``plan.ambiguous`` rows) that were actually
+    applied — not the full plan. Rows are emitted in ``row.row_index``
+    order so the CSV reads the same direction as the source spreadsheet.
+    """
+    fieldnames = [
+        "timestamp",
+        "line_index",
+        "description",
+        "csi_division",
+        "csi_section",
+        "original_unit_cost",
+        "new_unit_cost",
+        "operator_note",
+    ]
+    buf = io.StringIO()
+    writer = csv.DictWriter(buf, fieldnames=fieldnames, extrasaction="ignore")
+    writer.writeheader()
+    ordered = sorted(applied_rows, key=lambda r: r.row.row_index)
+    for result in ordered:
+        note = format_batch_operator_note(result.row)
+        writer.writerow({
+            "timestamp": "",
+            "line_index": (
+                result.best_match_index
+                if result.best_match_index is not None
+                else ""
+            ),
+            "description": result.row.description,
+            "csi_division": "",
+            "csi_section": "",
+            "original_unit_cost": "",
+            "new_unit_cost": round(float(result.row.unit_cost), 2),
+            "operator_note": note,
+        })
+    return buf.getvalue()
+
 
 from core.sheet_classifier import classify_sheet
 from core.takeoff import ProjectModel, reconcile
@@ -1895,6 +2020,362 @@ if "estimate" in st.session_state:
                     st.session_state["override_history"] = []
                     st.success("All overrides reverted; history cleared.")
                     st.rerun()
+
+        # ------------------------------------------------------------------
+        # Phase T6.3 — Batch operator overrides from vendor CSV
+        # ------------------------------------------------------------------
+        #
+        # Wires ``core.pricing.batch_override`` into the Streamlit Estimate
+        # tab as the bulk-CSV analogue of the T6.2 single-line affordance.
+        # Two-stage flow (preview → apply) is mandatory: the operator must
+        # see the match plan BEFORE any override is applied, because a
+        # batch op touches many lines at once and a mismatch in the fuzzy
+        # matcher could otherwise nuke the entire estimate silently.
+        #
+        # Session-state keys consumed (already seeded by T6.2):
+        #   - ``estimate_original`` — pre-override snapshot (for the
+        #     reset path; this section does not touch it).
+        #   - ``override_history``  — appended to on each successful
+        #     batch apply so the existing T6.2 history download stays
+        #     authoritative.
+        #
+        # New (transient) session-state keys this section introduces:
+        #   - ``batch_override_plan`` — the most recent
+        #     :class:`BatchOverridePlan` for preview rendering.
+        #   - ``batch_override_csv_lines`` — the parsed
+        #     :class:`BatchOverrideRow` list (kept for plan re-derivation
+        #     when the operator re-runs with different thresholds).
+        #   - ``batch_override_resolved`` — dict mapping CSV row index
+        #     to operator-chosen CostLine index for AMBIGUOUS rows.
+        with st.expander(
+            "Batch operator overrides from vendor CSV (Phase T6.3)",
+            expanded=False,
+        ):
+            st.caption(
+                "Upload a vendor pricing CSV (description + unit_cost "
+                "columns required; optional vendor / quote_ref / notes / "
+                "quantity). The matcher fuzzy-aligns each row to a "
+                "CostLine by description and surfaces a preview before "
+                "any override is committed. MATCHED rows auto-apply; "
+                "AMBIGUOUS rows wait for operator resolution; "
+                "LOW_SIMILARITY and NO_MATCH rows are flagged for "
+                "manual review and never auto-applied."
+            )
+
+            uploaded_csv = st.file_uploader(
+                "Vendor pricing CSV",
+                type=["csv"],
+                key="batch_override_csv_uploader",
+                help=(
+                    "Required columns (any of the case-insensitive "
+                    "aliases): description / desc / item / "
+                    "item_description / line_item AND unit_cost / price / "
+                    "unit_price / cost / $/unit / rate. Optional: "
+                    "vendor, quote_ref, notes, quantity."
+                ),
+            )
+
+            with st.expander("Matching settings (advanced)", expanded=False):
+                similarity_threshold = st.slider(
+                    "Similarity threshold",
+                    min_value=0.40,
+                    max_value=0.95,
+                    value=0.65,
+                    step=0.01,
+                    key="batch_override_threshold",
+                    help=(
+                        "Minimum description-similarity for a row to "
+                        "be considered MATCHED or AMBIGUOUS. Below this "
+                        "and above 0.40 lands in LOW_SIMILARITY (manual "
+                        "review). Below 0.40 lands in NO_MATCH. Default "
+                        "0.65 aligns with the Phase T6 OPERATOR_REVIEW "
+                        "band boundary."
+                    ),
+                )
+                ambiguity_margin = st.slider(
+                    "Ambiguity margin",
+                    min_value=0.05,
+                    max_value=0.30,
+                    value=0.10,
+                    step=0.01,
+                    key="batch_override_margin",
+                    help=(
+                        "Two CostLines whose similarities to the same "
+                        "CSV row are within this margin are flagged "
+                        "AMBIGUOUS and require operator resolution. "
+                        "Default 0.10 distinguishes 'walls vs. ceiling' "
+                        "(amb.) from 'Door 101A vs. 201A' (auto-resolved)."
+                    ),
+                )
+
+            preview_clicked = st.button(
+                "Preview match plan",
+                use_container_width=True,
+                disabled=uploaded_csv is None,
+                key="batch_override_preview_btn",
+                help=(
+                    "Parse the CSV + build the match plan. Does NOT "
+                    "apply any overrides. Required before the Apply "
+                    "button activates."
+                ),
+            )
+
+            if preview_clicked and uploaded_csv is not None:
+                try:
+                    raw_bytes = uploaded_csv.getvalue()
+                    csv_text = raw_bytes.decode("utf-8-sig")
+                except Exception as exc:
+                    st.error(f"Could not decode CSV: {exc}")
+                else:
+                    try:
+                        parsed_rows, parse_errors = parse_vendor_csv(csv_text)
+                    except ValueError as exc:
+                        st.error(f"CSV parse failed: {exc}")
+                        parsed_rows, parse_errors = [], []
+                    if parse_errors:
+                        for err in parse_errors:
+                            st.warning(err)
+                    if parsed_rows:
+                        plan = match_cost_lines(
+                            parsed_rows,
+                            list(estimate.line_items),
+                            similarity_threshold=float(similarity_threshold),
+                            ambiguity_margin=float(ambiguity_margin),
+                        )
+                        st.session_state["batch_override_plan"] = plan
+                        st.session_state["batch_override_csv_lines"] = parsed_rows
+                        st.session_state["batch_override_resolved"] = {}
+
+            plan: BatchOverridePlan | None = st.session_state.get(
+                "batch_override_plan"
+            )
+            if plan is not None:
+                summary = _summarize_batch_plan(plan, estimate)
+                m1, m2, m3, m4, m5 = st.columns(5)
+                m1.metric("Total rows", summary["total_rows"])
+                m2.metric("Matched", summary["matched_count"])
+                m3.metric("Ambiguous", summary["ambiguous_count"])
+                m4.metric("Low similarity", summary["low_similarity_count"])
+                m5.metric("No match", summary["no_match_count"])
+                adj = summary["estimated_total_adjustment"]
+                adj_sign = "+" if adj >= 0 else "\u2212"
+                st.caption(
+                    f"Estimated subtotal adjustment if all MATCHED rows "
+                    f"are applied: {adj_sign}${abs(adj):,.2f}."
+                )
+
+                if plan.matched:
+                    st.markdown("##### Matched rows (auto-apply)")
+                    matched_rows = []
+                    for result in plan.matched:
+                        if result.best_match_index is None:
+                            continue
+                        line = estimate.line_items[result.best_match_index]
+                        matched_rows.append({
+                            "CSV row": result.row.row_index,
+                            "CSV description": result.row.description,
+                            "Cost line #": result.best_match_index,
+                            "Cost line description": line.description,
+                            "Sim": round(result.best_match_similarity, 3),
+                            "Old $/unit": round(float(line.unit_cost), 2),
+                            "New $/unit": round(float(result.row.unit_cost), 2),
+                        })
+                    if matched_rows:
+                        st.dataframe(
+                            pd.DataFrame(matched_rows),
+                            hide_index=True,
+                            use_container_width=True,
+                            column_config={
+                                "Old $/unit": st.column_config.NumberColumn(
+                                    format="$%.2f"
+                                ),
+                                "New $/unit": st.column_config.NumberColumn(
+                                    format="$%.2f"
+                                ),
+                            },
+                        )
+
+                if plan.ambiguous:
+                    st.markdown("##### Ambiguous rows (operator resolution required)")
+                    resolved: dict[int, int] = st.session_state.get(
+                        "batch_override_resolved", {}
+                    )
+                    for result in plan.ambiguous:
+                        candidates: list[tuple[str, int | None]] = [
+                            ("Skip this row", None),
+                        ]
+                        for idx, sim in result.candidate_lines:
+                            if 0 <= idx < len(estimate.line_items):
+                                desc = estimate.line_items[idx].description[:60]
+                                candidates.append(
+                                    (f"#{idx} | {desc} | sim={sim:.2f}", idx)
+                                )
+                        labels = [label for label, _ in candidates]
+                        current_choice = resolved.get(result.row.row_index)
+                        default_index = 0
+                        for i, (_, idx) in enumerate(candidates):
+                            if idx == current_choice:
+                                default_index = i
+                                break
+                        chosen_label = st.selectbox(
+                            f"Row {result.row.row_index}: "
+                            f"{result.row.description[:80]}",
+                            options=labels,
+                            index=default_index,
+                            key=f"batch_amb_resolve_{result.row.row_index}",
+                        )
+                        chosen_idx = dict(candidates)[chosen_label]
+                        if chosen_idx is None:
+                            resolved.pop(result.row.row_index, None)
+                        else:
+                            resolved[result.row.row_index] = chosen_idx
+                    st.session_state["batch_override_resolved"] = resolved
+
+                unmatched = list(plan.low_similarity) + list(plan.no_match)
+                if unmatched:
+                    st.markdown("##### Unmatched rows (read-only audit)")
+                    unmatched_rows = []
+                    for result in unmatched:
+                        unmatched_rows.append({
+                            "CSV row": result.row.row_index,
+                            "CSV description": result.row.description,
+                            "Best sim": round(result.best_match_similarity, 3),
+                            "Status": result.status.value,
+                            "Notes": result.row.notes or "",
+                        })
+                    st.dataframe(
+                        pd.DataFrame(unmatched_rows),
+                        hide_index=True,
+                        use_container_width=True,
+                    )
+
+                plan_csv = export_match_plan_csv(plan, list(estimate.line_items))
+                st.download_button(
+                    "Download match plan CSV",
+                    data=plan_csv,
+                    file_name=(
+                        f"{estimate.project_name.replace(' ', '_')}"
+                        f"_batch_match_plan.csv"
+                    ),
+                    mime="text/csv",
+                    use_container_width=True,
+                    key="batch_override_plan_download",
+                    help=(
+                        "Audit-trail snapshot of the match plan: per-row "
+                        "status, best + runner-up similarity, candidate "
+                        "descriptions. Useful for offline review before "
+                        "committing the batch."
+                    ),
+                )
+
+                apply_clicked = st.button(
+                    "Apply batch overrides",
+                    use_container_width=True,
+                    type="primary",
+                    key="batch_override_apply_btn",
+                    disabled=(
+                        len(plan.matched) == 0
+                        and not st.session_state.get(
+                            "batch_override_resolved", {}
+                        )
+                    ),
+                    help=(
+                        "Applies every MATCHED row + every operator-"
+                        "resolved AMBIGUOUS row. LOW_SIMILARITY and "
+                        "NO_MATCH rows are always skipped. Updates the "
+                        "estimate in place and appends to the override "
+                        "history."
+                    ),
+                )
+
+                if apply_clicked:
+                    resolved_map: dict[int, int] = st.session_state.get(
+                        "batch_override_resolved", {}
+                    )
+                    pre_apply = estimate
+                    try:
+                        new_estimate, apply_summary = apply_batch_plan(
+                            estimate,
+                            plan,
+                            auto_apply_matched=True,
+                            resolved_ambiguous=resolved_map,
+                        )
+                    except Exception as exc:
+                        st.error(f"Batch apply failed: {exc}")
+                    else:
+                        applied_results: list[BatchMatchResult] = list(plan.matched)
+                        for result in plan.ambiguous:
+                            if result.row.row_index in resolved_map:
+                                # Forge a synthesised result with the
+                                # resolved index in best_match_index so
+                                # the history row points at the line the
+                                # override actually touched.
+                                applied_results.append(BatchMatchResult(
+                                    row=result.row,
+                                    status=BatchMatchStatus.MATCHED,
+                                    best_match_index=resolved_map[
+                                        result.row.row_index
+                                    ],
+                                    best_match_similarity=(
+                                        result.best_match_similarity
+                                    ),
+                                    runner_up_index=result.runner_up_index,
+                                    runner_up_similarity=(
+                                        result.runner_up_similarity
+                                    ),
+                                    candidate_lines=result.candidate_lines,
+                                ))
+
+                        now_ts = datetime.utcnow().isoformat(timespec="seconds")
+                        for result in applied_results:
+                            if result.best_match_index is None:
+                                continue
+                            if not 0 <= result.best_match_index < len(
+                                pre_apply.line_items
+                            ):
+                                continue
+                            old_line = pre_apply.line_items[
+                                result.best_match_index
+                            ]
+                            new_line = new_estimate.line_items[
+                                result.best_match_index
+                            ]
+                            note = format_batch_operator_note(result.row)
+                            override_history.append({
+                                "timestamp": now_ts,
+                                "line_index": result.best_match_index,
+                                "description": old_line.description,
+                                "csi_division": old_line.csi_division,
+                                "csi_section": old_line.csi_section or "",
+                                "original_unit_cost": round(
+                                    float(old_line.unit_cost), 2
+                                ),
+                                "new_unit_cost": round(
+                                    float(new_line.unit_cost), 2
+                                ),
+                                "operator_note": note,
+                            })
+
+                        st.session_state["override_history"] = override_history
+                        st.session_state["estimate"] = new_estimate
+                        st.session_state.pop("batch_override_plan", None)
+                        st.session_state.pop("batch_override_csv_lines", None)
+                        st.session_state.pop("batch_override_resolved", None)
+
+                        applied_count = sum(
+                            1 for line in apply_summary
+                            if line.startswith("Row") and "APPLIED" in line
+                        )
+                        st.success(
+                            f"Batch override applied: {applied_count} line"
+                            f"{'s' if applied_count != 1 else ''} updated. "
+                            f"Subtotal: ${pre_apply.subtotal:,.2f} "
+                            f"\u2192 ${new_estimate.subtotal:,.2f}."
+                        )
+                        with st.expander("Apply summary (full log)", expanded=False):
+                            for line in apply_summary:
+                                st.text(line)
+                        st.rerun()
 
         st.divider()
         st.subheader("Project totals")
