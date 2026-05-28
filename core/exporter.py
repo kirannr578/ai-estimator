@@ -11,7 +11,14 @@ from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 
-from .schemas import CostBand, CostSourceTier, Estimate, SheetExtraction
+from .schemas import (
+    AlternatePricingBasis,
+    AlternateType,
+    CostBand,
+    CostSourceTier,
+    Estimate,
+    SheetExtraction,
+)
 from .takeoff import ProjectModel
 
 
@@ -50,6 +57,50 @@ _TIER_LABELS: dict[CostSourceTier, str] = {
     CostSourceTier.MANUAL_OVERRIDE: "Manual Override",
     CostSourceTier.MISSING: "Missing",
 }
+
+
+# Phase T9.0 — bid-alternates worksheet header tint. Subtle blue-grey
+# so the tab reads as a "supplementary cost detail" sheet alongside
+# the operator / hand-takeoff queue sheets without competing visually
+# with the headline Line Items + Summary tabs.
+ALTERNATES_HEADER_FILL = PatternFill("solid", fgColor="A9C5E2")
+ALTERNATES_HEADER_FONT = Font(bold=True, color="000000")
+
+# Phase T9.0 — Title-Case labels for the bid-alternates sheet's
+# Type and Pricing Basis columns. Mirrors the ``_TIER_LABELS`` /
+# ``_BAND_LABELS`` pattern above. Surfaced as module-level constants
+# so tests can pin exact strings.
+_ALTERNATE_TYPE_LABELS: dict[AlternateType, str] = {
+    AlternateType.ADDITIVE: "Additive",
+    AlternateType.DEDUCTIVE: "Deductive",
+    AlternateType.SUBSTITUTION: "Substitution",
+    AlternateType.VE: "Value Engineering",
+}
+
+_ALTERNATE_BASIS_LABELS: dict[AlternatePricingBasis, str] = {
+    AlternatePricingBasis.EXTRACTED_FROM_BID_FORM: "Extracted (bid form)",
+    AlternatePricingBasis.OPERATOR_ENTERED: "Operator entered",
+    AlternatePricingBasis.SYNTHESIZED_FROM_TAKEOFF: "Synthesized (takeoff)",
+    AlternatePricingBasis.MISSING: "Missing — review",
+}
+
+
+def _alternate_type_label(atype) -> str:
+    if isinstance(atype, AlternateType):
+        return _ALTERNATE_TYPE_LABELS[atype]
+    try:
+        return _ALTERNATE_TYPE_LABELS[AlternateType(atype)]
+    except Exception:
+        return str(atype)
+
+
+def _alternate_basis_label(basis) -> str:
+    if isinstance(basis, AlternatePricingBasis):
+        return _ALTERNATE_BASIS_LABELS[basis]
+    try:
+        return _ALTERNATE_BASIS_LABELS[AlternatePricingBasis(basis)]
+    except Exception:
+        return str(basis)
 
 
 def _band_label(li) -> str:
@@ -253,6 +304,142 @@ def _render_queue_sheet(
     _autosize(ws, max_width=80)
 
 
+# Phase T9.0 — Bid Alternates worksheet column schema. Module-level so
+# tests can reference the exact contract.
+_ALTERNATES_SHEET_HEADERS: tuple[str, ...] = (
+    "Alternate ID",
+    "Type",
+    "Description",
+    "Cost Delta",
+    "Pricing Basis",
+    "Confidence",
+    "Included in Base",
+    "Bid Package",
+    "Source Sheet",
+    "Related CSI",
+    "Operator Notes",
+)
+
+
+def _render_alternates_sheet(wb, estimate: Estimate) -> None:
+    """Phase T9.0 — render the "Bid Alternates" worksheet.
+
+    Always called from :func:`export_estimate_xlsx` but bails out early
+    (creates no sheet) when the estimate has zero priced alternates —
+    keeps the standard exporter output clean for projects without any
+    alternates surfaced (most non-government bid sets).
+
+    Footer rows below the line items:
+
+      * Base bid (no alternates)
+      * Base + all additive
+      * Base + all deductive (incl. VE)
+      * Base + default-selected (the alternates marked
+        ``included_by_default=True``)
+
+    All currency cells use ``$#,##0.00``; confidence cells use ``0.00``.
+    """
+    alts = list(getattr(estimate, "alternates", None) or [])
+    if not alts:
+        return
+
+    ws = wb.create_sheet("Bid Alternates")
+    headers = list(_ALTERNATES_SHEET_HEADERS)
+    for i, h in enumerate(headers, start=1):
+        cell = ws.cell(row=1, column=i, value=h)
+        cell.fill = ALTERNATES_HEADER_FILL
+        cell.font = ALTERNATES_HEADER_FONT
+        cell.alignment = Alignment(vertical="center")
+
+    for r_idx, a in enumerate(alts, start=2):
+        ws.cell(row=r_idx, column=1, value=a.alternate_id)
+        ws.cell(row=r_idx, column=2, value=_alternate_type_label(a.alternate_type))
+        ws.cell(row=r_idx, column=3, value=a.description).alignment = Alignment(wrap_text=True)
+        if a.cost_delta is not None:
+            ws.cell(row=r_idx, column=4, value=a.cost_delta).number_format = "$#,##0.00"
+        else:
+            ws.cell(row=r_idx, column=4, value="—")
+        ws.cell(row=r_idx, column=5, value=_alternate_basis_label(a.pricing_basis))
+        ws.cell(row=r_idx, column=6, value=a.confidence).number_format = "0.00"
+        ws.cell(row=r_idx, column=7, value="YES" if a.included_in_base else "")
+        ws.cell(row=r_idx, column=8, value=a.bid_package_id or "")
+        ws.cell(row=r_idx, column=9, value=a.source_sheet or "")
+        ws.cell(row=r_idx, column=10, value=", ".join(a.related_csi or []))
+        ws.cell(row=r_idx, column=11, value=a.operator_notes or "").alignment = Alignment(
+            wrap_text=True
+        )
+
+    # Footer rows: base bid + alternate-selection rollups.
+    footer_row = len(alts) + 3
+    additive_total = estimate.alternates_total_additive
+    deductive_total = estimate.alternates_total_deductive
+    substitution_total = estimate.alternates_total_substitution
+
+    additive_ids = {
+        a.alternate_id for a in alts
+        if a.alternate_type == AlternateType.ADDITIVE and a.cost_delta is not None
+    }
+    deductive_ids = {
+        a.alternate_id for a in alts
+        if a.alternate_type in (AlternateType.DEDUCTIVE, AlternateType.VE)
+        and a.cost_delta is not None
+    }
+    substitution_ids = {
+        a.alternate_id for a in alts
+        if a.alternate_type == AlternateType.SUBSTITUTION and a.cost_delta is not None
+    }
+    default_ids = set(estimate.alternates_selected_default or set())
+
+    rows: list[tuple[str, float | None]] = [
+        ("Base bid (no alternates)", estimate.subtotal_base_only),
+        (
+            "Base + all additive alternates",
+            estimate.subtotal_with_alternates_selected(additive_ids),
+        ),
+        (
+            "Base + all deductive / VE alternates",
+            estimate.subtotal_with_alternates_selected(deductive_ids),
+        ),
+        (
+            "Base + all substitution alternates",
+            estimate.subtotal_with_alternates_selected(substitution_ids),
+        ),
+        (
+            "Base + default-selected alternates",
+            estimate.subtotal_with_alternates_selected(default_ids),
+        ),
+    ]
+    for offset, (label, value) in enumerate(rows):
+        r = footer_row + offset
+        c1 = ws.cell(row=r, column=1, value=label)
+        c1.font = Font(bold=True)
+        c2 = ws.cell(row=r, column=4, value=round(value, 2))
+        c2.number_format = "$#,##0.00"
+        c2.font = Font(bold=True)
+
+    # Aggregate counts (informational; clearly distinct from the footer
+    # subtotals above).
+    counts_row = footer_row + len(rows) + 2
+    summary_pairs: list[tuple[str, object]] = [
+        ("Additive alternates total", additive_total),
+        ("Deductive / VE alternates total", deductive_total),
+        ("Substitution alternates total", substitution_total),
+        ("Alternates missing a price", estimate.alternates_count_missing),
+        ("Total alternates", len(alts)),
+    ]
+    for offset, (label, value) in enumerate(summary_pairs):
+        r = counts_row + offset
+        ws.cell(row=r, column=1, value=label).font = Font(italic=True)
+        cell = ws.cell(row=r, column=4, value=value)
+        if isinstance(value, float):
+            cell.number_format = "$#,##0.00"
+        else:
+            cell.number_format = "#,##0"
+
+    ws.freeze_panes = "A2"
+    _autosize(ws, max_width=80)
+
+
 def export_estimate_xlsx(
     estimate: Estimate,
     project: ProjectModel,
@@ -301,10 +488,38 @@ def export_estimate_xlsx(
     ws["A15"] = f"Lines Needing Manual Takeoff: {estimate.hand_takeoff_count}"
     ws["A16"] = f"Lines Needing Operator Review: {estimate.operator_review_count}"
 
-    ws["A18"] = "By CSI division"
-    ws["A18"].font = Font(bold=True)
-    _write_header(ws, 19, ["Div", "Title", "Subtotal"])
-    row = 20
+    # Phase T9.0 — bid-alternates summary block. Surfaces the count
+    # + the total additive / deductive deltas next to the headline
+    # subtotal so a reviewer immediately sees the upside / downside
+    # range without flipping to the "Bid Alternates" tab. Renders
+    # only when the estimate carries at least one alternate so the
+    # default exporter output (Project Summary row layout) is
+    # unchanged for projects without any.
+    alt_count = len(getattr(estimate, "alternates", None) or [])
+    if alt_count:
+        add_total = estimate.alternates_total_additive
+        ded_total = estimate.alternates_total_deductive
+        sub_total = estimate.alternates_total_substitution
+        missing = estimate.alternates_count_missing
+        ws["A17"] = "Bid Alternates"
+        ws["A17"].font = Font(bold=True)
+        ws["A18"] = f"Alternates: {alt_count} ({missing} missing a price)"
+        ws["A19"] = "Total additive potential"
+        ws["B19"] = add_total
+        ws["B19"].number_format = "$#,##0.00"
+        ws["A20"] = "Total deductive / VE potential"
+        ws["B20"] = ded_total
+        ws["B20"].number_format = "$#,##0.00"
+        ws["A21"] = "Total substitution potential (net)"
+        ws["B21"] = sub_total
+        ws["B21"].number_format = "$#,##0.00"
+        division_anchor_row = 23
+    else:
+        division_anchor_row = 18
+
+    ws.cell(row=division_anchor_row, column=1, value="By CSI division").font = Font(bold=True)
+    _write_header(ws, division_anchor_row + 1, ["Div", "Title", "Subtotal"])
+    row = division_anchor_row + 2
     for div in sorted(estimate.by_division):
         ws.cell(row=row, column=1, value=div)
         ws.cell(row=row, column=2, value=csi_titles.get(div, ""))
@@ -510,6 +725,15 @@ def export_estimate_xlsx(
         empty_note="No hand-takeoff lines — every row had ≥ 0.65 confidence "
                    "and no unit-mismatch suppression triggered.",
     )
+
+    # ----- Bid Alternates (Phase T9.0) -----
+    # Renders only when the estimate carries at least one priced
+    # alternate. Sheet is omitted entirely (no "(empty)" stub) for
+    # projects without alternates — keeps the standard exporter
+    # output unchanged for those cases. Placed after the queue sheets
+    # because alternates are a supplementary cost surface, not part
+    # of the headline line-item flow.
+    _render_alternates_sheet(wb, estimate)
 
     # ----- Rooms -----
     if project.rooms:
@@ -832,6 +1056,25 @@ def export_estimate_json(estimate: Estimate, project: ProjectModel) -> str:
         ],
         "sheet_summaries": project.sheet_summaries,
         "warnings": project.warnings,
+        # Phase T9.0 — bid alternates / VE. ``alternates`` holds the
+        # priced :class:`AlternateLineEstimate` rows attached to the
+        # estimate; the top-level totals mirror the Excel "Bid
+        # Alternates" footer rows so JSON consumers (downstream PDF
+        # builders deferred to T9.2, Streamlit T9.1 tab) can render
+        # the headline numbers without re-walking the list.
+        "alternates": [
+            a.model_dump() for a in getattr(estimate, "alternates", None) or []
+        ],
+        "alternates_selected_default": sorted(
+            list(getattr(estimate, "alternates_selected_default", None) or set())
+        ),
+        "alternates_total_additive": estimate.alternates_total_additive,
+        "alternates_total_deductive": estimate.alternates_total_deductive,
+        "alternates_total_substitution": estimate.alternates_total_substitution,
+        "alternates_count_missing": estimate.alternates_count_missing,
+        "project_alternates": [
+            a.model_dump() for a in getattr(project, "alternates", None) or []
+        ],
     }
     return json.dumps(payload, indent=2, default=str)
 

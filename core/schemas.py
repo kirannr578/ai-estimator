@@ -390,6 +390,302 @@ class Alternate(BaseModel):
     amount: Optional[float] = None     # known dollar amount, if any
 
 
+# ---------------------------------------------------------------------------
+# Phase T9.0 — bid alternates / value-engineering pricing
+# ---------------------------------------------------------------------------
+#
+# The pre-T9.0 `Alternate` (above) is the *informational* form that the
+# bid-package extractor has emitted since calibration v1 — it carries the
+# narrative description plus an optional dollar amount with no signed-cost
+# semantics. T9.0 introduces a parallel, *priceable* shape with explicit
+# type-tagging, a signed `cost_delta`, and traceability fields the
+# estimator can consume to fold the alternate into a parallel
+# `Estimate.alternates` rollup. The legacy `Alternate` is unchanged so
+# every pre-T9.0 export, fixture, and Excel "Scope Matrix" row keeps
+# rendering exactly as before.
+
+
+class AlternateType(str, Enum):
+    """Classification of a bid alternate line.
+
+    Mirrors the four forms real federal / state bid forms enumerate:
+
+    * **ADDITIVE** — extra scope priced separately ("Alternate #1: ADD
+      epoxy floor coating to mechanical rooms, +$X"). `cost_delta`
+      should be non-negative.
+    * **DEDUCTIVE** — scope reduction priced as savings ("Alternate #2:
+      DEDUCT skylight system, -$X"). `cost_delta` should be non-positive
+      (the savings appear as a negative dollar amount, so the math
+      ``subtotal_with_alternates_selected = subtotal_base_only + sum(deltas)``
+      naturally subtracts).
+    * **SUBSTITUTION** — material / system swap with a net delta after
+      netting the cost of the removed scope ("Alternate #3: SUBSTITUTE
+      LVT flooring for VCT, net ±$X"). `cost_delta` is the NET signed
+      delta; it can be either positive (substitution costs more) or
+      negative (substitution saves money).
+    * **VE** — Value Engineering suggestion, typically a post-award
+      negotiation surface but occasionally solicited at bid time. VE
+      items behave numerically like DEDUCTIVE (savings → negative
+      delta) but are tagged separately so the downstream UI / PDF
+      can group them under a "Value Engineering" header rather than
+      lumping them with the architect-authored deductive alternates.
+
+    The numeric math (`subtotal_with_alternates_selected`,
+    `total_with_alternates_selected`) treats VE identically to
+    DEDUCTIVE — both contribute a (typically negative) `cost_delta`
+    to the rollup. Type is preserved for downstream grouping only.
+    """
+
+    ADDITIVE = "additive"
+    DEDUCTIVE = "deductive"
+    SUBSTITUTION = "substitution"
+    VE = "value_engineering"
+
+
+class AlternatePricingBasis(str, Enum):
+    """How a priced :class:`AlternateLineEstimate` got its dollar value.
+
+    Distinct from :class:`CostSourceTier` (which lives on every priced
+    line item and tracks CWICR / seed-DB completeness) — alternates have
+    a much narrower set of provenance signals because the bid form
+    itself is the canonical source of the printed dollar amount.
+
+    * **EXTRACTED_FROM_BID_FORM** — the `AlternateLine.cost_delta` came
+      out of a printed dollar value on the bid form (rare: most bid
+      forms print blank fillable lines and ask the bidder to fill in
+      the price).
+    * **OPERATOR_ENTERED** — the operator hand-entered `cost_delta`
+      via the (deferred T9.1) Streamlit toggle UI or via a vendor /
+      subcontractor quote outside the bid-form extraction path.
+      Numerically indistinguishable from EXTRACTED_FROM_BID_FORM, but
+      the audit trail differs.
+    * **SYNTHESIZED_FROM_TAKEOFF** — `cost_delta` was computed by
+      summing the priced takeoff items referenced in
+      `AlternateLine.related_takeoff_items`. Used when the bid form
+      enumerates the alternate description but no price (and the
+      project model carries enough takeoff detail to estimate the
+      delta locally).
+    * **MISSING** — neither `cost_delta` nor `related_takeoff_items`
+      were populated. Surfaced in the operator-review queue so the
+      estimator can supply a number before submitting the bid.
+    """
+
+    EXTRACTED_FROM_BID_FORM = "extracted_from_bid_form"
+    OPERATOR_ENTERED = "operator_entered"
+    SYNTHESIZED_FROM_TAKEOFF = "synthesized_from_takeoff"
+    MISSING = "missing"
+
+
+class AlternateLine(BaseModel):
+    """One bid-alternate line item (Phase T9.0).
+
+    Source-of-truth fields are populated by the deterministic
+    bid-form alternates extractor in
+    :mod:`core.extraction.bid_form_alternates` (and its LLM-fallback
+    sibling); the estimator (:func:`core.estimator.price_alternates`)
+    reads them to produce :class:`AlternateLineEstimate` rows that
+    fold into the parallel :pyattr:`Estimate.alternates` rollup.
+
+    The base estimate (``Estimate.subtotal``, ``Estimate.grand_total``)
+    is **NOT** modified by an alternate's presence — alternates are
+    priced separately and surfaced via
+    :meth:`Estimate.subtotal_with_alternates_selected` so the headline
+    base bid stays as-is (matching real federal / state bid practice:
+    you bid the base, alternates are at owner option). The single
+    exception is when ``included_by_default=True``; see the field
+    documentation below.
+
+    Numeric sign convention for ``cost_delta``:
+
+    * ADDITIVE → ``cost_delta >= 0`` (adds to base)
+    * DEDUCTIVE → ``cost_delta <= 0`` (subtracts from base; savings)
+    * SUBSTITUTION → signed net delta (either direction)
+    * VE → typically ``cost_delta <= 0`` (savings)
+
+    A validator (``_validate_sign_consistency``) emits a Pydantic
+    warning when type and sign disagree but does NOT raise — real
+    bid forms sometimes print a positive absolute value with a
+    separate ADD/DEDUCT label, and the operator or extractor is
+    free to keep that convention. Downstream callers
+    (``price_alternates``) trust the sign of ``cost_delta`` as-is.
+    """
+
+    alternate_id: str = Field(
+        ...,
+        description=(
+            "Human-readable identifier from the bid form. Examples: "
+            "'Alternate #1', 'Alt 1', 'Add Alternate A', 'VE-3', "
+            "'Bid Alternate B'. Used as the stable key for selection / "
+            "deselection and as the cross-bid-package dedupe key."
+        ),
+    )
+    alternate_type: AlternateType = AlternateType.ADDITIVE
+    description: str = Field(
+        ...,
+        description="Free-text description copied verbatim from the bid form.",
+    )
+    scope_summary: Optional[str] = Field(
+        default=None,
+        description=(
+            "1-2 sentence summary (LLM-distilled or copied verbatim). "
+            "Used in the Excel + PDF + UI surface so the reader sees a "
+            "compact narrative even when ``description`` is long."
+        ),
+    )
+    cost_delta: Optional[float] = Field(
+        default=None,
+        description=(
+            "Signed dollar amount. Positive = adds cost (ADDITIVE), "
+            "negative = saves cost (DEDUCTIVE / VE). For SUBSTITUTION "
+            "this is the NET delta after netting the cost of removed "
+            "scope. ``None`` means the bid form left the field blank — "
+            "the estimator may synthesize a value from "
+            "``related_takeoff_items`` or surface the line as MISSING."
+        ),
+    )
+    included_by_default: bool = Field(
+        default=False,
+        description=(
+            "Whether this alternate is pre-priced into the base estimate. "
+            "Default ``False`` — alternates surface separately and "
+            "operators opt them in via the (deferred T9.1) UI. ``True`` "
+            "indicates the alternate's dollar delta is ALREADY in "
+            "``Estimate.subtotal`` and the operator can opt OUT. Rare; "
+            "some federal RFPs use this for a base-bid-includes-Option-A "
+            "convention."
+        ),
+    )
+    related_takeoff_items: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Optional list of takeoff entity ids (csi_section / mark / "
+            "description hash) the alternate affects. When populated and "
+            "``cost_delta`` is ``None``, the estimator sums the priced "
+            "rows for these items to synthesize a ``cost_delta`` and "
+            "tags the resulting AlternateLineEstimate with "
+            ":attr:`AlternatePricingBasis.SYNTHESIZED_FROM_TAKEOFF`."
+        ),
+    )
+    related_csi: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Optional list of CSI codes the alternate touches "
+            "(e.g. '09 65 19' for LVT flooring on a flooring "
+            "substitution). Surfaced in the Excel + PDF for "
+            "traceability; never used in the numeric math."
+        ),
+    )
+    bid_package_id: Optional[str] = Field(
+        default=None,
+        description=(
+            "Which :class:`BidPackage` this alternate belongs to "
+            "(``pdf_name`` or ``package_number``). Used by the "
+            "cross-bid-package aggregator to deduplicate alternates "
+            "that appear in multiple bid forms. ``None`` means the "
+            "alternate is not attributed to any specific package and "
+            "is grouped under 'general' in the aggregator."
+        ),
+    )
+    source_sheet: Optional[str] = Field(
+        default=None,
+        description=(
+            "Page reference for traceability (e.g. 'Bid Form p.3'). "
+            "Surfaced in the Excel + PDF for the audit trail; never "
+            "used in the numeric math."
+        ),
+    )
+    confidence: float = Field(
+        default=0.7,
+        ge=0.0,
+        le=1.0,
+        description=(
+            "Extraction confidence in [0.0, 1.0]. The deterministic "
+            "regex parser emits ~0.85-0.90 for a clean parse with "
+            "both type and delta extracted; the LLM-fallback path "
+            "emits ~0.70 (lower because the model occasionally "
+            "guesses on ambiguous wording). Used by the Excel + "
+            "PDF to highlight low-confidence alternate rows."
+        ),
+    )
+    operator_notes: Optional[str] = Field(
+        default=None,
+        description="Free-form operator commentary. Never read by the math.",
+    )
+
+    @model_validator(mode="after")
+    def _validate_sign_consistency(self) -> "AlternateLine":
+        """Soft sign-vs-type check — sets ``operator_notes`` warning.
+
+        Does NOT raise. Real bid forms occasionally print a positive
+        absolute value alongside a separate ADD/DEDUCT label and the
+        downstream pipeline needs to tolerate both conventions. When
+        the sign disagrees with the type, we leave the values
+        as-given and prepend a ``[sign-warning]`` note so a downstream
+        reviewer can spot the inconsistency.
+        """
+        if self.cost_delta is None:
+            return self
+        if self.alternate_type == AlternateType.ADDITIVE and self.cost_delta < 0:
+            note = (
+                "[sign-warning] ADDITIVE alternate with negative cost_delta; "
+                "verify sign — the bid form may have printed the savings "
+                "label separately."
+            )
+            self.operator_notes = (
+                f"{self.operator_notes} | {note}" if self.operator_notes else note
+            )
+        elif self.alternate_type == AlternateType.DEDUCTIVE and self.cost_delta > 0:
+            note = (
+                "[sign-warning] DEDUCTIVE alternate with positive cost_delta; "
+                "verify sign — the bid form may have printed the magnitude "
+                "with the DEDUCT label separately."
+            )
+            self.operator_notes = (
+                f"{self.operator_notes} | {note}" if self.operator_notes else note
+            )
+        return self
+
+
+class AlternateLineEstimate(BaseModel):
+    """Priced view of one :class:`AlternateLine` (Phase T9.0).
+
+    Built by :func:`core.estimator.price_alternates` and attached to
+    :pyattr:`Estimate.alternates`. Carries the resolved dollar delta
+    plus a :class:`AlternatePricingBasis` tag so the Excel + PDF + UI
+    can show *how* the number was derived (printed on the bid form,
+    operator-entered, synthesized from takeoff, or missing entirely).
+    """
+
+    alternate_id: str
+    alternate_type: AlternateType
+    description: str
+    cost_delta: Optional[float] = Field(
+        default=None,
+        description=(
+            "Resolved signed dollar amount, mirroring the contract of "
+            ":pyattr:`AlternateLine.cost_delta`. ``None`` only when the "
+            "pricing basis is :attr:`AlternatePricingBasis.MISSING`."
+        ),
+    )
+    pricing_basis: AlternatePricingBasis = AlternatePricingBasis.MISSING
+    confidence: float = Field(default=0.7, ge=0.0, le=1.0)
+    included_in_base: bool = Field(
+        default=False,
+        description=(
+            "Current toggle state — whether this alternate is rolled "
+            "into the base bid right now. Mirrors "
+            ":pyattr:`AlternateLine.included_by_default` at estimate-"
+            "build time; the (deferred T9.1) UI lets an operator flip "
+            "this at runtime via "
+            ":meth:`Estimate.subtotal_with_alternates_selected`."
+        ),
+    )
+    bid_package_id: Optional[str] = None
+    source_sheet: Optional[str] = None
+    related_csi: list[str] = Field(default_factory=list)
+    operator_notes: Optional[str] = None
+
+
 class UnitPrice(BaseModel):
     """Unit-price line item solicited inside a bid package."""
 
@@ -1270,6 +1566,32 @@ class Estimate(BaseModel):
 
     line_items: list[CostLine] = Field(default_factory=list)
 
+    # ------------------------------------------------------------------
+    # Phase T9.0 — bid alternates / VE
+    # ------------------------------------------------------------------
+    #
+    # Alternates do NOT roll into ``subtotal`` / ``grand_total`` by
+    # default — the base estimate's headline number reflects the base
+    # bid only, mirroring real federal / state bid practice ("you bid
+    # the base; alternates are at owner option"). Two helper methods
+    # (`subtotal_with_alternates_selected`,
+    # `total_with_alternates_selected`) compute the rolled-up totals
+    # when an operator opts an alternate in via the (deferred T9.1)
+    # UI. The set of alternates that ARE rolled in by default lives
+    # in ``alternates_selected_default`` — non-empty only when an
+    # :class:`AlternateLine` was marked ``included_by_default=True``,
+    # which is rare.
+    alternates: list[AlternateLineEstimate] = Field(default_factory=list)
+    alternates_selected_default: set[str] = Field(
+        default_factory=set,
+        description=(
+            "Set of ``alternate_id`` values that are rolled into the "
+            "base estimate by construction (the corresponding "
+            ":class:`AlternateLine` had ``included_by_default=True``). "
+            "Most projects leave this empty."
+        ),
+    )
+
     @property
     def priced_line_items(self) -> list[CostLine]:
         """`line_items` minus any flagged `suppressed=True`.
@@ -1497,6 +1819,145 @@ class Estimate(BaseModel):
                     tier = CostSourceTier.MISSING
             out[tier] += 1
         return out
+
+    # ------------------------------------------------------------------
+    # Phase T9.0 — bid alternates helpers
+    # ------------------------------------------------------------------
+    #
+    # All four helpers below operate on the priced
+    # :pyattr:`alternates` list (built by
+    # :func:`core.estimator.price_alternates`) and never mutate the
+    # base estimate. They are read-only views — the math composes:
+    #
+    #   subtotal_with_alternates_selected(ids)
+    #     = subtotal_base_only + sum(cost_delta for alt in selected)
+    #
+    #   total_with_alternates_selected(ids)
+    #     = subtotal_with_alternates_selected(ids)
+    #       + contingency on adjusted subtotal
+    #       + overhead on (subtotal + contingency)
+    #       + profit on (subtotal + contingency + overhead)
+    #
+    # so the markups apply to the adjusted subtotal — same composition
+    # the base ``grand_total`` uses against ``subtotal``.
+
+    @property
+    def subtotal_base_only(self) -> float:
+        """Alias for ``subtotal`` — the base bid before any alternates.
+
+        Phase T9.0 contract: the base estimate is unchanged by the
+        presence of alternates; this property exists so downstream
+        callers can be explicit about which subtotal they're reading.
+        Equivalent to :pyattr:`subtotal`.
+        """
+        return self.subtotal
+
+    @property
+    def alternates_total_additive(self) -> float:
+        """Sum of every ADDITIVE alternate's resolved ``cost_delta``.
+
+        Returns 0.0 when no ADDITIVE alternates carry a numeric
+        ``cost_delta`` (or none are priced at all). Used by the Excel
+        "Project Summary" alternates block and the
+        "Bid Alternates" worksheet footer rows.
+        """
+        return round(
+            sum(
+                (a.cost_delta or 0.0)
+                for a in self.alternates
+                if a.alternate_type == AlternateType.ADDITIVE and a.cost_delta is not None
+            ),
+            2,
+        )
+
+    @property
+    def alternates_total_deductive(self) -> float:
+        """Sum of every DEDUCTIVE + VE alternate's ``cost_delta``.
+
+        DEDUCTIVE and VE alternates both carry negative deltas (savings)
+        and behave identically in the math; the type tag preserves
+        downstream grouping. The returned number is negative when
+        savings exist.
+        """
+        return round(
+            sum(
+                (a.cost_delta or 0.0)
+                for a in self.alternates
+                if a.alternate_type in (AlternateType.DEDUCTIVE, AlternateType.VE)
+                and a.cost_delta is not None
+            ),
+            2,
+        )
+
+    @property
+    def alternates_total_substitution(self) -> float:
+        """Sum of every SUBSTITUTION alternate's ``cost_delta`` (signed)."""
+        return round(
+            sum(
+                (a.cost_delta or 0.0)
+                for a in self.alternates
+                if a.alternate_type == AlternateType.SUBSTITUTION and a.cost_delta is not None
+            ),
+            2,
+        )
+
+    @property
+    def alternates_count_missing(self) -> int:
+        """Number of priced alternates with no resolvable ``cost_delta``."""
+        return sum(
+            1 for a in self.alternates
+            if a.pricing_basis == AlternatePricingBasis.MISSING
+        )
+
+    def alternates_delta_for_selection(self, selected_ids: set[str] | None) -> float:
+        """Sum of ``cost_delta`` over alternates in ``selected_ids``.
+
+        ``None`` is treated as the empty set (no alternates selected).
+        Alternates with ``cost_delta is None`` contribute 0.0 to the
+        sum — they're surfaced separately via
+        :pyattr:`alternates_count_missing`.
+        """
+        ids = selected_ids or set()
+        return round(
+            sum(
+                (a.cost_delta or 0.0)
+                for a in self.alternates
+                if a.alternate_id in ids and a.cost_delta is not None
+            ),
+            2,
+        )
+
+    def subtotal_with_alternates_selected(
+        self, selected_ids: set[str] | None
+    ) -> float:
+        """Base subtotal + the signed deltas of every alternate in ``selected_ids``.
+
+        Pre-markup. The base subtotal itself is unaffected — alternates
+        are an additive layer on top so an operator can compare
+        scenarios without re-running the estimator.
+        """
+        return round(
+            self.subtotal_base_only + self.alternates_delta_for_selection(selected_ids),
+            2,
+        )
+
+    def total_with_alternates_selected(
+        self, selected_ids: set[str] | None
+    ) -> float:
+        """Grand total recomputed against the alternate-adjusted subtotal.
+
+        Applies the same contingency / overhead / profit composition
+        that :pyattr:`grand_total` applies against the base subtotal.
+        Region multiplier is already baked into each ``cost_delta`` by
+        :func:`core.estimator.price_alternates` (mirrors the seed-DB /
+        CWICR pricing path that bakes region multiplier into
+        ``unit_cost``), so no extra region scaling is applied here.
+        """
+        base = self.subtotal_with_alternates_selected(selected_ids)
+        cont = round(base * self.contingency_pct / 100.0, 2)
+        oh = round((base + cont) * self.overhead_pct / 100.0, 2)
+        prof = round((base + cont + oh) * self.profit_pct / 100.0, 2)
+        return round(base + cont + oh + prof, 2)
 
 
 # Resolve forward reference (TakeoffItem used inside SheetExtraction).

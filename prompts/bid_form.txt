@@ -61,9 +61,42 @@ EXTRACTION RULES:
        Almost always blank — leave null when so.
    Bid schedules typically have 5–60 unit-price lines. Do NOT skip any.
 
-2. **alternates** — separately listed add / deduct alternates outside the
-   base bid schedule. Note Add vs Deduct when stated; leave `amount` null
-   if blank.
+2. **alternates** — separately listed add / deduct / substitution / VE
+   alternates outside the base bid schedule. Federal / state bid forms
+   commonly enumerate them under headers like:
+
+     * "ALTERNATE NO. 1", "Alternate #1", "Alt #1", "Bid Alternate A"
+     * "ADD ALTERNATE", "ADDITIVE ALTERNATE", "ADDITIONAL ALTERNATE"
+     * "DEDUCT ALTERNATE", "DEDUCTIVE ALTERNATE", "OMIT", "DELETE"
+     * "SUBSTITUTION ALTERNATE", "ALTERNATE TO", "IN LIEU OF"
+     * "VALUE ENGINEERING", "VE ITEM", "VE PROPOSAL"
+
+   For each alternate the form lists:
+
+     - `number` — the printed identifier ("1", "A", "VE-3", "#1", etc.)
+       Preserve it verbatim. Used as the dedupe key downstream.
+     - `description` — copy verbatim. May be a single line ("Add epoxy
+       floor coating to all mechanical rooms") or a multi-line scope
+       description that you should concatenate into one paragraph.
+     - `add_or_deduct` — "Add" / "Deduct" / "Substitute" / "VE" /
+       null. Look at the surrounding header context AND any explicit
+       trailing label like "$______ ADD" or "$______ (DEDUCT)".
+     - `amount` — the printed dollar amount if any. Almost always
+       null (the form is fillable). When given, use a positive
+       number for ADD and a positive magnitude for DEDUCT (the
+       downstream pipeline applies the sign convention based on
+       `add_or_deduct`).
+
+   Capture EVERY alternate on the form even when several share the
+   same dollar field (e.g. a five-line "Alternates" block where each
+   line has its own ADD/DEDUCT label but the dollar column is blank).
+   Do not invent alternates the form does not list.
+
+   When the form has a header like "BID ALTERNATES" with no priced
+   lines beneath it (just the header text and empty fillable fields),
+   emit each enumerated alternate with `amount: null`. The downstream
+   estimator surfaces these as a "missing price — operator review"
+   queue rather than skipping them.
 
 3. **Header / project info** — pull whatever the bid form's header / cover
    states. Do not fabricate fields the form doesn't show.

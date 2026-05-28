@@ -23,6 +23,8 @@ from .llm_client import LLMClient
 from .pdf_processor import DocumentBundle
 from .schemas import (
     Alternate,
+    AlternateLine,
+    AlternateType,
     BidPackage,
     Discipline,
     DoorEntry,
@@ -881,6 +883,184 @@ def extract_bid_form(bundle: "DocumentBundle", llm: LLMClient) -> SheetExtractio
         bid_package=bp,
         warnings=([str(w) for w in _safe_list(data, "warnings")] if isinstance(data, dict) else []),
     )
+
+
+# ---------------------------------------------------------------------------
+# Phase T9.0 — bid-alternates LLM-fallback extraction
+# ---------------------------------------------------------------------------
+#
+# Companion to the deterministic regex parser in
+# :mod:`core.extraction.bid_form_alternates`. Invoked only when the
+# deterministic path returns zero alternates AND the page detector
+# said the page contains alternates wording — see
+# :func:`core.extraction.bid_form_alternates.should_invoke_llm_fallback`
+# for the predicate.
+#
+# The prompt is the same `bid_form.txt` that backs :func:`extract_bid_form`
+# (extended in T9.0 with explicit alternates-extraction guidance). We
+# re-use the prompt rather than authoring a second one so the
+# extracted alternates shape stays in lock-step with the bid-package
+# extraction surface — operators see one consistent contract.
+
+
+def _coerce_alternate_line(d: dict, *, bid_package_id: str | None, source_sheet: str | None) -> AlternateLine | None:
+    """Build an :class:`AlternateLine` from a permissive dict.
+
+    Tolerates either the new T9.0 keys (``alternate_id`` /
+    ``alternate_type`` / ``cost_delta``) or the legacy keys the
+    `bid_form.txt` prompt has emitted since calibration v1 (``number``
+    / ``add_or_deduct`` / ``amount``). The latter is the common case
+    today — the prompt extension is additive but the LLM occasionally
+    emits the older shape because of cache.
+
+    Returns ``None`` on a malformed dict so the caller can keep walking
+    the list without per-row error handling.
+    """
+    from .extraction.bid_form_alternates import (
+        classify_alternate_type,
+        _apply_type_sign,
+    )
+
+    if not isinstance(d, dict):
+        return None
+    desc_raw = d.get("description") or d.get("scope_summary") or ""
+    desc = str(desc_raw).strip()
+    if not desc:
+        return None
+
+    raw_id = (
+        str(d.get("alternate_id") or "").strip()
+        or str(d.get("number") or "").strip()
+    )
+    if not raw_id:
+        return None
+    if not raw_id.lower().startswith(("alt", "ve", "bid alternate", "add alternate", "deduct alternate")):
+        alt_id = f"Alternate {raw_id.lstrip('#').strip()}"
+    else:
+        alt_id = raw_id
+
+    # alternate_type: prefer explicit string, else derive from add_or_deduct
+    # label, else classify from the description body.
+    type_raw = str(d.get("alternate_type") or "").strip().lower()
+    atype: AlternateType
+    if type_raw in {t.value for t in AlternateType}:
+        atype = AlternateType(type_raw)
+    else:
+        label = str(d.get("add_or_deduct") or "").lower()
+        if "deduct" in label:
+            atype = AlternateType.DEDUCTIVE
+        elif "add" in label or "additive" in label:
+            atype = AlternateType.ADDITIVE
+        elif "substitut" in label:
+            atype = AlternateType.SUBSTITUTION
+        elif "ve" in label or "value engineering" in label:
+            atype = AlternateType.VE
+        else:
+            atype = classify_alternate_type(desc)
+
+    raw_cost = d.get("cost_delta")
+    if raw_cost is None:
+        raw_cost = d.get("amount")
+    try:
+        cost_val: float | None = (
+            float(raw_cost) if raw_cost not in (None, "", "null") else None
+        )
+    except (TypeError, ValueError):
+        cost_val = None
+
+    # The prompt emits magnitudes for DEDUCT alternates; apply the sign
+    # convention here so the AlternateLine carries a signed delta.
+    if cost_val is not None and "cost_delta" not in d:
+        # Legacy key path — magnitude needs signing.
+        cost_val = _apply_type_sign(cost_val, atype)
+
+    confidence_raw = d.get("confidence")
+    try:
+        conf = (
+            min(1.0, max(0.0, float(confidence_raw)))
+            if confidence_raw is not None
+            else 0.70
+        )
+    except (TypeError, ValueError):
+        conf = 0.70
+
+    return AlternateLine(
+        alternate_id=alt_id,
+        alternate_type=atype,
+        description=desc,
+        scope_summary=str(d.get("scope_summary") or desc[:160]).strip() or desc,
+        cost_delta=cost_val,
+        included_by_default=bool(d.get("included_by_default", False)),
+        bid_package_id=bid_package_id,
+        source_sheet=source_sheet,
+        confidence=conf,
+    )
+
+
+def extract_alternates_via_llm(
+    page_text: str,
+    llm: LLMClient,
+    *,
+    bid_package_id: str | None = None,
+    source_sheet: str | None = None,
+) -> list[AlternateLine]:
+    """LLM fallback for bid-alternates extraction (Phase T9.0).
+
+    Invoked by callers when the deterministic regex parser in
+    :func:`core.extraction.bid_form_alternates.extract_alternates_from_page`
+    returns an empty list but
+    :func:`core.extraction.bid_form_alternates.detect_alternates_section`
+    indicates the page does carry alternates wording.
+
+    Re-uses the `bid_form.txt` prompt (which T9.0 extended with
+    explicit alternates-extraction guidance) — same JSON contract as
+    the full bid-form path, but we read only the ``alternates`` field
+    of the response. Confidence is clamped to a 0.70 ceiling because
+    the LLM-fallback path runs only when the deterministic path
+    couldn't parse the wording; the model is guessing on an
+    intentionally unusual layout.
+
+    Returns an empty list on LLM error rather than raising — the
+    caller has the deterministic result available and can proceed
+    without the fallback's contribution. Errors are logged.
+    """
+    if not page_text or len(page_text.strip()) < 30:
+        return []
+    try:
+        user_prompt = load_prompt("bid_form")
+    except Exception as exc:
+        logger.warning("extract_alternates_via_llm: failed to load prompt (%s)", exc)
+        return []
+    extra = (
+        f"Source page text (alternates section excerpt):\n{page_text}"
+    )
+    try:
+        resp = llm.analyze_text(
+            system_prompt=SYSTEM,
+            user_prompt=user_prompt + "\n\n" + extra,
+        )
+        data = resp.parsed if isinstance(resp.parsed, dict) else {}
+    except Exception as exc:
+        logger.warning("extract_alternates_via_llm: LLM call failed (%s)", exc)
+        return []
+
+    raw_alts = _safe_list(data, "alternates")
+    out: list[AlternateLine] = []
+    for d in raw_alts:
+        line = _coerce_alternate_line(
+            d if isinstance(d, dict) else {},
+            bid_package_id=bid_package_id,
+            source_sheet=source_sheet,
+        )
+        if line is not None:
+            # Cap LLM-fallback confidence at 0.70 — this path runs only
+            # when the deterministic parser missed, so the model is
+            # working on an unusual layout where a reviewer should
+            # confirm the result before it lands in any total.
+            if line.confidence > 0.70:
+                line = line.model_copy(update={"confidence": 0.70})
+            out.append(line)
+    return out
 
 
 def extract_bundle(bundle: "DocumentBundle", llm: LLMClient) -> SheetExtraction:

@@ -52,8 +52,14 @@ from .extraction.takeoff_synthesis import (
     synthesize_window_takeoff_items,
 )
 from .extraction.window_dedupe import dedupe_windows_against_synthesis
+from .extraction.bid_form_alternates import (
+    alternates_from_bid_package_legacy,
+    _normalize_id_for_dedupe,
+    _completeness_score,
+)
 from .schemas import (
     Alternate,
+    AlternateLine,
     BidPackage,
     Discipline,
     DoorEntry,
@@ -114,6 +120,15 @@ class ProjectModel:
     scope_matrix: ScopeMatrix
     aggregated_inclusions: list[ScopeItem]
     aggregated_exclusions: list[ScopeItem]
+    # Phase T9.0 — priced bid alternates / value engineering. Aggregated
+    # cross-package via :func:`aggregate_alternates_across_packages`
+    # during ``reconcile()`` — duplicates that appear in multiple bid
+    # forms collapse to the most-complete instance.
+    alternates: list[AlternateLine] = None  # default-set in __post_init__
+
+    def __post_init__(self) -> None:
+        if self.alternates is None:
+            self.alternates = []
 
     @property
     def trade_packages(self) -> list[BidPackage]:
@@ -647,6 +662,68 @@ def _aggregate_scope_items(
     return aggregated
 
 
+def aggregate_alternates_across_packages(
+    packages: list[BidPackage],
+    extra_alternates: list[AlternateLine] | None = None,
+) -> list[AlternateLine]:
+    """Phase T9.0 — cross-package alternates dedupe + bridge from legacy shape.
+
+    Walks every :class:`BidPackage`, bridges any legacy :class:`Alternate`
+    records on it into the new :class:`AlternateLine` shape via
+    :func:`core.extraction.bid_form_alternates.alternates_from_bid_package_legacy`,
+    then deduplicates the union (plus any ``extra_alternates`` the
+    caller produced via the deterministic / LLM-fallback path on raw
+    page text) by normalized ``alternate_id``.
+
+    When the same alternate appears in two bid packages, the record
+    with the higher :func:`_completeness_score` wins. Tie-breaks favour
+    the record with a populated ``cost_delta`` over one with ``None``.
+
+    Alternates without a ``bid_package_id`` are grouped under the
+    bucket implicitly — the dedupe key is the normalised
+    ``alternate_id`` only, so a "general" alternate (no package
+    attribution) still merges with a per-package version that shares
+    its id.
+    """
+    candidates: list[AlternateLine] = []
+    for p in packages:
+        legacy_alts = getattr(p, "alternates", None) or []
+        if legacy_alts:
+            candidates.extend(
+                alternates_from_bid_package_legacy(
+                    legacy_alts,
+                    bid_package_id=p.pdf_name,
+                )
+            )
+    if extra_alternates:
+        candidates.extend(extra_alternates)
+
+    out: list[AlternateLine] = []
+    seen: dict[str, int] = {}
+    for alt in candidates:
+        key = _normalize_id_for_dedupe(alt.alternate_id)
+        if not key:
+            out.append(alt)
+            continue
+        if key in seen:
+            existing_idx = seen[key]
+            existing = out[existing_idx]
+            replace = False
+            if _completeness_score(alt) > _completeness_score(existing):
+                replace = True
+            elif (
+                existing.cost_delta is None
+                and alt.cost_delta is not None
+            ):
+                replace = True
+            if replace:
+                out[existing_idx] = alt
+            continue
+        seen[key] = len(out)
+        out.append(alt)
+    return out
+
+
 def _build_scope_matrix(packages: list[BidPackage]) -> ScopeMatrix:
     by_div: dict[str, list[BidPackage]] = {}
     all_alts: list[Alternate] = []
@@ -1116,6 +1193,17 @@ def reconcile(
     aggregated_inclusions = _aggregate_scope_items(bid_packages, "inclusions")
     aggregated_exclusions = _aggregate_scope_items(bid_packages, "exclusions")
 
+    # Phase T9.0 — aggregate priced alternates across bid packages.
+    # Bridges legacy :class:`Alternate` records into the new
+    # :class:`AlternateLine` shape and deduplicates duplicates that
+    # appear in multiple bid forms. Operators / downstream code can
+    # ALSO append :class:`AlternateLine` records produced via the
+    # deterministic + LLM-fallback path on raw bid-form page text;
+    # those flow in through the ``extra_alternates`` parameter of
+    # :func:`aggregate_alternates_across_packages` when the caller
+    # invokes it directly (e.g. the Streamlit T9.1 review tab).
+    aggregated_alternates = aggregate_alternates_across_packages(bid_packages)
+
     return ProjectModel(
         rooms=rooms,
         doors=doors,
@@ -1132,4 +1220,5 @@ def reconcile(
         scope_matrix=scope_matrix,
         aggregated_inclusions=aggregated_inclusions,
         aggregated_exclusions=aggregated_exclusions,
+        alternates=aggregated_alternates,
     )

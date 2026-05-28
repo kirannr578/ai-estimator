@@ -32,6 +32,10 @@ from .pricing.cwicr_matcher import (
 )
 from .schemas import (
     COST_TIER_SEED_DB_PRICE_CONFIDENCE,
+    AlternateLine,
+    AlternateLineEstimate,
+    AlternatePricingBasis,
+    AlternateType,
     CostBand,
     CostCategory,
     CostLine,
@@ -518,6 +522,220 @@ def price_takeoff(
         overhead_pct=overhead_pct,
         profit_pct=profit_pct,
         line_items=line_items,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Phase T9.0 — bid alternates / VE pricing
+# ---------------------------------------------------------------------------
+#
+# Companion to ``price_takeoff`` above. Where ``price_takeoff`` builds
+# the headline :class:`Estimate` from a project's measured takeoffs,
+# ``price_alternates`` walks the project's :class:`AlternateLine`
+# records (populated by the bid-form alternates extractor in
+# :mod:`core.extraction.bid_form_alternates`) and resolves each into a
+# priced :class:`AlternateLineEstimate` row.
+#
+# The alternates list is a PARALLEL rollup — it does NOT modify the
+# base estimate's ``subtotal`` / ``grand_total``. The two helpers on
+# :class:`Estimate` (``subtotal_with_alternates_selected`` /
+# ``total_with_alternates_selected``) let an operator compose the
+# base bid with any subset of alternates at runtime without
+# re-running the pipeline.
+#
+# Resolution order per :class:`AlternateLine`:
+#
+#   1. ``cost_delta`` populated  → pricing_basis = EXTRACTED_FROM_BID_FORM
+#      (the printed value came off the bid form). Confidence pulls from
+#      the AlternateLine's own ``confidence`` (set by the extractor).
+#   2. ``related_takeoff_items`` populated → pricing_basis =
+#      SYNTHESIZED_FROM_TAKEOFF. Cost is the signed sum of priced
+#      ``CostLine.total_cost`` for every line whose ``description``
+#      (case-insensitive substring match) or ``csi_section`` appears
+#      in the AlternateLine's takeoff-item id list. DEDUCTIVE / VE
+#      alternates flip the synthesized sum to negative.
+#   3. Neither → pricing_basis = MISSING, ``cost_delta=None``. Surfaced
+#      in the operator-review queue (Excel "Bid Alternates" sheet +
+#      Project Summary block + the deferred T9.1 Streamlit tab).
+
+
+def _synthesize_alternate_cost_delta(
+    alt: AlternateLine,
+    line_items: list[CostLine],
+) -> float | None:
+    """Sum priced CostLines that match ``alt.related_takeoff_items``.
+
+    Match rule: a CostLine matches when ANY of the strings in
+    ``related_takeoff_items`` appears (case-insensitive substring) in
+    the CostLine's ``description`` OR equals the CostLine's
+    ``csi_section`` (case-insensitive). Conservative — designed to
+    capture the common "alternate references the CSI section the
+    affected scope rolls up to" pattern without false-matching on
+    short tokens.
+
+    DEDUCTIVE and VE alternates flip the magnitude to negative.
+    SUBSTITUTION alternates pass through as-is (signed sum); the
+    caller has already accounted for the "net of removed scope" by
+    listing both the new and removed line items in
+    ``related_takeoff_items`` if appropriate.
+
+    Returns ``None`` when ``related_takeoff_items`` is empty OR no
+    line items match — caller treats this as MISSING.
+    """
+    if not alt.related_takeoff_items:
+        return None
+    needles = [s.lower().strip() for s in alt.related_takeoff_items if s and s.strip()]
+    if not needles:
+        return None
+    total = 0.0
+    matched = 0
+    for li in line_items:
+        if li.suppressed:
+            continue
+        desc = (li.description or "").lower()
+        section = (li.csi_section or "").lower()
+        for n in needles:
+            if not n:
+                continue
+            if n == section or n in desc:
+                total += float(li.total_cost or 0.0)
+                matched += 1
+                break
+    if matched == 0:
+        return None
+    if alt.alternate_type in (AlternateType.DEDUCTIVE, AlternateType.VE):
+        return -abs(round(total, 2))
+    return round(total, 2)
+
+
+def price_alternates(
+    project: ProjectModel,
+    line_items: list[CostLine] | None = None,
+    *,
+    region_multiplier: float = 1.0,
+) -> list[AlternateLineEstimate]:
+    """Resolve every :class:`AlternateLine` on ``project`` into a priced row.
+
+    ``line_items`` is the priced base estimate's ``line_items`` list
+    (used for the SYNTHESIZED_FROM_TAKEOFF path). When ``None``, the
+    synthesis path is skipped — alternates with neither a
+    ``cost_delta`` nor priced related_takeoff_items collapse to
+    MISSING.
+
+    ``region_multiplier`` scales the extracted cost_delta (mirrors the
+    seed-DB / CWICR pricing path). Set to the same value the
+    estimator passed to ``price_takeoff`` so the alternates roll-up
+    composes cleanly with the base subtotal.
+
+    Returns a list with the same ordering as ``project.alternates``.
+    """
+    project_alts: list[AlternateLine] = list(getattr(project, "alternates", None) or [])
+    base_lines: list[CostLine] = list(line_items or [])
+    out: list[AlternateLineEstimate] = []
+
+    for alt in project_alts:
+        included = bool(alt.included_by_default)
+        confidence = alt.confidence
+
+        # Path 1: cost_delta populated on the AlternateLine → use as-is.
+        if alt.cost_delta is not None:
+            delta = round(float(alt.cost_delta) * region_multiplier, 2)
+            out.append(
+                AlternateLineEstimate(
+                    alternate_id=alt.alternate_id,
+                    alternate_type=alt.alternate_type,
+                    description=alt.description,
+                    cost_delta=delta,
+                    pricing_basis=AlternatePricingBasis.EXTRACTED_FROM_BID_FORM,
+                    confidence=confidence,
+                    included_in_base=included,
+                    bid_package_id=alt.bid_package_id,
+                    source_sheet=alt.source_sheet,
+                    related_csi=list(alt.related_csi or []),
+                    operator_notes=alt.operator_notes,
+                )
+            )
+            continue
+
+        # Path 2: related_takeoff_items populated → synthesize from base.
+        synthesized = _synthesize_alternate_cost_delta(alt, base_lines)
+        if synthesized is not None:
+            delta = round(synthesized * region_multiplier, 2)
+            # Synthesis confidence: the extractor's qty-side confidence
+            # × a 0.85 "synthesis isn't a printed number" haircut.
+            syn_conf = round(max(0.0, min(1.0, confidence)) * 0.85, 4)
+            out.append(
+                AlternateLineEstimate(
+                    alternate_id=alt.alternate_id,
+                    alternate_type=alt.alternate_type,
+                    description=alt.description,
+                    cost_delta=delta,
+                    pricing_basis=AlternatePricingBasis.SYNTHESIZED_FROM_TAKEOFF,
+                    confidence=syn_conf,
+                    included_in_base=included,
+                    bid_package_id=alt.bid_package_id,
+                    source_sheet=alt.source_sheet,
+                    related_csi=list(alt.related_csi or []),
+                    operator_notes=alt.operator_notes,
+                )
+            )
+            continue
+
+        # Path 3: neither — MISSING. Surfaced in the operator-review
+        # queue. ``cost_delta=None`` and a low confidence floor so the
+        # downstream UI / PDF can highlight the row visually.
+        out.append(
+            AlternateLineEstimate(
+                alternate_id=alt.alternate_id,
+                alternate_type=alt.alternate_type,
+                description=alt.description,
+                cost_delta=None,
+                pricing_basis=AlternatePricingBasis.MISSING,
+                confidence=min(confidence, 0.50),
+                included_in_base=included,
+                bid_package_id=alt.bid_package_id,
+                source_sheet=alt.source_sheet,
+                related_csi=list(alt.related_csi or []),
+                operator_notes=alt.operator_notes,
+            )
+        )
+
+    return out
+
+
+def attach_alternates_to_estimate(
+    estimate: Estimate,
+    project: ProjectModel,
+    *,
+    region_multiplier: float | None = None,
+) -> Estimate:
+    """Return a new :class:`Estimate` with priced alternates attached.
+
+    Companion to :func:`price_alternates` for the common one-shot
+    caller pattern: build the base estimate via :func:`price_takeoff`,
+    then attach alternates via this helper. The returned estimate is
+    a fresh object (Pydantic ``model_copy``); the input is not
+    mutated.
+
+    ``region_multiplier`` defaults to the estimate's own
+    ``region_multiplier`` — matches the convention the seed-DB /
+    CWICR pricing uses when baking the regional adjustment into each
+    ``unit_cost``.
+    """
+    rm = (
+        float(region_multiplier)
+        if region_multiplier is not None
+        else float(estimate.region_multiplier)
+    )
+    priced = price_alternates(project, estimate.line_items, region_multiplier=rm)
+    selected_default: set[str] = {
+        p.alternate_id for p in priced if p.included_in_base
+    }
+    return estimate.model_copy(
+        update={
+            "alternates": priced,
+            "alternates_selected_default": selected_default,
+        }
     )
 
 
