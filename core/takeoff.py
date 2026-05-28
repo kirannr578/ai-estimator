@@ -26,6 +26,7 @@ from dataclasses import dataclass
 
 from rapidfuzz import fuzz
 
+from .extraction.av_dedupe import dedupe_av_against_synthesis
 from .extraction.door_dedupe import dedupe_doors_against_synthesis
 from .extraction.finish_dedupe import dedupe_finishes_against_synthesis
 from .extraction.hvac_dedupe import dedupe_hvac_against_synthesis
@@ -35,8 +36,10 @@ from .extraction.lighting_dedupe import dedupe_lighting_against_synthesis
 from .extraction.panel_dedupe import dedupe_panels_against_synthesis
 from .extraction.plumbing_dedupe import dedupe_plumbing_against_synthesis
 from .extraction.room_schedule import merge_room_schedules
+from .extraction.security_dedupe import dedupe_security_against_synthesis
 from .extraction.takeoff_backfill import backfill_finish_quantities
 from .extraction.takeoff_synthesis import (
+    synthesize_av_takeoff_items,
     synthesize_door_takeoff_items,
     synthesize_finish_takeoff_items,
     synthesize_hvac_takeoff_items,
@@ -45,6 +48,7 @@ from .extraction.takeoff_synthesis import (
     synthesize_lighting_takeoff_items,
     synthesize_panel_takeoff_items,
     synthesize_plumbing_takeoff_items,
+    synthesize_security_takeoff_items,
     synthesize_window_takeoff_items,
 )
 from .extraction.window_dedupe import dedupe_windows_against_synthesis
@@ -745,9 +749,25 @@ def reconcile(
     # 1 EA item row + optional 1 LS MEP rough-in row + optional
     # 1 LS trim / installation-hardware row (mfr+model gated, fume
     # hood + eyewash exempt).  Same survives-through-merge pattern;
-    # T2.10 lab dedupe runs after the merge.  AV + Security
-    # extractors are DEFERRED to Phase T2.11.
+    # T2.10 lab dedupe runs after the merge.
     synthesized_lab_items: list[TakeoffItem] = []
+    # Phase T2.11: per-sheet AV equipment schedule pre-pass →
+    # typed TakeoffItem rows.  Each AVDeviceRecord fans out into
+    # 1 EA device row + 1 LS low-voltage cabling rough-in row +
+    # optional 1 LS programming/commissioning labor row
+    # (CONTROL_PROCESSOR / NETWORK_SWITCH or mfr+model gated).
+    # Same survives-through-merge pattern; T2.11 AV dedupe runs
+    # after the merge.  Closes the T2.x typed-extraction family
+    # alongside the security stream below.
+    synthesized_av_items: list[TakeoffItem] = []
+    # Phase T2.11: per-sheet security / access-control schedule
+    # pre-pass → typed TakeoffItem rows.  Each SecurityDeviceRecord
+    # fans out into 1 EA device + optional 1 LS cabling rough-in
+    # (gated by type — DOOR_CONTACT excluded) + optional 1 LS
+    # programming/commissioning labor row (CARD_READER / MAGLOCK
+    # or mfr+model gated).  Same survives-through-merge pattern;
+    # T2.11 security dedupe runs after the merge.
+    synthesized_security_items: list[TakeoffItem] = []
     # Phase T5: per-sheet room-schedule pre-pass. Unlike doors / windows
     # / finishes there's no synthesis step — the room schedule supplies
     # GEOMETRY (area / perimeter / ceiling height) that the T5 back-fill
@@ -848,6 +868,20 @@ def reconcile(
                     sheet_id=ex.sheet_id,
                 )
             )
+        if ex.prepass is not None and getattr(ex.prepass, "av_schedule", None) is not None:
+            synthesized_av_items.extend(
+                synthesize_av_takeoff_items(
+                    ex.prepass.av_schedule,
+                    sheet_id=ex.sheet_id,
+                )
+            )
+        if ex.prepass is not None and getattr(ex.prepass, "security_schedule", None) is not None:
+            synthesized_security_items.extend(
+                synthesize_security_takeoff_items(
+                    ex.prepass.security_schedule,
+                    sheet_id=ex.sheet_id,
+                )
+            )
 
     # --- dedupe domain entities ---
     rooms = _dedupe_rooms(rooms)
@@ -930,10 +964,25 @@ def reconcile(
     # 1 LS MEP rough-in + optional 1 LS trim row inside
     # ``synthesize_lab_takeoff_items``; every row is tagged
     # ``source=lab_schedule_prepass`` for the downstream dedupe pass.
-    # AV (Div 27) + Security (Div 28) extractors are DEFERRED to
-    # Phase T2.11 — scaffold schemas already present in
-    # ``core/schemas.py`` but no wire-in here.
     all_takeoffs.extend(synthesized_lab_items)
+    # T2.11: append synthesised AV-equipment-schedule rows.  Each
+    # AVDeviceRecord already fanned out into 1 EA device +
+    # 1 LS low-voltage cabling rough-in + optional 1 LS
+    # programming/commissioning labor row inside
+    # ``synthesize_av_takeoff_items``; every row is tagged
+    # ``source=av_schedule_prepass`` for the downstream dedupe
+    # pass.  Closes the Division 27 communications scope.
+    all_takeoffs.extend(synthesized_av_items)
+    # T2.11: append synthesised security-schedule rows.  Each
+    # SecurityDeviceRecord already fanned out into 1 EA device +
+    # optional 1 LS cabling rough-in + optional 1 LS programming/
+    # commissioning labor row inside
+    # ``synthesize_security_takeoff_items``; every row is tagged
+    # ``source=security_schedule_prepass`` for the downstream
+    # dedupe pass.  Closes the Division 28 electronic safety &
+    # security scope, and with it the entire T2.x typed-extraction
+    # family.
+    all_takeoffs.extend(synthesized_security_items)
     # T3: drop legacy LLM door aggregates ("Hollow metal doors", "Solid-core
     # wood doors", "Doors (type unspecified)") and same-mark LLM door rows
     # when a deterministic synthesised row already covers them. Pure on
@@ -1013,6 +1062,31 @@ def reconcile(
     # owns it).  No-op when no synthesised lab casework exists on
     # the project (safety rule, mirrors every prior T2.x dedupe).
     all_takeoffs = dedupe_lab_against_synthesis(all_takeoffs)
+    # T2.11 AV dedupe: retire legacy LLM AV aggregates ("AV
+    # Equipment", "Video Conferencing System", "Display Package")
+    # and same-tag LLM AV rows (DISP-/PROJ-/MIC-/SPK-/RACK-/CTRL-)
+    # when a deterministic synthesised row already covers them.
+    # CSI prefix ``27`` keeps this pass mutually exclusive with
+    # every preceding dedupe family.  Bare ``CAM-N`` LLM rows are
+    # NEVER touched here (per-mark form excludes ``cam-\d+``);
+    # they survive for the security dedupe below to claim if the
+    # description anchor matches.  No-op when no synthesised AV
+    # device exists on the project (safety rule).
+    all_takeoffs = dedupe_av_against_synthesis(all_takeoffs)
+    # T2.11 security dedupe: retire legacy LLM security
+    # aggregates ("Security Equipment", "Access Control System",
+    # "CCTV System", "Card Reader System") and same-tag LLM
+    # security rows (RDR-/DR-/MS-/MOT-/DC-/KP-/RTE-/REX-/ML-/
+    # MAG-) when a deterministic synthesised row already covers
+    # them.  CSI prefix ``28`` keeps this pass mutually exclusive
+    # with every other family.  Phase T1 door hardware rows
+    # (CSI ``08 71 00``) survive intact — the dedupe scope is
+    # CSI ``28 ...`` only, so door hardware is out of reach.
+    # Bare ``CAM-N`` LLM rows are NEVER touched (per-mark form
+    # excludes ``cam-\d+``).  No-op when no synthesised security
+    # device exists on the project (safety rule).  This dedupe
+    # closes the entire T2.x typed-extraction family.
+    all_takeoffs = dedupe_security_against_synthesis(all_takeoffs)
     # T5 back-fill: replace ``quantity=0.0`` on every finish-synthesis
     # row with the right SF (floor / ceiling = area; base = perimeter
     # in LF; wall = perimeter × height × share). Joins finish rows to

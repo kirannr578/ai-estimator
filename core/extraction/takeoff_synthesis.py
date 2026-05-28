@@ -45,6 +45,8 @@ from __future__ import annotations
 from typing import Final
 
 from core.schemas import (
+    AVDeviceRecord,
+    AVScheduleResult,
     DoorRecord,
     DoorScheduleResult,
     FinishRecord,
@@ -61,6 +63,8 @@ from core.schemas import (
     PanelScheduleResult,
     PlumbingFixtureRecord,
     PlumbingScheduleResult,
+    SecurityDeviceRecord,
+    SecurityScheduleResult,
     TakeoffItem,
     WindowRecord,
     WindowScheduleResult,
@@ -76,6 +80,8 @@ __all__ = [
     "SYNTHESIS_SOURCE_TAG_PLUMBING",
     "SYNTHESIS_SOURCE_TAG_KITCHEN",
     "SYNTHESIS_SOURCE_TAG_LAB",
+    "SYNTHESIS_SOURCE_TAG_AV",
+    "SYNTHESIS_SOURCE_TAG_SECURITY",
     "DERIVATION_HAIRCUT_MULTIPLIER",
     "DERIVATION_FLOOR_CONFIDENCE",
     "inherit_with_haircut",
@@ -88,6 +94,8 @@ __all__ = [
     "synthesize_plumbing_takeoff_items",
     "synthesize_kitchen_takeoff_items",
     "synthesize_lab_takeoff_items",
+    "synthesize_av_takeoff_items",
+    "synthesize_security_takeoff_items",
 ]
 
 
@@ -100,6 +108,8 @@ SYNTHESIS_SOURCE_TAG_HVAC: Final[str] = "hvac_schedule_prepass"
 SYNTHESIS_SOURCE_TAG_PLUMBING: Final[str] = "plumbing_schedule_prepass"
 SYNTHESIS_SOURCE_TAG_KITCHEN: Final[str] = "kitchen_schedule_prepass"
 SYNTHESIS_SOURCE_TAG_LAB: Final[str] = "lab_schedule_prepass"
+SYNTHESIS_SOURCE_TAG_AV: Final[str] = "av_schedule_prepass"
+SYNTHESIS_SOURCE_TAG_SECURITY: Final[str] = "security_schedule_prepass"
 
 
 # ---------------------------------------------------------------------------
@@ -2783,6 +2793,572 @@ def synthesize_lab_takeoff_items(
                 ),
                 source_sheet_ids=list(sheets),
                 notes=_lab_notes_for(record, role="trim"),
+            ))
+
+    return items
+
+
+# ====== Phase T2.11 — Specialty (AV + Security) ======
+#
+# Closes the T2.x typed-extraction family entirely.  AV equipment
+# (Division 27 — Communications) and Security / access-control
+# devices (Division 28 — Electronic Safety & Security) are the two
+# specialty domains that ship in Phase T2.11.  Together with
+# T2.10's kitchen + lab slices they close the long-tail of
+# typed-schedule coverage.
+#
+# Per-record fan-out shape (mirrors the T2.10 kitchen+lab
+# architecture):
+#
+# 1. **N × EA primary device** — CSI per item family.  AV routes
+#    DISPLAY → 27 41 16.51, PROJECTOR → 27 41 16.31,
+#    CAMERA (AV) → 27 41 16.49, MICROPHONE → 27 41 33.13,
+#    SPEAKER → 27 41 33.16, RACK → 27 11 26, CONTROL_PROCESSOR
+#    → 27 41 19.13, NETWORK_SWITCH → 27 21 33, OTHER → 27 41 16.
+#    Security routes CARD_READER → 28 13 23.13, CAMERA →
+#    28 23 23, MOTION_SENSOR → 28 16 13.13, DOOR_CONTACT →
+#    28 16 16.13, KEYPAD → 28 13 23.16, REQUEST_TO_EXIT →
+#    28 13 33.13, MAGLOCK → 28 13 43.13 (cross-list to 08 71 00
+#    Door Hardware is OPTIONAL but we choose Div 28 since these
+#    are on the security schedule and electrically driven),
+#    OTHER → 28 13 00.  Quantity = ``record.quantity`` when the
+#    schedule published a QTY column (confidence ``0.90``);
+#    otherwise quantity ``1.0`` (confidence ``0.55`` →
+#    HAND_TAKEOFF queue).
+# 2. **1 × LS low-voltage cabling rough-in** — every powered AV
+#    or security device needs structured low-voltage wiring
+#    (Cat6 to switch, RS-485 to controller, PoE upstream).  AV
+#    routes the cabling row to ``27 15 13.13`` (Communications
+#    Copper Backbone Cabling); security routes to ``28 05 13``
+#    (Conductors and Cables for Electronic Safety and Security).
+#    Emitted for EVERY AV device (cabling is universal in AV)
+#    and for security devices in {CARD_READER, CAMERA,
+#    MOTION_SENSOR, KEYPAD, REQUEST_TO_EXIT, MAGLOCK}.  Confidence
+#    inherits the parent's confidence with the T6.1 haircut.
+# 3. **1 × LS installation / programming labor** — emitted only
+#    for CONTROL_PROCESSOR, NETWORK_SWITCH, and any device whose
+#    BOTH manufacturer + model are populated (these require
+#    commissioning).  Confidence ``inherit_with_haircut × 0.70``
+#    so the row tracks the parent's banding.
+#
+# **MAGLOCK CSI decision (Div 28 vs Div 8)**: Maglocks are an
+# interesting cross-Division device — they are physically door
+# hardware (Div 8, Section 08 71 00) but electrically a security
+# / access-control component (Div 28, Section 28 13 43.13).  The
+# brief recommends Div 28 since they live on the security
+# schedule and the cost driver is the access-control sub, not the
+# door hardware sub.  We follow that: MAGLOCK → 28 13 43.13.  A
+# Div 8 cross-list would be visible to the door hardware dedupe
+# (Phase T1) and could double-count if both extractors fire on
+# the same row, so keeping the routing single-source-of-truth in
+# Div 28 is also the safer dedupe posture.
+#
+# **NETWORK_SWITCH CSI decision (Div 27 vs Div 26)**: Network
+# switches on an AV / T-series schedule are part of the
+# communications / IT infrastructure (Div 27, Section 27 21 33
+# Data Communications Network Equipment).  A panelboard or
+# branch-circuit electrical schedule would route the switch to
+# Div 26, but a switch listed on the AV schedule is being
+# procured by the AV / IT integrator, not the electrical sub.
+# We route to Div 27 to match the procurement reality and keep
+# the AV bid package self-contained.
+
+
+# ---------------------------------------------------------------------------
+# AV — CSI families
+# ---------------------------------------------------------------------------
+
+_CSI_AV_DISPLAY:     Final[tuple[str, str, str]] = (
+    "27", "27 41 16.51", "A-V Display Equipment",
+)
+_CSI_AV_PROJECTOR:   Final[tuple[str, str, str]] = (
+    "27", "27 41 16.31", "A-V Projection Equipment",
+)
+_CSI_AV_CAMERA:      Final[tuple[str, str, str]] = (
+    "27", "27 41 16.49", "A-V Capture Equipment",
+)
+_CSI_AV_MICROPHONE:  Final[tuple[str, str, str]] = (
+    "27", "27 41 33.13", "Microphones",
+)
+_CSI_AV_SPEAKER:     Final[tuple[str, str, str]] = (
+    "27", "27 41 33.16", "Loudspeakers",
+)
+_CSI_AV_RACK:        Final[tuple[str, str, str]] = (
+    "27", "27 11 26", "Communications Racks",
+)
+_CSI_AV_CONTROL:     Final[tuple[str, str, str]] = (
+    "27", "27 41 19.13", "A-V Control Equipment",
+)
+_CSI_AV_SWITCH:      Final[tuple[str, str, str]] = (
+    "27", "27 21 33", "Data Communications Network Equipment",
+)
+_CSI_AV_OTHER:       Final[tuple[str, str, str]] = (
+    "27", "27 41 16", "Integrated Audio-Video Systems",
+)
+
+# AV cabling rough-in CSI.
+_CSI_AV_CABLING: Final[tuple[str, str, str]] = (
+    "27", "27 15 13.13", "Communications Copper Backbone Cabling",
+)
+
+_AV_CSI_BY_TYPE: Final[dict[str, tuple[str, str, str]]] = {
+    "DISPLAY":           _CSI_AV_DISPLAY,
+    "PROJECTOR":         _CSI_AV_PROJECTOR,
+    "CAMERA":            _CSI_AV_CAMERA,
+    "MICROPHONE":        _CSI_AV_MICROPHONE,
+    "SPEAKER":           _CSI_AV_SPEAKER,
+    "RACK":              _CSI_AV_RACK,
+    "CONTROL_PROCESSOR": _CSI_AV_CONTROL,
+    "NETWORK_SWITCH":    _CSI_AV_SWITCH,
+    "OTHER":             _CSI_AV_OTHER,
+}
+
+# AV item types that ALWAYS get a programming / commissioning
+# labor row regardless of mfr+model state.  These devices require
+# integrator setup that flat-rate trim hardware doesn't cover.
+_AV_PROGRAMMING_REQUIRED: Final[frozenset[str]] = frozenset({
+    "CONTROL_PROCESSOR", "NETWORK_SWITCH",
+})
+
+_AV_QTY_CONFIDENCE: Final[float] = 0.90
+_AV_HAND_TAKEOFF_CONFIDENCE: Final[float] = 0.55
+# Fixed multiplier applied AFTER the T6.1 derivation haircut on
+# the programming/commissioning labor row.  Mirrors the kitchen+lab
+# trim multiplier so banding is consistent.
+_AV_PROGRAMMING_MULTIPLIER: Final[float] = 0.70
+# Cabling rough-in inherits with the standard T6.1 haircut.  An
+# additional 0.95 multiplier is applied on top so the cabling row
+# never lands above the parent's effective confidence (it is
+# strictly derived from the device's presence).
+_AV_CABLING_MULTIPLIER: Final[float] = 0.95
+
+
+def _classify_av_item(
+    record: AVDeviceRecord,
+) -> tuple[str, str, str]:
+    """Return ``(csi_division, csi_section, family_label)`` for one AV item."""
+    itype = (record.item_type or "OTHER").upper()
+    return _AV_CSI_BY_TYPE.get(itype, _CSI_AV_OTHER)
+
+
+def _av_label(record: AVDeviceRecord) -> str:
+    tag = (record.tag or "").strip()
+    if not tag:
+        return "AV device (unmarked)"
+    return f"AV device {tag}"
+
+
+def _describe_av_item(record: AVDeviceRecord, family: str) -> str:
+    """Build a human-readable description for the primary AV item row."""
+    head = _av_label(record)
+    parts: list[str] = []
+    desc = (record.description or "").strip()
+    parts.append(desc if desc else family)
+    mfr_bits: list[str] = []
+    if record.manufacturer:
+        mfr_bits.append(record.manufacturer.strip())
+    if record.model_number:
+        mfr_bits.append(record.model_number.strip())
+    if mfr_bits:
+        parts.append(f"({' '.join(mfr_bits)})")
+    if record.size_or_resolution:
+        parts.append(record.size_or_resolution)
+    if record.wattage is not None:
+        parts.append(f"{record.wattage:g}W")
+    if record.mounting:
+        parts.append(record.mounting)
+    if record.power:
+        parts.append(record.power)
+    if record.signal_type:
+        parts.append(record.signal_type)
+    return f"{head} — {' '.join(parts)}".rstrip()
+
+
+def _describe_av_cabling(record: AVDeviceRecord, family: str) -> str:
+    return f"{_av_label(record)} — {family}"
+
+
+def _describe_av_programming(record: AVDeviceRecord) -> str:
+    return f"{_av_label(record)} — programming / commissioning labor"
+
+
+def _av_notes_for(record: AVDeviceRecord, *, role: str) -> str:
+    """Stable, source-tagged notes string for AV dedupe to grep."""
+    bits: list[str] = [f"source={SYNTHESIS_SOURCE_TAG_AV}"]
+    if record.tag:
+        bits.append(f"mark={record.tag}")
+    bits.append(f"role={role}")
+    if record.item_type:
+        bits.append(f"item_type={record.item_type}")
+    if record.manufacturer:
+        bits.append(f"manufacturer={record.manufacturer}")
+    if record.model_number:
+        bits.append(f"model={record.model_number}")
+    if record.size_or_resolution:
+        bits.append(f"size_or_resolution={record.size_or_resolution}")
+    if record.wattage is not None:
+        bits.append(f"wattage={record.wattage}")
+    if record.mounting:
+        bits.append(f"mounting={record.mounting}")
+    if record.power:
+        bits.append(f"power={record.power}")
+    if record.signal_type:
+        bits.append(f"signal_type={record.signal_type}")
+    if record.quantity is not None:
+        bits.append(f"qty_from_schedule={record.quantity}")
+    return "; ".join(bits)
+
+
+def synthesize_av_takeoff_items(
+    devices: list[AVDeviceRecord] | AVScheduleResult | None,
+    *,
+    sheet_id: str | None = None,
+) -> list[TakeoffItem]:
+    """Convert each ``AVDeviceRecord`` into 1-3 ``TakeoffItem`` rows.
+
+    Per-record fan-out (mirrors the T2.10 kitchen / lab shape):
+
+    * One **device** row at the per-family Division 27 CSI section
+      (DISPLAY → 27 41 16.51, PROJECTOR → 27 41 16.31, CAMERA →
+      27 41 16.49, MICROPHONE → 27 41 33.13, SPEAKER → 27 41
+      33.16, RACK → 27 11 26, CONTROL_PROCESSOR → 27 41 19.13,
+      NETWORK_SWITCH → 27 21 33, OTHER → 27 41 16), unit ``EA``.
+      Quantity = ``record.quantity`` (confidence ``0.90``) when
+      the schedule published a QTY column, else ``1.0`` (confidence
+      ``0.55``).
+    * One **low-voltage cabling rough-in** row at ``27 15 13.13``,
+      unit ``LS``.  Emitted for every AV device (cabling is
+      universal in AV).  Confidence inherits the device row's
+      confidence with the T6.1 haircut.
+    * One **programming / commissioning labor** row at the SAME
+      device CSI section, unit ``LS``, emitted only for
+      CONTROL_PROCESSOR / NETWORK_SWITCH OR any device with BOTH
+      ``manufacturer`` AND ``model_number`` populated.  Confidence
+      ``inherit_with_haircut × 0.70``.
+
+    A record with no usable ``tag`` is skipped.  ``sheet_id``
+    (when provided) is stored on ``source_sheet_ids`` so downstream
+    consumers can trace each row back to its sheet.
+    """
+    if devices is None:
+        return []
+    if hasattr(devices, "devices"):
+        record_list: list[AVDeviceRecord] = list(devices.devices)
+    else:
+        record_list = list(devices)
+    if not record_list:
+        return []
+
+    items: list[TakeoffItem] = []
+    for record in record_list:
+        if not (record.tag and record.tag.strip()):
+            continue
+        sheets: list[str] = []
+        if sheet_id:
+            sheets.append(sheet_id)
+        elif record.source_sheet:
+            sheets.append(record.source_sheet)
+
+        # 1. Device row.
+        division, section, family = _classify_av_item(record)
+        if record.quantity is not None and record.quantity > 0:
+            qty = float(record.quantity)
+            device_confidence = _AV_QTY_CONFIDENCE
+        else:
+            qty = 1.0
+            device_confidence = _AV_HAND_TAKEOFF_CONFIDENCE
+        items.append(TakeoffItem(
+            csi_division=division,
+            csi_section=section,
+            description=_describe_av_item(record, family),
+            quantity=qty,
+            unit="EA",
+            confidence=device_confidence,
+            source_sheet_ids=list(sheets),
+            notes=_av_notes_for(record, role="device"),
+        ))
+
+        # 2. Low-voltage cabling rough-in (universal for AV).
+        c_div, c_sec, c_fam = _CSI_AV_CABLING
+        items.append(TakeoffItem(
+            csi_division=c_div,
+            csi_section=c_sec,
+            description=_describe_av_cabling(record, c_fam),
+            quantity=1.0,
+            unit="LS",
+            confidence=inherit_with_haircut(
+                device_confidence,
+                multiplier=DERIVATION_HAIRCUT_MULTIPLIER
+                              * _AV_CABLING_MULTIPLIER,
+            ),
+            source_sheet_ids=list(sheets),
+            notes=_av_notes_for(record, role="cabling"),
+        ))
+
+        # 3. Programming / commissioning labor row — gated.
+        itype = (record.item_type or "OTHER").upper()
+        needs_programming = (
+            itype in _AV_PROGRAMMING_REQUIRED
+            or (record.manufacturer and record.model_number)
+        )
+        if needs_programming:
+            items.append(TakeoffItem(
+                csi_division=division,
+                csi_section=section,
+                description=_describe_av_programming(record),
+                quantity=1.0,
+                unit="LS",
+                confidence=inherit_with_haircut(
+                    device_confidence,
+                    multiplier=DERIVATION_HAIRCUT_MULTIPLIER
+                                  * _AV_PROGRAMMING_MULTIPLIER,
+                ),
+                source_sheet_ids=list(sheets),
+                notes=_av_notes_for(record, role="programming"),
+            ))
+
+    return items
+
+
+# ---------------------------------------------------------------------------
+# Security — CSI families
+# ---------------------------------------------------------------------------
+
+_CSI_SEC_CARD_READER:  Final[tuple[str, str, str]] = (
+    "28", "28 13 23.13", "Access Control Card Readers",
+)
+_CSI_SEC_CAMERA:       Final[tuple[str, str, str]] = (
+    "28", "28 23 23", "Video Surveillance Cameras",
+)
+_CSI_SEC_MOTION:       Final[tuple[str, str, str]] = (
+    "28", "28 16 13.13", "Passive Infrared Intrusion Detection",
+)
+_CSI_SEC_DOOR_CONTACT: Final[tuple[str, str, str]] = (
+    "28", "28 16 16.13", "Door Position Switches",
+)
+_CSI_SEC_KEYPAD:       Final[tuple[str, str, str]] = (
+    "28", "28 13 23.16", "Access Control Keypads",
+)
+_CSI_SEC_REX:          Final[tuple[str, str, str]] = (
+    "28", "28 13 33.13", "Request-to-Exit Devices",
+)
+_CSI_SEC_MAGLOCK:      Final[tuple[str, str, str]] = (
+    "28", "28 13 43.13", "Electromagnetic Locks",
+)
+_CSI_SEC_OTHER:        Final[tuple[str, str, str]] = (
+    "28", "28 13 00", "Access Control",
+)
+
+# Security cabling rough-in CSI.
+_CSI_SEC_CABLING: Final[tuple[str, str, str]] = (
+    "28", "28 05 13",
+    "Conductors and Cables for Electronic Safety and Security",
+)
+
+_SECURITY_CSI_BY_TYPE: Final[dict[str, tuple[str, str, str]]] = {
+    "CARD_READER":     _CSI_SEC_CARD_READER,
+    "CAMERA":          _CSI_SEC_CAMERA,
+    "MOTION_SENSOR":   _CSI_SEC_MOTION,
+    "DOOR_CONTACT":    _CSI_SEC_DOOR_CONTACT,
+    "KEYPAD":          _CSI_SEC_KEYPAD,
+    "REQUEST_TO_EXIT": _CSI_SEC_REX,
+    "MAGLOCK":         _CSI_SEC_MAGLOCK,
+    "OTHER":           _CSI_SEC_OTHER,
+}
+
+# Security item types that get a cabling rough-in row.  Per the
+# T2.11 brief: CARD_READER, CAMERA, MOTION_SENSOR, KEYPAD,
+# REQUEST_TO_EXIT, MAGLOCK.  DOOR_CONTACT is excluded — its wiring
+# is part of the door frame and not a separate cabling pull.
+_SECURITY_CABLING_TYPES: Final[frozenset[str]] = frozenset({
+    "CARD_READER", "CAMERA", "MOTION_SENSOR",
+    "KEYPAD", "REQUEST_TO_EXIT", "MAGLOCK",
+})
+
+# Security item types that ALWAYS get programming/commissioning
+# labor.  Card readers and maglocks require panel-side enrollment
+# and access-control programming.
+_SECURITY_PROGRAMMING_REQUIRED: Final[frozenset[str]] = frozenset({
+    "CARD_READER", "MAGLOCK",
+})
+
+_SECURITY_QTY_CONFIDENCE: Final[float] = 0.90
+_SECURITY_HAND_TAKEOFF_CONFIDENCE: Final[float] = 0.55
+_SECURITY_PROGRAMMING_MULTIPLIER: Final[float] = 0.70
+_SECURITY_CABLING_MULTIPLIER: Final[float] = 0.95
+
+
+def _classify_security_item(
+    record: SecurityDeviceRecord,
+) -> tuple[str, str, str]:
+    """Return ``(csi_division, csi_section, family_label)`` for one security item."""
+    itype = (record.item_type or "OTHER").upper()
+    return _SECURITY_CSI_BY_TYPE.get(itype, _CSI_SEC_OTHER)
+
+
+def _security_label(record: SecurityDeviceRecord) -> str:
+    tag = (record.tag or "").strip()
+    if not tag:
+        return "Security device (unmarked)"
+    return f"Security device {tag}"
+
+
+def _describe_security_item(record: SecurityDeviceRecord,
+                                family: str) -> str:
+    """Build a human-readable description for the primary security row."""
+    head = _security_label(record)
+    parts: list[str] = []
+    desc = (record.description or "").strip()
+    parts.append(desc if desc else family)
+    mfr_bits: list[str] = []
+    if record.manufacturer:
+        mfr_bits.append(record.manufacturer.strip())
+    if record.model_number:
+        mfr_bits.append(record.model_number.strip())
+    if mfr_bits:
+        parts.append(f"({' '.join(mfr_bits)})")
+    if record.mounting:
+        parts.append(record.mounting)
+    if record.power:
+        parts.append(record.power)
+    if record.connection:
+        parts.append(record.connection)
+    return f"{head} — {' '.join(parts)}".rstrip()
+
+
+def _describe_security_cabling(record: SecurityDeviceRecord,
+                                   family: str) -> str:
+    return f"{_security_label(record)} — {family}"
+
+
+def _describe_security_programming(record: SecurityDeviceRecord) -> str:
+    return f"{_security_label(record)} — programming / commissioning labor"
+
+
+def _security_notes_for(record: SecurityDeviceRecord, *, role: str) -> str:
+    """Stable, source-tagged notes string for security dedupe to grep."""
+    bits: list[str] = [f"source={SYNTHESIS_SOURCE_TAG_SECURITY}"]
+    if record.tag:
+        bits.append(f"mark={record.tag}")
+    bits.append(f"role={role}")
+    if record.item_type:
+        bits.append(f"item_type={record.item_type}")
+    if record.manufacturer:
+        bits.append(f"manufacturer={record.manufacturer}")
+    if record.model_number:
+        bits.append(f"model={record.model_number}")
+    if record.mounting:
+        bits.append(f"mounting={record.mounting}")
+    if record.power:
+        bits.append(f"power={record.power}")
+    if record.connection:
+        bits.append(f"connection={record.connection}")
+    if record.quantity is not None:
+        bits.append(f"qty_from_schedule={record.quantity}")
+    return "; ".join(bits)
+
+
+def synthesize_security_takeoff_items(
+    devices: list[SecurityDeviceRecord] | SecurityScheduleResult | None,
+    *,
+    sheet_id: str | None = None,
+) -> list[TakeoffItem]:
+    """Convert each ``SecurityDeviceRecord`` into 1-3 ``TakeoffItem`` rows.
+
+    Per-record fan-out (mirrors the T2.11 AV shape):
+
+    * One **device** row at the per-family Division 28 CSI section
+      (CARD_READER → 28 13 23.13, CAMERA → 28 23 23,
+      MOTION_SENSOR → 28 16 13.13, DOOR_CONTACT → 28 16 16.13,
+      KEYPAD → 28 13 23.16, REQUEST_TO_EXIT → 28 13 33.13,
+      MAGLOCK → 28 13 43.13, OTHER → 28 13 00), unit ``EA``.
+    * One **low-voltage cabling rough-in** row at ``28 05 13``,
+      unit ``LS``.  Emitted for devices in
+      :data:`_SECURITY_CABLING_TYPES` (DOOR_CONTACT excluded —
+      its wiring lives inside the frame).  Confidence inherits
+      the device row's confidence with the T6.1 haircut.
+    * One **programming / commissioning labor** row at the SAME
+      device CSI section, unit ``LS``, emitted only for
+      CARD_READER / MAGLOCK OR any device with BOTH
+      ``manufacturer`` AND ``model_number`` populated.  Confidence
+      ``inherit_with_haircut × 0.70``.
+    """
+    if devices is None:
+        return []
+    if hasattr(devices, "devices"):
+        record_list: list[SecurityDeviceRecord] = list(devices.devices)
+    else:
+        record_list = list(devices)
+    if not record_list:
+        return []
+
+    items: list[TakeoffItem] = []
+    for record in record_list:
+        if not (record.tag and record.tag.strip()):
+            continue
+        sheets: list[str] = []
+        if sheet_id:
+            sheets.append(sheet_id)
+        elif record.source_sheet:
+            sheets.append(record.source_sheet)
+
+        # 1. Device row.
+        division, section, family = _classify_security_item(record)
+        if record.quantity is not None and record.quantity > 0:
+            qty = float(record.quantity)
+            device_confidence = _SECURITY_QTY_CONFIDENCE
+        else:
+            qty = 1.0
+            device_confidence = _SECURITY_HAND_TAKEOFF_CONFIDENCE
+        items.append(TakeoffItem(
+            csi_division=division,
+            csi_section=section,
+            description=_describe_security_item(record, family),
+            quantity=qty,
+            unit="EA",
+            confidence=device_confidence,
+            source_sheet_ids=list(sheets),
+            notes=_security_notes_for(record, role="device"),
+        ))
+
+        # 2. Low-voltage cabling rough-in (gated by type).
+        itype = (record.item_type or "OTHER").upper()
+        if itype in _SECURITY_CABLING_TYPES:
+            c_div, c_sec, c_fam = _CSI_SEC_CABLING
+            items.append(TakeoffItem(
+                csi_division=c_div,
+                csi_section=c_sec,
+                description=_describe_security_cabling(record, c_fam),
+                quantity=1.0,
+                unit="LS",
+                confidence=inherit_with_haircut(
+                    device_confidence,
+                    multiplier=DERIVATION_HAIRCUT_MULTIPLIER
+                                  * _SECURITY_CABLING_MULTIPLIER,
+                ),
+                source_sheet_ids=list(sheets),
+                notes=_security_notes_for(record, role="cabling"),
+            ))
+
+        # 3. Programming / commissioning labor row — gated.
+        needs_programming = (
+            itype in _SECURITY_PROGRAMMING_REQUIRED
+            or (record.manufacturer and record.model_number)
+        )
+        if needs_programming:
+            items.append(TakeoffItem(
+                csi_division=division,
+                csi_section=section,
+                description=_describe_security_programming(record),
+                quantity=1.0,
+                unit="LS",
+                confidence=inherit_with_haircut(
+                    device_confidence,
+                    multiplier=DERIVATION_HAIRCUT_MULTIPLIER
+                                  * _SECURITY_PROGRAMMING_MULTIPLIER,
+                ),
+                source_sheet_ids=list(sheets),
+                notes=_security_notes_for(record, role="programming"),
             ))
 
     return items

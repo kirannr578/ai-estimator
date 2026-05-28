@@ -180,6 +180,23 @@ class DrawingPrepassResult:
     # a ``core.extraction.lab_casework_schedule.LabScheduleResult``
     # or ``None``.
     lab_schedule: Any = None
+    # T2.11 — typed AV / IT equipment schedule pre-pass.  Populated
+    # whenever an AV equipment schedule was detected on the page.
+    # Runs INDEPENDENTLY of door / window / finish / room
+    # precedence — AV schedules live on T-series telecom / A/V
+    # drawings that those upstream detectors never claim.  Runs
+    # ALONGSIDE every other T2.x hook (different table shapes,
+    # different sheets → no scheduling conflict).  Closes the
+    # T2.x typed-extraction family alongside the security hook
+    # below.  Concretely a
+    # ``core.extraction.av_schedule.AVScheduleResult`` or ``None``.
+    av_schedule: Any = None
+    # T2.11 — typed security / access-control schedule pre-pass.
+    # Populated whenever a security schedule was detected on the
+    # page.  Same posture as ``av_schedule``.  Concretely a
+    # ``core.extraction.security_schedule.SecurityScheduleResult``
+    # or ``None``.
+    security_schedule: Any = None
 
 
 # ---------------------------------------------------------------------------
@@ -987,6 +1004,106 @@ def _maybe_extract_lab_schedule(page: "fitz.Page", page_index: int,
     return result if result.casework else None
 
 
+def _maybe_extract_av_schedule(page: "fitz.Page", page_index: int,
+                                  schedules: list[Schedule]) -> Any:
+    """T2.11 hook: run the AV-equipment-schedule extractor when present.
+
+    Imported lazily so the av_schedule module stays optional at
+    load time.  **Runs independently of door / window / finish /
+    room precedence** — AV / IT equipment schedules live on
+    T-series telecom / A/V drawings that those upstream detectors
+    never claim, same posture as every other T2.x hook.  Runs
+    ALONGSIDE every other T2.x hook (different table shapes,
+    different sheets → no scheduling conflict).  Returns an
+    ``AVScheduleResult`` dataclass or ``None``.
+    """
+    text_upper = (page.get_text("text") or "").upper()
+    text_has_phrase = any(
+        kw in text_upper
+        for kw in (
+            "AV SCHEDULE",
+            "A/V SCHEDULE",
+            "AUDIO VISUAL SCHEDULE",
+            "AUDIO-VIDEO SCHEDULE",
+            "AUDIO-VISUAL SCHEDULE",
+            "AV EQUIPMENT SCHEDULE",
+            "AV DEVICE SCHEDULE",
+            "VIDEO CONFERENCING SCHEDULE",
+            "AV/IT SCHEDULE",
+            "DISPLAY SCHEDULE",
+        )
+    )
+    if not text_has_phrase:
+        try:
+            from .av_schedule import _looks_like_av_header  # type: ignore
+        except Exception:  # pragma: no cover - defensive
+            return None
+        if not any(_looks_like_av_header(s.headers) for s in schedules):
+            return None
+    try:
+        from .av_schedule import extract_av_schedule_from_page
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.debug("av_schedule import failed: %s", exc)
+        return None
+    try:
+        result = extract_av_schedule_from_page(page, page_index)
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.warning("av_schedule extraction failed on page %d: %s",
+                       page_index, exc)
+        return None
+    return result if result.devices else None
+
+
+def _maybe_extract_security_schedule(page: "fitz.Page", page_index: int,
+                                        schedules: list[Schedule]) -> Any:
+    """T2.11 hook: run the security-schedule extractor when present.
+
+    Imported lazily so the security_schedule module stays optional
+    at load time.  **Runs independently of door / window / finish
+    / room precedence** — security schedules live on S-series
+    security or T-series telecom sheets.  The ``DOOR HARDWARE
+    SCHEDULE`` phrase is handled with a context guard inside the
+    extractor itself (see :func:`.security_schedule.
+    detect_security_schedule_page`).  Returns a
+    ``SecurityScheduleResult`` dataclass or ``None``.
+    """
+    text_upper = (page.get_text("text") or "").upper()
+    # NB: ``DOOR HARDWARE SCHEDULE`` is intentionally NOT in this
+    # quick-path list — the extractor's detector applies the
+    # security-context guard for that phrase.  A bare
+    # ``DOOR HARDWARE SCHEDULE`` page belongs to Phase T1.
+    text_has_phrase = any(
+        kw in text_upper
+        for kw in (
+            "SECURITY SCHEDULE",
+            "ACCESS CONTROL SCHEDULE",
+            "SECURITY DEVICE SCHEDULE",
+            "CCTV SCHEDULE",
+            "VIDEO SURVEILLANCE SCHEDULE",
+            "CARD READER SCHEDULE",
+        )
+    )
+    if not text_has_phrase:
+        try:
+            from .security_schedule import _looks_like_security_header  # type: ignore
+        except Exception:  # pragma: no cover - defensive
+            return None
+        if not any(_looks_like_security_header(s.headers) for s in schedules):
+            return None
+    try:
+        from .security_schedule import extract_security_schedule_from_page
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.debug("security_schedule import failed: %s", exc)
+        return None
+    try:
+        result = extract_security_schedule_from_page(page, page_index)
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.warning("security_schedule extraction failed on page %d: %s",
+                       page_index, exc)
+        return None
+    return result if result.devices else None
+
+
 def prepass_drawing_page(pdf_path: Path, page_index: int) -> DrawingPrepassResult:
     """Run the deterministic pre-pass on a single page of a drawing PDF."""
     pdf_path = Path(pdf_path)
@@ -1029,6 +1146,12 @@ def prepass_drawing_page(pdf_path: Path, page_index: int) -> DrawingPrepassResul
         lab_schedule = _maybe_extract_lab_schedule(
             page, page_index, schedules,
         )
+        av_schedule = _maybe_extract_av_schedule(
+            page, page_index, schedules,
+        )
+        security_schedule = _maybe_extract_security_schedule(
+            page, page_index, schedules,
+        )
 
     if not text.strip():
         quality_issues.append("page has no embedded text (likely scanned)")
@@ -1049,6 +1172,8 @@ def prepass_drawing_page(pdf_path: Path, page_index: int) -> DrawingPrepassResul
         plumbing_schedule=plumbing_schedule,
         kitchen_schedule=kitchen_schedule,
         lab_schedule=lab_schedule,
+        av_schedule=av_schedule,
+        security_schedule=security_schedule,
     )
     result.confidence = round(_score(result), 4)
     return result
@@ -1093,6 +1218,12 @@ def prepass_drawing_pdf(pdf_path: Path) -> list[DrawingPrepassResult]:
             lab_schedule = _maybe_extract_lab_schedule(
                 page, i, schedules,
             )
+            av_schedule = _maybe_extract_av_schedule(
+                page, i, schedules,
+            )
+            security_schedule = _maybe_extract_security_schedule(
+                page, i, schedules,
+            )
             if not text.strip():
                 quality_issues.append("page has no embedded text (likely scanned)")
 
@@ -1112,6 +1243,8 @@ def prepass_drawing_pdf(pdf_path: Path) -> list[DrawingPrepassResult]:
                 plumbing_schedule=plumbing_schedule,
                 kitchen_schedule=kitchen_schedule,
                 lab_schedule=lab_schedule,
+                av_schedule=av_schedule,
+                security_schedule=security_schedule,
             )
             r.confidence = round(_score(r), 4)
             results.append(r)
@@ -1182,6 +1315,14 @@ def to_schema(result: DrawingPrepassResult):
     if result.lab_schedule is not None:
         from .lab_casework_schedule import to_schema as lab_to_schema
         lab_schedule = lab_to_schema(result.lab_schedule)
+    av_schedule = None
+    if result.av_schedule is not None:
+        from .av_schedule import to_schema as av_to_schema
+        av_schedule = av_to_schema(result.av_schedule)
+    security_schedule = None
+    if result.security_schedule is not None:
+        from .security_schedule import to_schema as security_to_schema
+        security_schedule = security_to_schema(result.security_schedule)
     return S.DrawingPrepassResult(
         title_block=S.TitleBlockData(
             project_name=tb.project_name,
@@ -1213,6 +1354,8 @@ def to_schema(result: DrawingPrepassResult):
         plumbing_schedule=plumbing_schedule,
         kitchen_schedule=kitchen_schedule,
         lab_schedule=lab_schedule,
+        av_schedule=av_schedule,
+        security_schedule=security_schedule,
     )
 
 
