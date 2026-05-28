@@ -65,3 +65,9 @@ config/cost_database_escalated.json
 .idea/
 .vscode/
 .DS_Store
+
+# Smoke-test scratch directory — manual-smoke generators (e.g. the T9.2
+# `tmp_smoke/generate_t9_2_smoke_pdf.py` referenced in the roadmap) and the
+# rendered artifacts they produce. Local-only; rerun the generator script
+# to recreate the artifact.
+tmp_smoke/

@@ -32,5 +32,11 @@
       { "label": "Retainage",     "percentage": 10.0, "amount": null, "notes": "Due 30 days after final acceptance" }
     ]
   },
-  "terms_text": ""
+  "terms_text": "",
+  "alternates_section": {
+    "enabled": true,
+    "intro_paragraph": null,
+    "footer_note": null,
+    "default_selection": null
+  }
 }

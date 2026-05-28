@@ -35,7 +35,13 @@ from reportlab.platypus import (
     TableStyle,
 )
 
-from .schemas import CostSourceTier, Estimate, QuoteConfig
+from .schemas import (
+    AlternateLineEstimate,
+    AlternateType,
+    CostSourceTier,
+    Estimate,
+    QuoteConfig,
+)
 from .takeoff import ProjectModel
 
 logger = logging.getLogger(__name__)
@@ -1264,6 +1270,370 @@ def _signature_block(cfg: QuoteConfig, styles: dict[str, ParagraphStyle]) -> lis
 
 
 # ---------------------------------------------------------------------------
+# Phase T9.2 — Bid alternates section (renders Estimate.alternates)
+# ---------------------------------------------------------------------------
+#
+# Distinct from :func:`_alternates_and_unit_prices` above which renders the
+# legacy project-level :pyattr:`BidPackage.alternates` (informational
+# pre-T9.0 shape). The Phase T9.2 section below renders the priced
+# :pyattr:`Estimate.alternates` (T9.0 shape) with a base-vs-selected
+# tally and a regulator-friendly footer note.
+#
+# Insertion point: between Cost Breakdown (CSI division + cost category
+# tables) and Scope Coverage. Rationale: alternates affect the cost
+# numbers, so they belong adjacent to the cost-breakdown material; the
+# payment schedule (which sits later, after scope + supporting docs)
+# should land AFTER the operator has decided which alternates to roll
+# in.
+
+_ALTERNATE_TYPE_SHORT_LABELS: dict[AlternateType, str] = {
+    AlternateType.ADDITIVE: "Add",
+    AlternateType.DEDUCTIVE: "Deduct",
+    AlternateType.SUBSTITUTION: "Sub.",
+    AlternateType.VE: "VE",
+}
+
+# Sort order for the PDF table. Per the T9.2 brief: ADDITIVE first
+# (most common, owner usually adds scope), then SUBSTITUTION (net-delta
+# trades — second-most-common), then VE (engineering proposals — same
+# numerical sign as DEDUCTIVE but worth a separate visual group), then
+# DEDUCTIVE (savings; typically smallest count). Within each type, by
+# alternate_id (string sort) for determinism.
+_ALTERNATE_TYPE_SORT_ORDER: dict[AlternateType, int] = {
+    AlternateType.ADDITIVE: 0,
+    AlternateType.SUBSTITUTION: 1,
+    AlternateType.VE: 2,
+    AlternateType.DEDUCTIVE: 3,
+}
+
+ALTERNATES_SECTION_TITLE: str = "Bid Alternates"
+ALTERNATES_SECTION_SUBTITLE: str = (
+    "Owner-option items priced separately from the base bid"
+)
+
+# Tally-section sub-heading. Pinned by `test_section_renders_tally_heading`.
+ALTERNATES_TALLY_HEADING: str = "Tally — base bid vs. alternate selections"
+
+DEFAULT_ALTERNATES_INTRO_PARAGRAPH: str = (
+    "The following items have been priced as alternates to the base bid. "
+    "The owner may elect to include any combination of these alternates; "
+    "pricing for each is shown below. The base bid stands on its own and "
+    "assumes none of these alternates are selected unless otherwise noted."
+)
+
+DEFAULT_ALTERNATES_FOOTER_NOTE: str = (
+    "Prices for alternates assume execution concurrent with the base bid. "
+    "Sequential or out-of-order execution may incur mobilization premiums. "
+    "Alternates expire 60 days from this proposal date unless otherwise "
+    "agreed."
+)
+
+
+def _coerce_alternate_type(t: AlternateType | str | None) -> AlternateType | None:
+    """Normalize a value (enum or stringified value) to :class:`AlternateType`."""
+    if isinstance(t, AlternateType):
+        return t
+    if t is None:
+        return None
+    try:
+        return AlternateType(t)
+    except (ValueError, TypeError):
+        return None
+
+
+def _format_alternate_type_short(t: AlternateType | str) -> str:
+    """Short table label for an :class:`AlternateType`.
+
+    Returns ``"Add"`` / ``"Deduct"`` / ``"Sub."`` / ``"VE"`` for the
+    four canonical types; falls through to the input's string form for
+    anything unrecognized so a future enum extension renders as the new
+    value rather than crashing the PDF build.
+    """
+    coerced = _coerce_alternate_type(t)
+    if coerced is None:
+        return str(t)
+    return _ALTERNATE_TYPE_SHORT_LABELS.get(coerced, str(coerced))
+
+
+def _truncate_description_for_pdf(
+    desc: str | None, max_chars: int = 80
+) -> tuple[str, str | None]:
+    """Word-aware truncation for the Description column.
+
+    Returns ``(truncated, footnote)`` where ``footnote`` is the full
+    text when the input was truncated, or ``None`` when the original
+    fits within ``max_chars``. Word-aware: cuts at the last space at or
+    before ``max_chars`` if that space sits at least half-way across
+    the budget, otherwise hard-cuts at ``max_chars`` so a description
+    with no whitespace inside the budget still fits the column. The
+    truncated form ends with a Unicode ellipsis (``"…"``) so the
+    reader knows it's clipped.
+
+    ``None`` / empty input returns ``("", None)`` — no footnote.
+    Inputs of exactly ``max_chars`` return ``(input, None)`` — no
+    ellipsis on the boundary, matching the brief's "boundary at exactly
+    max_chars" test.
+    """
+    if desc is None:
+        return "", None
+    s = str(desc)
+    if len(s) <= max_chars:
+        return s, None
+    head = s[:max_chars]
+    last_space = head.rfind(" ")
+    # Only word-break if the last space sits at least half-way across
+    # the budget — otherwise we'd produce a stub like "Su…" instead of
+    # "Substitute…" for a long single word with a tiny preamble.
+    word_break_floor = max(20, max_chars // 2)
+    cutoff = last_space if last_space >= word_break_floor else max_chars
+    truncated = s[:cutoff].rstrip() + "\u2026"
+    return truncated, s
+
+
+def _sort_alternates_for_pdf(
+    alternates: list[AlternateLineEstimate],
+) -> list[AlternateLineEstimate]:
+    """Stable sort by AlternateType per the T9.2 order, then by alternate_id."""
+
+    def _key(a: AlternateLineEstimate) -> tuple[int, str]:
+        coerced = _coerce_alternate_type(a.alternate_type)
+        type_rank = (
+            _ALTERNATE_TYPE_SORT_ORDER.get(coerced, 99)
+            if coerced is not None
+            else 99
+        )
+        return (type_rank, str(a.alternate_id or ""))
+
+    return sorted(alternates, key=_key)
+
+
+def _compute_tally_rows(
+    estimate: Estimate,
+    selected_ids: set[str] | None = None,
+) -> list[tuple[str, float, float | None]]:
+    """Compute base / with-X tally rows for the section footer.
+
+    Returns a list of ``(label, total, delta_from_base)`` tuples. The
+    base row carries ``delta=None`` (it IS the base — no delta to
+    itself). Each "Base + all <type>" row is included only when at
+    least one alternate of that type carries a non-None ``cost_delta``
+    — empty types are omitted entirely per the T9.2 brief. The "Base +
+    selected" row is always emitted (even when the selection set is
+    empty — the delta is then 0.00, which still answers the operator's
+    "what does my current selection look like?" question).
+
+    VE is rendered on its OWN row (separate from DEDUCTIVE) because the
+    grouping is operator-facing — a value-engineering proposal carries
+    different commercial weight than an architect-authored deductive,
+    even though the math is identical. Pinned by
+    ``test_compute_tally_ve_separate_from_deductive``.
+    """
+    base = float(estimate.subtotal_base_only)
+    rows: list[tuple[str, float, float | None]] = [
+        ("Base bid (no alternates)", round(base, 2), None),
+    ]
+
+    additive_total = 0.0
+    deductive_total = 0.0
+    ve_total = 0.0
+    has_additive = has_deductive = has_ve = False
+
+    for a in estimate.alternates:
+        if a.cost_delta is None:
+            continue
+        coerced = _coerce_alternate_type(a.alternate_type)
+        if coerced is AlternateType.ADDITIVE:
+            additive_total += float(a.cost_delta)
+            has_additive = True
+        elif coerced is AlternateType.DEDUCTIVE:
+            deductive_total += float(a.cost_delta)
+            has_deductive = True
+        elif coerced is AlternateType.VE:
+            ve_total += float(a.cost_delta)
+            has_ve = True
+
+    if has_additive:
+        delta = round(additive_total, 2)
+        rows.append(("Base + all additive alternates", round(base + delta, 2), delta))
+    if has_deductive:
+        delta = round(deductive_total, 2)
+        rows.append(("Base + all deductive alternates", round(base + delta, 2), delta))
+    if has_ve:
+        delta = round(ve_total, 2)
+        rows.append(("Base + all VE items", round(base + delta, 2), delta))
+
+    selected = (
+        set(selected_ids)
+        if selected_ids is not None
+        else set(estimate.alternates_selected_default or set())
+    )
+    sel_total = float(estimate.subtotal_with_alternates_selected(selected))
+    rows.append(
+        (
+            "Base + selected alternates",
+            round(sel_total, 2),
+            round(sel_total - base, 2),
+        )
+    )
+    return rows
+
+
+def _format_signed_money(amount: float) -> str:
+    """``+$1,234.56`` / ``-$1,234.56`` formatter for the cost-delta column."""
+    sign = "+" if amount >= 0 else "-"
+    return f"{sign}${abs(amount):,.2f}"
+
+
+def _render_alternates_section(
+    estimate: Estimate,
+    project: ProjectModel,
+    styles: dict[str, ParagraphStyle],
+    client_config: dict | None = None,
+) -> list:
+    """Phase T9.2 — render the priced bid-alternates section.
+
+    Returns a flowables list ready to extend the document story:
+    page-break, heading + subtitle, intro paragraph, alternates table
+    sorted by type, full-text footnotes for any truncated description,
+    a tally sub-section (base / per-type / selected), and a footer note.
+
+    Returns ``[]`` (no flowables) when:
+      * ``estimate.alternates`` is empty — per the brief ("don't render
+        a heading-only empty section").
+      * ``client_config["enabled"]`` is explicitly ``False`` — operator
+        opt-out via ``config/client_quote.json``.
+
+    ``client_config`` keys honoured:
+      * ``enabled``: bool, default True. False → skip section.
+      * ``intro_paragraph``: str, override the default intro.
+      * ``footer_note``: str, override the default footer.
+      * ``default_selection``: list[str], override
+        :pyattr:`Estimate.alternates_selected_default` for the rendered
+        PDF (handy for one-off PDFs without changing the estimate).
+    """
+    cfg = client_config or {}
+
+    if not estimate.alternates:
+        return []
+    if cfg.get("enabled") is False:
+        return []
+
+    intro = cfg.get("intro_paragraph") or DEFAULT_ALTERNATES_INTRO_PARAGRAPH
+    footer_note = cfg.get("footer_note") or DEFAULT_ALTERNATES_FOOTER_NOTE
+
+    selection_override = cfg.get("default_selection")
+    if selection_override is not None:
+        selected_ids: set[str] = {str(s) for s in selection_override}
+    else:
+        selected_ids = set(estimate.alternates_selected_default or set())
+
+    flow: list = [
+        PageBreak(),
+        Paragraph(ALTERNATES_SECTION_TITLE, styles["h1"]),
+        Paragraph(
+            f"<i>{ALTERNATES_SECTION_SUBTITLE}</i>", styles["body_small"]
+        ),
+        Spacer(1, 0.05 * inch),
+        Paragraph(intro, styles["body"]),
+        Spacer(1, 0.10 * inch),
+    ]
+
+    sorted_alts = _sort_alternates_for_pdf(list(estimate.alternates))
+
+    rows: list[list] = [
+        ["Alt ID", "Type", "Description", "Cost Delta", "Notes"]
+    ]
+    long_descriptions: list[tuple[str, str]] = []
+    for a in sorted_alts:
+        truncated, full_text = _truncate_description_for_pdf(a.description)
+        if full_text is not None:
+            long_descriptions.append((a.alternate_id, full_text))
+
+        if a.cost_delta is None:
+            cost_str = "$_____"
+        else:
+            cost_str = _format_signed_money(float(a.cost_delta))
+
+        # Notes column. Per the T9.2 brief: "only the operator-facing-
+        # relevant notes; skip the basis tag". Operator notes on
+        # AlternateLineEstimate are already free-form (the basis lives
+        # on .pricing_basis, not in .operator_notes), so we surface
+        # them as-is. Empty notes render as a blank cell.
+        notes = (a.operator_notes or "").strip()
+        notes_cell = (
+            Paragraph(notes, styles["body_small"]) if notes else ""
+        )
+
+        rows.append(
+            [
+                a.alternate_id,
+                _format_alternate_type_short(a.alternate_type),
+                Paragraph(truncated, styles["body"]),
+                cost_str,
+                notes_cell,
+            ]
+        )
+
+    # Column widths sum to CONTENT_WIDTH (7.0"). Description gets the
+    # residual; cost + notes are equal-width so the eye groups them.
+    col_widths = [
+        0.7 * inch,
+        0.7 * inch,
+        CONTENT_WIDTH - 0.7 * inch - 0.7 * inch - 1.4 * inch - 1.4 * inch,
+        1.4 * inch,
+        1.4 * inch,
+    ]
+    tbl = Table(rows, colWidths=col_widths, repeatRows=1)
+    tbl_style = _grid_style()
+    tbl_style.add("ALIGN", (3, 1), (3, -1), "RIGHT")
+    tbl.setStyle(tbl_style)
+    flow.append(tbl)
+
+    if long_descriptions:
+        flow.append(Spacer(1, 0.06 * inch))
+        for alt_id, full in long_descriptions:
+            flow.append(
+                Paragraph(
+                    f"<i><b>{alt_id} — full description:</b> {full}</i>",
+                    styles["body_small"],
+                )
+            )
+
+    flow.append(Spacer(1, 0.18 * inch))
+    flow.append(Paragraph(ALTERNATES_TALLY_HEADING, styles["h2"]))
+
+    tally = _compute_tally_rows(estimate, selected_ids)
+    tally_rows: list[list] = [["Scenario", "Total", "Delta"]]
+    for label, total, delta in tally:
+        if delta is None:
+            tally_rows.append([label, _money(total), ""])
+        else:
+            tally_rows.append([label, _money(total), _format_signed_money(delta)])
+
+    tally_col_widths = [
+        CONTENT_WIDTH - 1.4 * inch - 1.4 * inch,
+        1.4 * inch,
+        1.4 * inch,
+    ]
+    ttbl = Table(tally_rows, colWidths=tally_col_widths, repeatRows=1)
+    tstyle = _grid_style()
+    tstyle.add("ALIGN", (1, 1), (-1, -1), "RIGHT")
+    # Highlight the "Base + selected alternates" row (always last data
+    # row by construction in `_compute_tally_rows`) — that's the
+    # operator's intended deliverable scenario, so it gets the same
+    # bold-on-tinted-background treatment the other section totals use.
+    tstyle.add("FONTNAME", (0, -1), (-1, -1), "Helvetica-Bold")
+    tstyle.add("BACKGROUND", (0, -1), (-1, -1), ACCENT_LIGHT)
+    ttbl.setStyle(tstyle)
+    flow.append(ttbl)
+
+    flow.append(Spacer(1, 0.15 * inch))
+    flow.append(Paragraph(f"<i>{footer_note}</i>", styles["body_small"]))
+
+    return flow
+
+
+# ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
 
@@ -1275,6 +1645,7 @@ def build_quote_pdf(
     out_path: Path,
     *,
     csi_titles: Optional[dict[str, str]] = None,
+    alternates_config: Optional[dict] = None,
 ) -> Path:
     """Build a client-ready proposal PDF and return the written path.
 
@@ -1285,6 +1656,15 @@ def build_quote_pdf(
         out_path: where to write the PDF (parents are created if missing).
         csi_titles: optional CSI division titles for the breakdown table; if
             omitted, division codes are shown without descriptions.
+        alternates_config: optional dict (typically loaded from the
+            ``alternates_section`` block in ``config/client_quote.json``)
+            controlling the Phase T9.2 bid-alternates section. Recognised
+            keys: ``enabled`` (bool, default True), ``intro_paragraph``
+            (str), ``footer_note`` (str), ``default_selection``
+            (list[str] of alternate_ids — overrides
+            ``Estimate.alternates_selected_default`` for the rendered
+            PDF). Section is skipped silently when the estimate has no
+            alternates OR ``enabled`` is False, regardless of config.
     """
     out_path = Path(out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -1303,6 +1683,17 @@ def build_quote_pdf(
     story.extend(_executive_summary(estimate, quote_config, styles))
     story.extend(_csi_division_table(estimate, csi_titles, styles))
     story.extend(_cost_category_table(estimate, styles))
+    # Phase T9.2 — bid-alternates section. Inserted BETWEEN cost
+    # breakdown (CSI division + category tables above) and the rest of
+    # the proposal (scope coverage, project-level alternates/unit
+    # prices, supporting docs, payment schedule below) so the reader
+    # encounters the alternates while the cost numbers are still fresh.
+    # Returns an empty list (and is therefore skipped silently) when
+    # the estimate has no T9.0-priced alternates OR the operator
+    # disabled the section via ``alternates_config["enabled"] = False``.
+    story.extend(
+        _render_alternates_section(estimate, project, styles, alternates_config)
+    )
     story.extend(_scope_coverage(project, styles))
     story.extend(_alternates_and_unit_prices(project, styles))
     story.extend(_supporting_documents_page(project, styles))
