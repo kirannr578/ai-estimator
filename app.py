@@ -40,6 +40,7 @@ from core.estimator import (
     MANUAL_OVERRIDE_NOTE_PREFIX,
     CostDatabase,
     apply_manual_override,
+    attach_alternates_to_estimate,
     price_takeoff,
 )
 from core.exporter import export_estimate_json, export_estimate_xlsx
@@ -65,6 +66,9 @@ from core.pricing.subquote_parser import (
     parse_subquote_pdf_with_llm,
 )
 from core.schemas import (
+    AlternateLineEstimate,
+    AlternatePricingBasis,
+    AlternateType,
     ClientInfo,
     CompanyInfo,
     CostLine,
@@ -574,6 +578,453 @@ def _render_subquote_llm_source_banner(
     )
 
 
+# ---------------------------------------------------------------------------
+# Phase T9.1 — Streamlit "Bid Alternates" review tab helpers
+# ---------------------------------------------------------------------------
+#
+# Pure helpers wrapping the T9.0 backend so the alternates review tab can be
+# tested without a Streamlit harness. Same pattern as T6.2 (override UI):
+# every Streamlit-side function delegates to a pure helper that takes the
+# raw Pydantic model in and emits a string / dict / list out — the
+# Streamlit form glue (``st.checkbox``, ``st.number_input``, ...) is
+# transitively unit-tested via the helpers, and a smoke import of
+# ``app.py`` confirms the form wiring parses.
+#
+# Public surface:
+#
+# * :func:`_alternate_type_label` / :func:`_alternate_basis_label` —
+#   user-visible labels matching ``core.exporter`` exactly.
+# * :func:`_format_alternate_type_badge` — type badge with a colour hint
+#   for the Streamlit markdown surface.
+# * :func:`_format_cost_delta` — signed dollar string with proper sign
+#   per ``AlternateType``; em-dash for MISSING (None) deltas.
+# * :func:`_compute_alternates_summary` — by-type aggregates (count + sum
+#   of resolved deltas) for the header banner.
+# * :func:`_alternates_to_csv` — CSV export including selection state and
+#   in-session operator notes overlay.
+# * :func:`_resolve_bid_package_title` — FK resolution from
+#   ``bid_package_id`` to a human-readable title; handles None / unknown.
+# * :func:`_initialize_alternates_session_state` — idempotent seeding of
+#   the three new session-state keys; resets on a new estimate identity.
+# * :func:`_apply_alternate_operator_entry` — pure functional update for
+#   a MISSING-basis alternate: returns a new list with the entered delta
+#   applied + ``OPERATOR_ENTERED`` basis. Sign mismatch (ADDITIVE with
+#   negative delta, DEDUCTIVE with positive delta) emits a soft warning
+#   string but still applies, mirroring the T9.0 backend
+#   ``AlternateLine._validate_sign_consistency`` behaviour.
+
+_ALTERNATE_TYPE_LABELS_UI: dict[AlternateType, str] = {
+    AlternateType.ADDITIVE: "Additive",
+    AlternateType.DEDUCTIVE: "Deductive",
+    AlternateType.SUBSTITUTION: "Substitution",
+    AlternateType.VE: "Value Engineering",
+}
+
+# Streamlit native ``:colour[text]`` markdown spans (Streamlit ≥1.27)
+# render coloured pills in regular markdown. Falling back to plain
+# parenthesised tags if the host Streamlit is older still produces a
+# usable label — the colour is purely cosmetic.
+_ALTERNATE_TYPE_BADGE_COLOURS: dict[AlternateType, str] = {
+    AlternateType.ADDITIVE: "green",
+    AlternateType.DEDUCTIVE: "red",
+    AlternateType.SUBSTITUTION: "orange",
+    AlternateType.VE: "blue",
+}
+
+_ALTERNATE_BASIS_LABELS_UI: dict[AlternatePricingBasis, str] = {
+    AlternatePricingBasis.EXTRACTED_FROM_BID_FORM: "Extracted (bid form)",
+    AlternatePricingBasis.OPERATOR_ENTERED: "Operator entered",
+    AlternatePricingBasis.SYNTHESIZED_FROM_TAKEOFF: "Synthesized (takeoff)",
+    AlternatePricingBasis.MISSING: "Missing — review",
+}
+
+_ALTERNATE_BASIS_TOOLTIPS: dict[AlternatePricingBasis, str] = {
+    AlternatePricingBasis.EXTRACTED_FROM_BID_FORM: (
+        "Cost delta was printed on the bid form and parsed verbatim."
+    ),
+    AlternatePricingBasis.OPERATOR_ENTERED: (
+        "Cost delta was hand-entered by an operator (this UI or a "
+        "vendor / sub quote outside the bid-form path)."
+    ),
+    AlternatePricingBasis.SYNTHESIZED_FROM_TAKEOFF: (
+        "Cost delta was computed by summing priced takeoff items "
+        "referenced by the alternate (related_takeoff_items)."
+    ),
+    AlternatePricingBasis.MISSING: (
+        "No cost delta and no related takeoff items — operator "
+        "review required before submitting the bid."
+    ),
+}
+
+
+def _alternate_type_label(t: AlternateType | str) -> str:
+    """Title-case label for an :class:`AlternateType` (mirrors exporter)."""
+    if isinstance(t, AlternateType):
+        return _ALTERNATE_TYPE_LABELS_UI[t]
+    try:
+        return _ALTERNATE_TYPE_LABELS_UI[AlternateType(t)]
+    except (ValueError, KeyError):
+        return str(t)
+
+
+def _alternate_basis_label(basis: AlternatePricingBasis | str) -> str:
+    """Title-case label for an :class:`AlternatePricingBasis` (mirrors exporter)."""
+    if isinstance(basis, AlternatePricingBasis):
+        return _ALTERNATE_BASIS_LABELS_UI[basis]
+    try:
+        return _ALTERNATE_BASIS_LABELS_UI[AlternatePricingBasis(basis)]
+    except (ValueError, KeyError):
+        return str(basis)
+
+
+def _format_alternate_type_badge(t: AlternateType | str) -> str:
+    """Render a colour-coded ``:colour[Title]`` Streamlit markdown badge.
+
+    Returns a single-line markdown string suitable for ``st.markdown``.
+    Falls back to plain ``[Label]`` when the type is not a known
+    :class:`AlternateType` value.
+    """
+    try:
+        atype = t if isinstance(t, AlternateType) else AlternateType(t)
+    except (ValueError, KeyError):
+        return f"[{t}]"
+    label = _ALTERNATE_TYPE_LABELS_UI[atype]
+    colour = _ALTERNATE_TYPE_BADGE_COLOURS[atype]
+    return f":{colour}[{label}]"
+
+
+def _format_cost_delta(
+    delta: float | None,
+    alt_type: AlternateType | str | None = None,
+) -> str:
+    """Format a signed dollar amount per :class:`AlternateType` convention.
+
+    * ``None`` → ``"$_____"`` (the bid-form blank placeholder; signals
+      MISSING basis to the operator).
+    * Positive  → ``"+$X,XXX.XX"``
+    * Negative  → ``"-$X,XXX.XX"`` (the unary minus and `$` flip so the
+      sign reads as "$-X" colloquially; we use `-$X` for readability).
+    * Zero      → ``"$0.00"`` (no sign prefix).
+
+    ``alt_type`` is accepted for API symmetry with the brief but does not
+    change the formatting — the sign is taken from the resolved delta
+    itself, matching the T9.0 backend convention where every cost_delta
+    is already signed.
+    """
+    if delta is None:
+        return "$_____"
+    try:
+        amount = float(delta)
+    except (TypeError, ValueError):
+        return "$_____"
+    if amount > 0:
+        return f"+${amount:,.2f}"
+    if amount < 0:
+        return f"-${abs(amount):,.2f}"
+    return "$0.00"
+
+
+def _compute_alternates_summary(
+    alternates: list[AlternateLineEstimate],
+) -> dict[str, dict[str, Any]]:
+    """Aggregate priced alternates into UI-friendly per-type metrics.
+
+    Returns a dict keyed by the :class:`AlternateType` *string value* so
+    the Streamlit caller can iterate without re-importing the enum::
+
+        {
+            "additive": {"count": int, "total_delta": float, "missing_count": int},
+            "deductive": {...},
+            "substitution": {...},
+            "value_engineering": {...},
+            "all": {"count": int, "total_delta": float, "missing_count": int},
+        }
+
+    ``total_delta`` is the sum of *resolved* (non-None) ``cost_delta``
+    values for that bucket; ``missing_count`` is the number of priced
+    alternates whose pricing basis is ``MISSING`` (which always implies
+    ``cost_delta is None``).
+    """
+    out: dict[str, dict[str, Any]] = {
+        t.value: {"count": 0, "total_delta": 0.0, "missing_count": 0}
+        for t in AlternateType
+    }
+    out["all"] = {"count": 0, "total_delta": 0.0, "missing_count": 0}
+
+    for a in alternates or []:
+        atype = a.alternate_type
+        if isinstance(atype, AlternateType):
+            key = atype.value
+        else:
+            try:
+                key = AlternateType(atype).value
+            except (ValueError, KeyError):
+                continue
+        out[key]["count"] += 1
+        out["all"]["count"] += 1
+
+        if a.cost_delta is not None:
+            out[key]["total_delta"] = round(
+                out[key]["total_delta"] + float(a.cost_delta), 2
+            )
+            out["all"]["total_delta"] = round(
+                out["all"]["total_delta"] + float(a.cost_delta), 2
+            )
+
+        # ``MISSING`` basis is the canonical "needs operator attention"
+        # signal — surfaced separately from cost_delta-is-None because a
+        # future basis (OPERATOR_ENTERED with a still-None delta) would
+        # not necessarily mean "missing".
+        basis = a.pricing_basis
+        if isinstance(basis, AlternatePricingBasis):
+            is_missing = basis == AlternatePricingBasis.MISSING
+        else:
+            try:
+                is_missing = (
+                    AlternatePricingBasis(basis) == AlternatePricingBasis.MISSING
+                )
+            except (ValueError, KeyError):
+                is_missing = False
+        if is_missing:
+            out[key]["missing_count"] += 1
+            out["all"]["missing_count"] += 1
+
+    return out
+
+
+def _alternates_to_csv(
+    alternates: list[AlternateLineEstimate],
+    selected_ids: set[str] | None = None,
+    operator_notes_map: dict[str, str] | None = None,
+) -> str:
+    """Render priced alternates + selection state as a CSV string.
+
+    Columns (stable contract; tested by ``test_alternates_to_csv_*``)::
+
+        alternate_id, type, description, cost_delta, pricing_basis,
+        confidence, bid_package_id, source_sheet, related_csi,
+        selected, operator_notes
+
+    ``selected_ids`` defaults to the empty set; ``operator_notes_map``
+    is an in-session overlay keyed by ``alternate_id`` — when present
+    its value supersedes the ``AlternateLineEstimate.operator_notes``
+    on disk (mirrors the T9.1 UI's "edit notes inline" affordance).
+    """
+    sel = selected_ids or set()
+    notes_map = operator_notes_map or {}
+
+    buf = io.StringIO()
+    writer = csv.writer(buf, lineterminator="\n")
+    writer.writerow([
+        "alternate_id",
+        "type",
+        "description",
+        "cost_delta",
+        "pricing_basis",
+        "confidence",
+        "bid_package_id",
+        "source_sheet",
+        "related_csi",
+        "selected",
+        "operator_notes",
+    ])
+    for a in alternates or []:
+        atype = (
+            a.alternate_type.value
+            if isinstance(a.alternate_type, AlternateType)
+            else str(a.alternate_type)
+        )
+        basis = (
+            a.pricing_basis.value
+            if isinstance(a.pricing_basis, AlternatePricingBasis)
+            else str(a.pricing_basis)
+        )
+        delta_str = "" if a.cost_delta is None else f"{a.cost_delta:.2f}"
+        notes = notes_map.get(a.alternate_id, a.operator_notes or "")
+        writer.writerow([
+            a.alternate_id,
+            atype,
+            a.description,
+            delta_str,
+            basis,
+            f"{a.confidence:.2f}",
+            a.bid_package_id or "",
+            a.source_sheet or "",
+            ", ".join(a.related_csi or []),
+            "yes" if a.alternate_id in sel else "no",
+            notes,
+        ])
+    return buf.getvalue()
+
+
+def _resolve_bid_package_title(
+    bid_package_id: str | None,
+    project: ProjectModel | None,
+) -> str:
+    """Resolve a ``bid_package_id`` foreign key to a human-readable title.
+
+    Match order against ``project.bid_packages``:
+
+    1. ``BidPackage.pdf_name`` (the canonical FK target used by T9.0
+       extraction).
+    2. ``BidPackage.package_number`` (e.g. ``"03.00"``).
+
+    Returns the package's ``trade_name`` (preferred), falling back to
+    ``pdf_name`` when the trade name is empty. ``None`` / empty
+    ``bid_package_id`` returns ``"(general)"``; an unknown id returns
+    the id itself prefixed with ``"(unknown:`` so an operator can spot
+    the broken FK without crashing the UI.
+    """
+    if not bid_package_id:
+        return "(general)"
+    if project is None:
+        return bid_package_id
+    bid_packages = getattr(project, "bid_packages", None) or []
+    needle = str(bid_package_id).strip()
+    for p in bid_packages:
+        if p.pdf_name == needle or (p.package_number and p.package_number == needle):
+            return p.trade_name or p.pdf_name or needle
+    return f"(unknown: {bid_package_id})"
+
+
+# Session-state keys — kept namespaced under ``alternates_*`` so they
+# don't collide with the T6.2 (``override_history``,
+# ``estimate_original``), T6.3 (``batch_override_*``), or T8
+# (``subquote_*``) keys.
+_ALTERNATES_SS_SELECTED = "alternates_selected_ids"
+_ALTERNATES_SS_NOTES = "alternates_operator_notes"
+_ALTERNATES_SS_DELTAS = "alternates_operator_deltas"
+_ALTERNATES_SS_ESTIMATE_FP = "alternates_estimate_fingerprint"
+
+
+def _alternates_estimate_fingerprint(estimate: Estimate) -> tuple:
+    """Return a hashable fingerprint that changes when a new estimate loads.
+
+    Two estimates "look the same" to the alternates session if they
+    carry the same project name + line-item count + alternates list
+    (alternate_id + cost_delta tuple). A fresh analyze run regenerates
+    the line-item list so the fingerprint flips and the session
+    re-initialises; an in-session edit (e.g. T6.2 override) preserves
+    the alternates list and keeps the operator's selection / notes.
+    """
+    alts = list(getattr(estimate, "alternates", None) or [])
+    alt_fp = tuple((a.alternate_id, a.cost_delta) for a in alts)
+    return (
+        getattr(estimate, "project_name", "") or "",
+        len(getattr(estimate, "line_items", []) or []),
+        alt_fp,
+    )
+
+
+def _initialize_alternates_session_state(estimate: Estimate) -> None:
+    """Idempotent seed of the three new alternates session-state keys.
+
+    Called once per render of the Bid Alternates tab. On a fresh
+    estimate (different fingerprint) the function:
+
+    * seeds ``alternates_selected_ids`` from
+      ``estimate.alternates_selected_default``,
+    * resets ``alternates_operator_notes`` and
+      ``alternates_operator_deltas`` to empty dicts,
+    * stamps the new fingerprint so subsequent calls during the same
+      estimate are no-ops.
+
+    On a same-fingerprint re-call the function is a no-op — the
+    operator's in-progress selection / notes / deltas survive a
+    simple re-render (every checkbox toggle re-runs the script).
+    """
+    fp = _alternates_estimate_fingerprint(estimate)
+    if st.session_state.get(_ALTERNATES_SS_ESTIMATE_FP) == fp:
+        return
+
+    default_selected = set(
+        getattr(estimate, "alternates_selected_default", None) or set()
+    )
+    st.session_state[_ALTERNATES_SS_SELECTED] = default_selected
+    st.session_state[_ALTERNATES_SS_NOTES] = {}
+    st.session_state[_ALTERNATES_SS_DELTAS] = {}
+    st.session_state[_ALTERNATES_SS_ESTIMATE_FP] = fp
+
+
+def _apply_alternate_operator_entry(
+    alternate_id: str,
+    new_delta: float,
+    alternates: list[AlternateLineEstimate],
+) -> tuple[list[AlternateLineEstimate], str | None]:
+    """Apply an operator-entered ``cost_delta`` to a MISSING-basis alternate.
+
+    Returns ``(updated_alternates, warning_or_none)``. The list is a new
+    list — the input is never mutated. The warning is non-None only when
+    the entered ``new_delta``'s sign disagrees with the alternate's type
+    (ADDITIVE with negative delta, DEDUCTIVE with positive delta).
+
+    Mirrors the T9.0 backend ``AlternateLine._validate_sign_consistency``
+    behaviour: the entry IS APPLIED regardless — real bid forms
+    occasionally publish a positive absolute value with the ADD/DEDUCT
+    label printed separately, and downstream callers must tolerate
+    both conventions.
+
+    Raises :class:`ValueError` if ``alternate_id`` is not present in
+    ``alternates``. Pre-existing OPERATOR_ENTERED / EXTRACTED entries
+    are also overwritable (the operator can correct an extraction
+    error); the basis is set to OPERATOR_ENTERED on the way through.
+    """
+    if not alternate_id:
+        raise ValueError(
+            "_apply_alternate_operator_entry: alternate_id must be non-empty."
+        )
+    try:
+        delta_f = float(new_delta)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            f"_apply_alternate_operator_entry: new_delta {new_delta!r} "
+            f"must be numeric."
+        ) from exc
+
+    out: list[AlternateLineEstimate] = []
+    matched = False
+    warning: str | None = None
+    for a in alternates or []:
+        if a.alternate_id != alternate_id:
+            out.append(a)
+            continue
+        matched = True
+        atype = a.alternate_type
+        if isinstance(atype, str):
+            try:
+                atype = AlternateType(atype)
+            except (ValueError, KeyError):
+                atype = AlternateType.ADDITIVE
+        if atype == AlternateType.ADDITIVE and delta_f < 0:
+            warning = (
+                f"Sign mismatch: ADDITIVE alternate {alternate_id!r} "
+                f"received negative delta {delta_f:+,.2f}. Applied as-given; "
+                "verify the bid-form printed sign convention."
+            )
+        elif atype == AlternateType.DEDUCTIVE and delta_f > 0:
+            warning = (
+                f"Sign mismatch: DEDUCTIVE alternate {alternate_id!r} "
+                f"received positive delta {delta_f:+,.2f}. Applied as-given; "
+                "verify the bid-form printed sign convention."
+            )
+        out.append(
+            a.model_copy(
+                update={
+                    "cost_delta": round(delta_f, 2),
+                    "pricing_basis": AlternatePricingBasis.OPERATOR_ENTERED,
+                }
+            )
+        )
+
+    if not matched:
+        raise ValueError(
+            f"_apply_alternate_operator_entry: alternate_id "
+            f"{alternate_id!r} not found in {len(alternates or [])} priced "
+            "alternates."
+        )
+    return out, warning
+
+
 from core.sheet_classifier import classify_sheet
 from core.takeoff import ProjectModel, reconcile
 
@@ -743,6 +1194,16 @@ def _run_pipeline(
         overhead_pct=overhead_pct,
         profit_pct=profit_pct,
         cost_db=CostDatabase(),
+    )
+
+    # Phase T9.1 — attach priced bid alternates so the new "Bid Alternates"
+    # tab has data to render. Pure-additive: ``attach_alternates_to_estimate``
+    # returns a fresh ``Estimate`` with ``alternates`` + ``alternates_selected_default``
+    # populated and leaves every other field (including ``line_items`` and
+    # the headline ``grand_total``) untouched. No-op when the project
+    # has zero ``AlternateLine`` records.
+    estimate = attach_alternates_to_estimate(
+        estimate, project, region_multiplier=region_mult
     )
 
     progress_cb(1.0, "Done.")
@@ -1359,7 +1820,7 @@ if "estimate" in st.session_state:
         "Project", "Bid Packages", "Scope Matrix", "Scope Coverage", "Alternates",
         "Estimate", "By Division", "Sheets", "Rooms",
         "Doors / Windows", "Structural / MEP", "Specs",
-        "Raw takeoffs", "Warnings", "Client Quote",
+        "Raw takeoffs", "Warnings", "Client Quote", "Bid Alternates",
     ])
 
     # --- Project tab ---
@@ -3295,6 +3756,323 @@ if "estimate" in st.session_state:
     # --- Client Quote (F12 + F15) ---
     with tabs[14]:
         _render_client_quote_tab(estimate, project, csi_titles)
+
+    # --- Bid Alternates (T9.1) -------------------------------------------
+    # Pure-UI surface on top of the T9.0 backend. Lets an operator
+    # review every priced ``AlternateLineEstimate`` on ``estimate``,
+    # toggle each in/out of the bid via a per-row checkbox, hand-enter
+    # ``cost_delta`` for MISSING-basis lines (which flips the basis
+    # to OPERATOR_ENTERED), and watch the live "base vs with-selected"
+    # tally re-render on every toggle. The tab is self-contained:
+    # session state lives under the ``alternates_*`` namespace and
+    # never collides with the T6.* / T8.* keys.
+    with tabs[15]:
+        # Lazy seed of the session-state keys; idempotent under repeat
+        # renders so a checkbox toggle (which re-runs the script) is
+        # cheap.
+        _initialize_alternates_session_state(estimate)
+
+        priced_alts: list[AlternateLineEstimate] = list(
+            getattr(estimate, "alternates", None) or []
+        )
+
+        # In-session operator override of the priced alternates list:
+        # any operator-entered cost_delta replaces the corresponding
+        # priced row before we render the tally / rows. Stored as a
+        # delta-only map so the original priced list (which is the
+        # single source of truth on disk / Excel / JSON) is never
+        # mutated by the UI.
+        operator_deltas: dict[str, float] = (
+            st.session_state.get(_ALTERNATES_SS_DELTAS) or {}
+        )
+        live_alts: list[AlternateLineEstimate] = list(priced_alts)
+        for alt_id, delta_val in operator_deltas.items():
+            try:
+                live_alts, _w = _apply_alternate_operator_entry(
+                    alt_id, float(delta_val), live_alts
+                )
+            except ValueError:
+                # Stale entry referencing an alternate that no longer
+                # exists (e.g. after a re-analyze). Drop it silently —
+                # the next session-state init will reset.
+                continue
+
+        # ---- Header banner (counts + by-type aggregates) -------------
+        bid_pkg_count = len(getattr(project, "bid_packages", None) or [])
+        st.subheader("Bid Alternates")
+        st.caption(
+            "Operator-driven alternate selection. Toggle rows to roll "
+            "alternates in/out of the base; the live tally on the "
+            "right shows the base vs with-selected total. Excel / "
+            "JSON exports remain pinned to the *base* bid; this tab "
+            "is the operator's working scenario."
+        )
+
+        if not priced_alts:
+            st.info(
+                "No alternates extracted yet. Alternates appear "
+                "automatically when bid forms contain Alternate / Bid "
+                "Alternate / VE sections."
+            )
+        else:
+            summary = _compute_alternates_summary(live_alts)
+            banner_bits = [
+                f"**{summary['all']['count']}** alternates extracted "
+                f"from **{bid_pkg_count}** bid packages"
+            ]
+            sub_bits: list[str] = []
+            add_total = summary[AlternateType.ADDITIVE.value]["total_delta"]
+            ded_total = summary[AlternateType.DEDUCTIVE.value]["total_delta"]
+            sub_total = summary[AlternateType.SUBSTITUTION.value]["total_delta"]
+            ve_count = summary[AlternateType.VE.value]["count"]
+            if summary[AlternateType.ADDITIVE.value]["count"]:
+                sub_bits.append(
+                    f"{summary[AlternateType.ADDITIVE.value]['count']} additive "
+                    f"(potential {_format_cost_delta(add_total)})"
+                )
+            if summary[AlternateType.DEDUCTIVE.value]["count"]:
+                sub_bits.append(
+                    f"{summary[AlternateType.DEDUCTIVE.value]['count']} deductive "
+                    f"(potential {_format_cost_delta(ded_total)})"
+                )
+            if summary[AlternateType.SUBSTITUTION.value]["count"]:
+                sub_bits.append(
+                    f"{summary[AlternateType.SUBSTITUTION.value]['count']} substitution "
+                    f"(net {_format_cost_delta(sub_total)})"
+                )
+            if ve_count:
+                sub_bits.append(f"{ve_count} VE")
+            st.info(banner_bits[0])
+            if sub_bits:
+                st.caption(" | ".join(sub_bits))
+            if summary["all"]["missing_count"]:
+                st.warning(
+                    f"{summary['all']['missing_count']} alternate(s) "
+                    "have no resolvable cost_delta — enter a value "
+                    "below to flip them to OPERATOR_ENTERED basis."
+                )
+
+            # ---- Bulk-action buttons ---------------------------------
+            ba1, ba2, ba3, ba4 = st.columns(4)
+            with ba1:
+                if st.button("Select all additive", key="alt_select_all_additive"):
+                    sel = set(st.session_state.get(_ALTERNATES_SS_SELECTED, set()))
+                    sel.update(
+                        a.alternate_id for a in live_alts
+                        if a.alternate_type == AlternateType.ADDITIVE
+                    )
+                    st.session_state[_ALTERNATES_SS_SELECTED] = sel
+                    st.rerun()
+            with ba2:
+                if st.button("Select all deductive", key="alt_select_all_deductive"):
+                    sel = set(st.session_state.get(_ALTERNATES_SS_SELECTED, set()))
+                    sel.update(
+                        a.alternate_id for a in live_alts
+                        if a.alternate_type
+                        in (AlternateType.DEDUCTIVE, AlternateType.VE)
+                    )
+                    st.session_state[_ALTERNATES_SS_SELECTED] = sel
+                    st.rerun()
+            with ba3:
+                if st.button("Reset to default", key="alt_reset_default"):
+                    st.session_state[_ALTERNATES_SS_SELECTED] = set(
+                        getattr(estimate, "alternates_selected_default", None) or set()
+                    )
+                    st.rerun()
+            with ba4:
+                if st.button("Clear all", key="alt_clear_all"):
+                    st.session_state[_ALTERNATES_SS_SELECTED] = set()
+                    st.rerun()
+
+            # ---- Two-column layout: rows on the left, tally on the right
+            row_col, tally_col = st.columns([3, 1])
+
+            current_selected: set[str] = set(
+                st.session_state.get(_ALTERNATES_SS_SELECTED, set())
+            )
+            notes_map: dict[str, str] = (
+                st.session_state.get(_ALTERNATES_SS_NOTES) or {}
+            )
+
+            with row_col:
+                st.markdown("#### Alternates")
+                for a in live_alts:
+                    with st.container(border=True):
+                        head_cols = st.columns([0.7, 0.6, 1.6, 0.9])
+                        with head_cols[0]:
+                            checked = st.checkbox(
+                                "Include",
+                                value=a.alternate_id in current_selected,
+                                key=f"alt_sel_{a.alternate_id}",
+                                help="Roll this alternate into the with-selected total.",
+                            )
+                            if checked:
+                                current_selected.add(a.alternate_id)
+                            else:
+                                current_selected.discard(a.alternate_id)
+                        with head_cols[1]:
+                            st.markdown(f"**{a.alternate_id}**")
+                            st.markdown(_format_alternate_type_badge(a.alternate_type))
+                        with head_cols[2]:
+                            desc = a.description or "(no description)"
+                            if len(desc) > 120:
+                                st.write(desc[:117] + "…")
+                                with st.expander("Full description"):
+                                    st.write(desc)
+                            else:
+                                st.write(desc)
+                        with head_cols[3]:
+                            st.markdown(
+                                f"**{_format_cost_delta(a.cost_delta, a.alternate_type)}**"
+                            )
+                            basis_label = _alternate_basis_label(a.pricing_basis)
+                            st.caption(
+                                basis_label,
+                                help=_ALTERNATE_BASIS_TOOLTIPS.get(
+                                    a.pricing_basis
+                                    if isinstance(a.pricing_basis, AlternatePricingBasis)
+                                    else AlternatePricingBasis.MISSING,
+                                    "",
+                                ),
+                            )
+                            st.caption(f"Confidence: {a.confidence:.0%}")
+
+                        meta_cols = st.columns([1.2, 1.2, 1.6])
+                        with meta_cols[0]:
+                            st.caption(
+                                "Bid package: "
+                                + _resolve_bid_package_title(a.bid_package_id, project)
+                            )
+                        with meta_cols[1]:
+                            st.caption(f"Source: {a.source_sheet or '—'}")
+                        with meta_cols[2]:
+                            note_default = notes_map.get(
+                                a.alternate_id, a.operator_notes or ""
+                            )
+                            new_note = st.text_input(
+                                "Operator notes",
+                                value=note_default,
+                                key=f"alt_note_{a.alternate_id}",
+                                placeholder="(in-session notes; not persisted to disk)",
+                            )
+                            if new_note != note_default:
+                                notes_map[a.alternate_id] = new_note
+
+                        # Operator entry for MISSING-basis lines.
+                        if (
+                            isinstance(a.pricing_basis, AlternatePricingBasis)
+                            and a.pricing_basis == AlternatePricingBasis.MISSING
+                        ) or a.cost_delta is None:
+                            st.markdown(
+                                ":orange[**Missing cost — enter operator value:**]"
+                            )
+                            entry_cols = st.columns([1, 1, 2])
+                            with entry_cols[0]:
+                                entered = st.number_input(
+                                    "Cost delta ($)",
+                                    value=float(operator_deltas.get(a.alternate_id, 0.0)),
+                                    step=100.0,
+                                    format="%.2f",
+                                    key=f"alt_delta_{a.alternate_id}",
+                                )
+                            with entry_cols[1]:
+                                if st.button(
+                                    "Apply",
+                                    key=f"alt_apply_{a.alternate_id}",
+                                ):
+                                    try:
+                                        _new_alts, warn = _apply_alternate_operator_entry(
+                                            a.alternate_id,
+                                            float(entered),
+                                            live_alts,
+                                        )
+                                        deltas = dict(
+                                            st.session_state.get(
+                                                _ALTERNATES_SS_DELTAS, {}
+                                            )
+                                            or {}
+                                        )
+                                        deltas[a.alternate_id] = float(entered)
+                                        st.session_state[_ALTERNATES_SS_DELTAS] = deltas
+                                        if warn:
+                                            st.warning(warn)
+                                        else:
+                                            st.success(
+                                                f"Applied {_format_cost_delta(float(entered))} "
+                                                f"to {a.alternate_id}."
+                                            )
+                                        st.rerun()
+                                    except ValueError as exc:
+                                        st.error(str(exc))
+
+                # Persist the (possibly-edited) selection + notes maps.
+                st.session_state[_ALTERNATES_SS_SELECTED] = current_selected
+                st.session_state[_ALTERNATES_SS_NOTES] = notes_map
+
+            # ---- Live tally panel ---------------------------------------
+            with tally_col:
+                st.markdown("#### Tally")
+                # Compute the with-selected total against the *live*
+                # alternates list (i.e. operator-entered deltas already
+                # applied via the live_alts overlay above). We do this
+                # by building a temporary Estimate ``model_copy`` with
+                # ``alternates=live_alts`` so the existing
+                # ``subtotal_with_alternates_selected`` / ``total_with_alternates_selected``
+                # methods work unchanged.
+                live_estimate = estimate.model_copy(
+                    update={"alternates": live_alts}
+                )
+                base_subtotal = live_estimate.subtotal_base_only
+                selected_delta = live_estimate.alternates_delta_for_selection(
+                    current_selected
+                )
+                with_subtotal = live_estimate.subtotal_with_alternates_selected(
+                    current_selected
+                )
+                with_total = live_estimate.total_with_alternates_selected(
+                    current_selected
+                )
+
+                st.metric("Base bid", f"${base_subtotal:,.0f}")
+                st.metric(
+                    "Selected delta",
+                    _format_cost_delta(selected_delta),
+                    help=(
+                        f"Sum of cost_delta over the {len(current_selected)} "
+                        "selected alternate(s)."
+                    ),
+                )
+                st.metric(
+                    "Subtotal w/ selected",
+                    f"${with_subtotal:,.0f}",
+                )
+                st.metric(
+                    "Grand total w/ selected",
+                    f"${with_total:,.0f}",
+                    help=(
+                        "Includes contingency / overhead / profit "
+                        "applied against the selection-aware subtotal."
+                    ),
+                )
+                st.caption(f"Selected: {len(current_selected)} of {len(live_alts)}")
+
+            # ---- CSV download (full, regardless of selection) ---------
+            csv_string = _alternates_to_csv(
+                live_alts,
+                selected_ids=current_selected,
+                operator_notes_map=notes_map,
+            )
+            st.download_button(
+                "Download alternates summary CSV",
+                csv_string,
+                file_name="bid_alternates_summary.csv",
+                mime="text/csv",
+                key="alt_csv_download",
+                help=(
+                    "Includes every priced alternate with the current "
+                    "selection state and any in-session operator notes."
+                ),
+            )
 
 else:
     st.info(
