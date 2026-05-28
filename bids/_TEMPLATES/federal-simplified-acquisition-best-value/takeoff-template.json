@@ -1,0 +1,67 @@
+{
+  "$schema_note": "BPC federal-simplified-acquisition-best-value takeoff template. Skeleton — fill rooms[] and scope_items[] from the RFQ CLINs + drawings. Each CLIN should map to one or more scope_items.",
+  "project": {
+    "name": "{{PROJECT_NAME}}",
+    "solicitation_number": "{{SOLICITATION_NUMBER}}",
+    "agency": "{{AGENCY}}",
+    "site_address": "{{SITE_ADDRESS}}",
+    "county": "{{COUNTY}}",
+    "naics": "{{NAICS_CODE}}",
+    "magnitude_band": "{{MAGNITUDE_BAND}}",
+    "magnitude_low_usd": "{{MAGNITUDE_LOW}}",
+    "magnitude_high_usd": "{{MAGNITUDE_HIGH}}",
+    "sap_cap_usd_civilian": 250000,
+    "sap_cap_usd_commercial_item": 7500000,
+    "pop_days": "{{POP_DAYS}}",
+    "evaluation_method": "SAP_best_value_comparative_tradeoff",
+    "evaluation_subset_note": "Often evaluated in groups of 3 lowest priced quotes; price must clear lowest-3 cutoff to get technical + experience read",
+    "wage_determination_number": "{{WD_NUMBER}}",
+    "wage_determination_date": "{{WD_DATE}}"
+  },
+  "rooms": [
+    {
+      "id": "R-{{NUM}}",
+      "name": "{{ROOM_NAME}}",
+      "sq_ft": 0,
+      "notes": "[USER TO FILL per room — purpose, finishes, MEP, takeoff measurements]"
+    }
+  ],
+  "scope_items": [
+    {
+      "clin": "0001",
+      "csi_division": "{{CSI_DIV}}",
+      "description": "{{DESCRIPTION}}",
+      "quantity": 0,
+      "unit": "{{UNIT}}",
+      "self_or_sub": "self|sub",
+      "trade": "{{TRADE}}",
+      "sub_name": "{{SUB_NAME_IF_KNOWN}}",
+      "unit_price_usd": 0,
+      "extended_price_usd": 0,
+      "notes": "[Assumptions, source page in spec / SOW, RFI status]"
+    }
+  ],
+  "general_conditions": {
+    "duration_days": 0,
+    "super_rate_per_day": 0,
+    "pm_rate_per_day": 0,
+    "temp_protection_lump_sum": 0,
+    "dumpster_haul_lump_sum": 0,
+    "temp_utilities_lump_sum": 0,
+    "site_access_coordination_hours": 0
+  },
+  "markup": {
+    "bond_pct": 1.5,
+    "insurance_pct": 3.0,
+    "contingency_pct": 5.0,
+    "overhead_pct": 9.5,
+    "profit_pct": 6.5,
+    "dba_labor_burden_pct": 0.0,
+    "_markup_band_note": "SAP-tuned: bond lower (no bid bond typical), contingency between LPTA and FAR 15, overhead + profit slightly above LPTA to fund technical-narrative drafting and reflect comparative-tradeoff upside"
+  },
+  "self_perform_verification_far_52_236_1": {
+    "target_pct": 15.0,
+    "current_pct": 0.0,
+    "self_perform_scope_items": ["{{IDS_FROM_SCOPE_ITEMS_ABOVE}}"]
+  }
+}

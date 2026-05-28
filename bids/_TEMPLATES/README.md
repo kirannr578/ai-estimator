@@ -7,6 +7,7 @@ When a new RFP lands, copy the matching workspace template into `bids/<new-slug>
 | Template | Procurement type | Mirrors structure of |
 |---|---|---|
 | [`federal-sba-rfq-lpta/`](federal-sba-rfq-lpta/) | Federal SBA RFQ / RFP, LPTA | [`bids/usfws-san-marcos-140FC126R0017/`](../usfws-san-marcos-140FC126R0017/) |
+| [`federal-simplified-acquisition-best-value/`](federal-simplified-acquisition-best-value/) | Federal Simplified Acquisition (FAR Part 13 + 12), best-value comparative trade-off across price + technical capability + prior experience (SF-18 / SF-1449, NOT SF-1442; often evaluated in "groups of 3 lowest priced" — fills the gap between pure LPTA and full FAR Part 15 best-value tradeoff) | [`bids/pais-cabin-140P6026Q0029/`](../pais-cabin-140P6026Q0029/) (first dogfood) |
 | [`texas-state-csp-hsp/`](texas-state-csp-hsp/) | Texas State CSP / RFCSP with HUB Subcontracting Plan | [`bids/tamu-harrington-2025-06813/`](../tamu-harrington-2025-06813/) + [`bids/angelo-state-carr-efa-26-007/`](../angelo-state-carr-efa-26-007/) (common denominator) |
 
 ## How to instantiate a template
