@@ -30,6 +30,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
+from collections.abc import Mapping
 from typing import Any
 
 import pandas as pd
@@ -1069,6 +1070,108 @@ def _save_quote_config(cfg: QuoteConfig) -> None:
     os.replace(tmp, CLIENT_QUOTE_CFG_PATH)
 
 
+def _load_alternates_section_config() -> dict:
+    """Read the ``alternates_section`` block from ``client_quote.json``.
+
+    Phase T9.3 — ``QuoteConfig`` (Pydantic) does NOT model the
+    ``alternates_section`` block (T9.2 added the keys to the JSON file
+    but kept the schema additive-only), so the block is silently
+    dropped on the ``_load_quote_config()`` round-trip. To honour
+    operator overrides for ``enabled`` / ``intro_paragraph`` /
+    ``footer_note`` set in ``config/client_quote.json``, we re-parse
+    the raw JSON here and surface the block as a dict.
+
+    Returns ``{}`` on any error (missing file, invalid JSON, missing
+    block, or block not a JSON object). Never raises — a malformed
+    config must not block PDF generation.
+    """
+    if not CLIENT_QUOTE_CFG_PATH.is_file():
+        return {}
+    try:
+        raw = json.loads(CLIENT_QUOTE_CFG_PATH.read_text(encoding="utf-8"))
+    except Exception as exc:
+        logging.warning(
+            "client_quote.json alternates_section parse failed: %s", exc
+        )
+        return {}
+    section = raw.get("alternates_section") if isinstance(raw, dict) else None
+    return dict(section) if isinstance(section, dict) else {}
+
+
+def _resolve_alternates_config_for_pdf(
+    session_state: Mapping[str, Any] | None,
+    base_config: dict | None = None,
+) -> dict:
+    """Resolve the ``alternates_config`` dict to pass into ``build_quote_pdf``.
+
+    Phase T9.3 — glue between T9.1's ``alternates_selected_ids``
+    session-state selection (populated by the "Bid Alternates" tab)
+    and T9.2's ``build_quote_pdf(..., alternates_config=...)`` PDF
+    renderer.
+
+    Operator-wins semantics: the operator's tab selection (a
+    ``set[str]`` in ``session_state["alternates_selected_ids"]``) is
+    the authoritative source for ``default_selection``. The
+    ``base_config`` dict (typically loaded from
+    ``config/client_quote.json``'s ``alternates_section`` block via
+    :func:`_load_alternates_section_config`) provides the other keys
+    (``enabled`` / ``intro_paragraph`` / ``footer_note``).
+
+    Empty selection convention: ``{}`` from the session state means
+    "operator deselected everything" — the PDF renders the section
+    with a $0.00 selected delta. There is intentionally NO fallback
+    to ``Estimate.alternates_selected_default`` from this helper —
+    once T9.1 seeds the session state on tab init (which it does),
+    every subsequent PDF render must reflect what the operator sees.
+    Falling back to estimate defaults would silently disagree with
+    the on-screen tally and is the bug T9.3 is designed to prevent.
+    Missing key (``alternates_selected_ids`` never populated) is
+    treated identically to an empty selection — the operator can
+    re-enable items on the tab; the PDF will reflect the next render.
+
+    Determinism: selection coerced to a sorted ``list[str]`` so two
+    PDFs rendered with identical inputs are byte-identical.
+
+    Mutation safety: ``base_config`` is shallow-copied; the caller's
+    dict is never mutated. ``session_state`` is read-only.
+
+    Args:
+        session_state: a Mapping (typically ``st.session_state``)
+            providing the ``alternates_selected_ids`` key. ``None``
+            is tolerated (treated as missing key).
+        base_config: optional dict of pre-existing alternates_config
+            keys (e.g. from ``alternates_section`` in
+            ``client_quote.json``). ``None`` is treated as ``{}``.
+
+    Returns:
+        A new dict suitable to pass as ``alternates_config=...`` into
+        :func:`core.exporter_pdf.build_quote_pdf`. Always carries a
+        ``default_selection`` key (possibly ``[]``).
+    """
+    resolved: dict = dict(base_config) if base_config else {}
+
+    raw_selection: Any = None
+    if session_state is not None:
+        getter = getattr(session_state, "get", None)
+        if callable(getter):
+            try:
+                raw_selection = getter("alternates_selected_ids")
+            except Exception:
+                raw_selection = None
+
+    selection: list[str]
+    if raw_selection is None:
+        selection = []
+    else:
+        try:
+            selection = sorted(str(s) for s in raw_selection)
+        except TypeError:
+            selection = []
+
+    resolved["default_selection"] = selection
+    return resolved
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -1403,12 +1506,24 @@ def _render_client_quote_tab(
             try:
                 from core.exporter_pdf import build_quote_pdf  # local import for friendlier error
                 tmp_pdf = EXPORT_DIR / "_quote_preview.pdf"
+                # Phase T9.3 — thread the operator's "Bid Alternates"
+                # tab selection (T9.1's session-state set) into T9.2's
+                # PDF renderer so the rendered "Base + selected
+                # alternates" tally row reflects what the operator
+                # sees on-screen. Other alternates_config keys
+                # (enabled / intro_paragraph / footer_note) come from
+                # client_quote.json's alternates_section block.
+                alternates_pdf_config = _resolve_alternates_config_for_pdf(
+                    st.session_state,
+                    _load_alternates_section_config(),
+                )
                 build_quote_pdf(
                     estimate=estimate,
                     project=project,
                     quote_config=candidate_cfg,
                     out_path=tmp_pdf,
                     csi_titles=csi_titles,
+                    alternates_config=alternates_pdf_config,
                 )
                 pdf_bytes = tmp_pdf.read_bytes()
             except ImportError:
