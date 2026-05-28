@@ -48,7 +48,15 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class WindowRecord:
-    """One window pulled off a schedule table."""
+    """One window pulled off a schedule table.
+
+    ``room_number`` (Phase T5.1) is the room the window opens INTO when
+    the schedule publishes a ``ROOM`` / ``RM`` / ``LOCATION`` column.
+    Less common on window schedules than door schedules (windows are
+    often plan-located rather than schedule-located), so this field is
+    frequently ``None``; when populated, the takeoff back-fill deducts
+    the window's opening SF from the wall SF of its room.
+    """
 
     mark: str
     type: str | None = None
@@ -65,6 +73,7 @@ class WindowRecord:
     u_factor: float | None = None
     shgc: float | None = None
     remarks: str | None = None
+    room_number: str | None = None
     raw_cells: dict[str, str] = field(default_factory=dict)
     source_page: int = 0
 
@@ -225,6 +234,43 @@ def _header_index(headers: list[str], candidates: tuple[str, ...]) -> int | None
     return None
 
 
+# Phase T5.1: dedicated room / location column finder. Substring matching
+# is unsafe — ``RM`` would collide with ``FRAME`` (a standard window-
+# schedule header). Word-level only.
+_ROOM_HEADER_WORDS: frozenset[str] = frozenset({"ROOM", "RM", "LOCATION", "LOC"})
+
+
+def _room_header_index(headers: list[str]) -> int | None:
+    """Find the room / location column in a window schedule (Phase T5.1).
+
+    Accepts ``ROOM``, ``ROOM #``, ``RM``, ``LOCATION``, ``LOC``.
+    Word-level match only. Returns ``None`` when the schedule omitted
+    the column (more common on window schedules than door schedules).
+    """
+    for i, h in enumerate(headers):
+        norm = _normalize_header(h)
+        norm_words = set(norm.split())
+        if norm_words & _ROOM_HEADER_WORDS:
+            return i
+    return None
+
+
+def _header_index_excluding(
+    headers: list[str], candidates: tuple[str, ...], *, exclude: set[int],
+) -> int | None:
+    """Like :func:`_header_index` but ignores any column in ``exclude``."""
+    for i, h in enumerate(headers):
+        if i in exclude:
+            continue
+        norm = _normalize_header(h)
+        norm_words = set(norm.split())
+        if any(c in norm_words for c in candidates):
+            return i
+        if any(c in norm for c in candidates):
+            return i
+    return None
+
+
 def _cell(row: list[str], idx: int | None) -> str | None:
     if idx is None or idx < 0 or idx >= len(row):
         return None
@@ -255,7 +301,15 @@ _HEADERS: dict[str, tuple[str, ...]] = {
 def _records_from_table(headers: list[str], data_rows: list[list[str]],
                           page_index: int) -> list[WindowRecord]:
     """Convert one table's rows to :class:`WindowRecord` instances."""
+    # Phase T5.1: locate the room / location column with a word-level
+    # matcher first; the generic ``_header_index`` is substring-tolerant
+    # and would otherwise alias ``RM`` to ``FRAME`` etc.
+    room_idx = _room_header_index(headers)
     idx = {k: _header_index(headers, v) for k, v in _HEADERS.items()}
+    if room_idx is not None and idx["mark"] == room_idx:
+        idx["mark"] = _header_index_excluding(
+            headers, _HEADERS["mark"], exclude={room_idx},
+        )
     records: list[WindowRecord] = []
     for row in data_rows:
         if not row:
@@ -302,6 +356,7 @@ def _records_from_table(headers: list[str], data_rows: list[list[str]],
             u_factor=_parse_float(_cell(row, idx["u_factor"])),
             shgc=_parse_float(_cell(row, idx["shgc"])),
             remarks=_cell(row, idx["remarks"]),
+            room_number=_cell(row, room_idx),
             raw_cells=raw_cells,
             source_page=page_index,
         ))
@@ -481,6 +536,7 @@ def to_schema(result: WindowScheduleResult):
                 u_factor=w.u_factor,
                 shgc=w.shgc,
                 remarks=w.remarks,
+                room_number=w.room_number,
                 raw_cells=dict(w.raw_cells),
                 source_page=w.source_page,
             )

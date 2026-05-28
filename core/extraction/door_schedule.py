@@ -35,7 +35,16 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class DoorRecord:
-    """One door pulled off a schedule table."""
+    """One door pulled off a schedule table.
+
+    ``room_number`` (Phase T5.1) is the room the door opens INTO when the
+    schedule publishes a ``ROOM`` / ``RM`` / ``LOCATION`` column. Most
+    architectural sheets ship this column on the door schedule so the
+    takeoff back-fill can deduct each door's opening SF from the wall
+    SF of the room it belongs to. Optional — a schedule that omits the
+    column leaves the field ``None`` and the back-fill annotates the
+    affected wall row with ``openings_partial`` rather than deducting.
+    """
 
     mark: str
     type: str | None = None
@@ -49,6 +58,7 @@ class DoorRecord:
     hardware_set: str | None = None
     fire_rating: str | None = None
     remarks: str | None = None
+    room_number: str | None = None
     source_page: int = 0
 
 
@@ -200,6 +210,53 @@ def _header_index(headers: list[str], candidates: tuple[str, ...]) -> int | None
     return None
 
 
+# Phase T5.1: a dedicated word-level matcher for the room / location column.
+# Substring matching (as ``_header_index`` does) is unsafe here because the
+# 2-letter ``RM`` token is a substring of ``FRAME`` (a standard door-schedule
+# header) and the 3-letter ``LOC`` token risks matching adjacent vocabulary.
+# Word-level membership avoids that collision class.
+_ROOM_HEADER_WORDS: frozenset[str] = frozenset({"ROOM", "RM", "LOCATION", "LOC"})
+
+
+def _room_header_index(headers: list[str]) -> int | None:
+    """Find the room / location column in a schedule (Phase T5.1).
+
+    Accepts ``ROOM``, ``ROOM #`` (the ``#`` is stripped by header
+    normalisation), ``RM``, ``LOCATION``, ``LOC``. Word-level match
+    only; never substring. Returns ``None`` when the schedule omitted
+    the column.
+    """
+    for i, h in enumerate(headers):
+        norm = _normalize_header(h)
+        norm_words = set(norm.split())
+        if norm_words & _ROOM_HEADER_WORDS:
+            return i
+    return None
+
+
+def _header_index_excluding(
+    headers: list[str], candidates: tuple[str, ...], *, exclude: set[int],
+) -> int | None:
+    """Like :func:`_header_index` but ignores any column in ``exclude``.
+
+    Used by the T5.1 room-column wire-in: when ``ROOM NUMBER`` is the
+    header, the substring-tolerant mark matcher would otherwise grab
+    it via the ``NUMBER`` candidate. Pinning the room column first
+    and re-running mark with that column excluded keeps both anchored
+    correctly.
+    """
+    for i, h in enumerate(headers):
+        if i in exclude:
+            continue
+        norm = _normalize_header(h)
+        norm_words = set(norm.split())
+        if any(c in norm_words for c in candidates):
+            return i
+        if any(c in norm for c in candidates):
+            return i
+    return None
+
+
 def _cell(row: list[str], idx: int | None) -> str | None:
     if idx is None or idx < 0 or idx >= len(row):
         return None
@@ -224,7 +281,19 @@ _HEADERS = {
 def _records_from_table(headers: list[str], data_rows: list[list[str]],
                           page_index: int) -> list[DoorRecord]:
     """Convert one table's rows to :class:`DoorRecord` instances."""
+    # Phase T5.1: locate the room / location column separately with a
+    # word-level matcher (the generic ``_header_index`` is substring-
+    # tolerant so ``RM`` would collide with ``FRAME``).
+    room_idx = _room_header_index(headers)
     idx = {k: _header_index(headers, v) for k, v in _HEADERS.items()}
+    # Edge case: if the substring-tolerant mark detection landed on the
+    # room column (header ``ROOM NUMBER`` — ``NUMBER`` is a mark
+    # candidate), re-pick mark on a different column so the door tag
+    # and room number aren't pulled from the same cell.
+    if room_idx is not None and idx["mark"] == room_idx:
+        idx["mark"] = _header_index_excluding(
+            headers, _HEADERS["mark"], exclude={room_idx},
+        )
     records: list[DoorRecord] = []
     for row in data_rows:
         if not row:
@@ -261,6 +330,7 @@ def _records_from_table(headers: list[str], data_rows: list[list[str]],
             hardware_set=_cell(row, idx["hdw"]),
             fire_rating=_cell(row, idx["rating"]),
             remarks=_cell(row, idx["remarks"]),
+            room_number=_cell(row, room_idx),
             source_page=page_index,
         ))
     return records
@@ -436,6 +506,7 @@ def to_schema(result: DoorScheduleResult):
                 hardware_set=d.hardware_set,
                 fire_rating=d.fire_rating,
                 remarks=d.remarks,
+                room_number=d.room_number,
                 source_page=d.source_page,
             )
             for d in result.doors

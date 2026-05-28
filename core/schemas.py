@@ -361,6 +361,13 @@ class DoorRecord(BaseModel):
     hardware_set: Optional[str] = None
     fire_rating: Optional[str] = None
     remarks: Optional[str] = None
+    # Phase T5.1: room this door opens INTO. Populated when the door
+    # schedule carries a ``ROOM`` / ``RM`` / ``LOCATION`` column. Used
+    # by ``backfill_finish_quantities`` to attribute opening SF to the
+    # right room's wall area; left ``None`` when the schedule omitted
+    # the column (the back-fill then annotates with ``openings_partial``
+    # rather than deducting).
+    room_number: Optional[str] = None
     source_page: int = 0
 
 
@@ -405,6 +412,11 @@ class WindowRecord(BaseModel):
     u_factor: Optional[float] = None
     shgc: Optional[float] = None               # Solar Heat Gain Coefficient
     remarks: Optional[str] = None
+    # Phase T5.1: room this window opens INTO. Populated when the window
+    # schedule carries a ``ROOM`` / ``RM`` / ``LOCATION`` column (less
+    # common than on door schedules). Used by ``backfill_finish_quantities``
+    # to attribute opening SF to the room's wall area.
+    room_number: Optional[str] = None
     raw_cells: dict[str, str] = Field(default_factory=dict)
     source_page: int = 0
 

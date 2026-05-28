@@ -19,13 +19,24 @@ row's ``quantity=0.0`` with the right SF, derived per-surface:
                          (one wall = 1/4 of total)
 * ``ceiling``         → ``area_sf``
 
-For ``wall_*`` quantities, opening deductions (doors + windows) are
-documented as a T5 stretch goal — the function accepts the door /
-window schedules as parameters so a future revision can subtract per
-door (~21 SF) and per window (parsed dimensions) without breaking the
-signature. The current implementation leaves a note (``openings not
-deducted``) and ships the gross wall area; the T5.1 follow-up will
-land the deduction.
+Phase T5.1 ships opening deduction: when a door schedule and / or
+window schedule are passed, every opening with a populated
+``room_number`` is attributed to that room, and each wall row's
+quantity is reduced by ``(total_opening_sf × wall_share)`` — the
+proportional share of openings carried by that one wall direction.
+Openings without dimensions fall back to standard commercial defaults
+(:data:`DOOR_DEFAULT_OPENING_SF` for doors, :data:`WINDOW_DEFAULT_OPENING_SF`
+for windows). Openings whose ``room_number`` is missing or doesn't
+appear in the room schedule are skipped (logged at debug; not deducted
+from any wall). Deductions are capped at the raw wall SF so a wall
+never goes negative — the cap firing is recorded in the audit notes.
+
+Wall-direction assignment is intentionally proportional (1/N for an
+N-compass-direction room, 1.0 for a single ``WALL`` column collapsed
+to ``wall_ALL``). The future T5.2 enhancement, when door / window
+schedules carry an explicit ``wall: "N"`` column, can replace the
+proportional share with a per-direction lookup without breaking this
+module's signature.
 
 Pure function: input items are never mutated; output is a new list of
 ``TakeoffItem`` instances with refreshed ``quantity``, ``confidence``,
@@ -39,7 +50,6 @@ from __future__ import annotations
 import logging
 import math
 import re
-from typing import Any
 
 from core.extraction.takeoff_synthesis import SYNTHESIS_SOURCE_TAG_FINISH
 from core.schemas import (
@@ -59,6 +69,8 @@ __all__ = [
     "BACKFILL_NOTE_FALLBACK_PERIM",
     "BACKFILL_NOTE_NO_HEIGHT",
     "BACKFILL_NOTE_NO_OPENINGS",
+    "DOOR_DEFAULT_OPENING_SF",
+    "WINDOW_DEFAULT_OPENING_SF",
     "backfill_finish_quantities",
 ]
 
@@ -68,7 +80,29 @@ BACKFILL_NOTE_OK: str = "backfill=ok"
 BACKFILL_NOTE_SKIP_ROOM: str = "backfill skipped: room not in schedule"
 BACKFILL_NOTE_FALLBACK_PERIM: str = "perimeter approximated from area (sqrt fallback)"
 BACKFILL_NOTE_NO_HEIGHT: str = "ceiling height missing — wall back-fill skipped"
-BACKFILL_NOTE_NO_OPENINGS: str = "openings not deducted (T5.1 stretch)"
+# Surfaces a "we have no opening data at all" status — only emitted on
+# wall rows when BOTH ``door_schedule`` and ``window_schedule`` were
+# ``None``. When either is provided (even if no openings matched this
+# room) the back-fill assumes the operator passed the available data
+# and is comfortable with whatever the deduction landed at; the
+# specific deduction count + total SF + per-wall amount go on the row
+# as ``openings_deducted=…`` audit fields instead.
+BACKFILL_NOTE_NO_OPENINGS: str = "openings not deducted (no door/window schedules provided)"
+
+
+# Phase T5.1 — standard commercial opening defaults used when a door or
+# window record carries a ``room_number`` but the schedule omitted both
+# its width and height (or one of them). These match the calibration v3
+# numbers the brief cited: ~21 SF for a 3'-0" × 7'-0" door is the
+# American Institute of Architects' typical commercial interior door;
+# ~12 SF for a 3'-0" × 4'-0" window is a sensible commercial default
+# that splits the difference between a 2'-0" × 3'-0" residential window
+# (6 SF) and a 4'-0" × 5'-0" punched window (20 SF). Both values are
+# conservative — under-deduction is preferred to over-deduction because
+# Phase T6 pricing can still review a slightly-gross wall row, but a
+# negative wall row would crash the cost-DB lookup.
+DOOR_DEFAULT_OPENING_SF: float = 21.0
+WINDOW_DEFAULT_OPENING_SF: float = 12.0
 
 # Confidence applied when the back-fill computes from real area + height
 # (i.e. the operator can defend every term in the formula). Carries the
@@ -253,11 +287,16 @@ def backfill_finish_quantities(
         finish_schedule: Optional fallback source for
             ``ceiling_height_ft`` when the room schedule didn't carry
             the column.
-        door_schedule: Optional. Reserved for the T5.1 opening-
-            deduction follow-up; currently unused but accepted to keep
-            the public signature stable.
-        window_schedule: Optional. Reserved for the T5.1 opening-
-            deduction follow-up; currently unused.
+        door_schedule: Phase T5.1 — door schedule with ``room_number``
+            populated per :class:`~core.schemas.DoorRecord`. Each door
+            whose ``room_number`` matches a room in ``room_schedule``
+            contributes ``(width_in × height_in) / 144`` SF (or
+            :data:`DOOR_DEFAULT_OPENING_SF` when dimensions are
+            missing) to that room's wall-opening deduction.
+        window_schedule: Phase T5.1 — window schedule. Same shape as
+            ``door_schedule``; falls back to
+            :data:`WINDOW_DEFAULT_OPENING_SF` when dimensions are
+            missing.
 
     Returns:
         A new list where every finish-synthesis row's ``quantity`` and
@@ -267,15 +306,6 @@ def backfill_finish_quantities(
         schedule pass through with ``quantity=0.0`` preserved and a
         ``backfill_skipped`` note appended for the auditor.
     """
-    # Door / window schedules are accepted today for signature stability
-    # but only consumed once T5.1 lands. Reference them in a debug log
-    # so the parameters are not silently ignored.
-    if door_schedule is not None or window_schedule is not None:
-        logger.debug(
-            "backfill_finish_quantities: door/window schedules provided but "
-            "opening deduction not yet implemented (T5.1 stretch goal)."
-        )
-
     if not items:
         return []
 
@@ -287,6 +317,24 @@ def backfill_finish_quantities(
         # synthesis rows stay visible (Phase T6 can still surface them
         # at quantity=0 for human review).
         return list(items)
+
+    # Phase T5.1 — compute per-room opening totals up front so every
+    # wall row for a given room shares a consistent deduction baseline.
+    # Doing this once at the top is also what makes the back-fill
+    # idempotent: re-running with the same schedules produces the same
+    # totals (the function recomputes from input every call rather than
+    # consuming the previously-back-filled quantity).
+    room_openings = _build_room_openings_map(
+        door_schedule, window_schedule, room_map,
+    )
+    # When neither opening schedule was provided we surface that to the
+    # auditor — wall SF is GROSS and the user should know openings
+    # weren't deducted. When at least one was provided we trust the
+    # operator passed what's available and treat empty matches as zero
+    # deductions.
+    opening_data_available = (
+        door_schedule is not None or window_schedule is not None
+    )
 
     out: list[TakeoffItem] = []
     for item in items:
@@ -313,7 +361,11 @@ def backfill_finish_quantities(
             ))
             continue
 
-        out.append(_compute_backfill(item, surface, room, finish_height_map))
+        out.append(_compute_backfill(
+            item, surface, room, finish_height_map,
+            room_openings=room_openings,
+            opening_data_available=opening_data_available,
+        ))
 
     return out
 
@@ -323,6 +375,9 @@ def _compute_backfill(
     surface: str,
     room: RoomRecord,
     finish_height_map: dict[str, float],
+    *,
+    room_openings: dict[str, tuple[int, float]],
+    opening_data_available: bool,
 ) -> TakeoffItem:
     """Per-surface back-fill computation. Pure dispatch on ``surface``."""
     if surface == "floor" or surface == "ceiling":
@@ -330,7 +385,11 @@ def _compute_backfill(
     if surface == "base":
         return _backfill_base(item, room)
     if surface.startswith("wall"):
-        return _backfill_wall(item, surface, room, finish_height_map)
+        return _backfill_wall(
+            item, surface, room, finish_height_map,
+            room_openings=room_openings,
+            opening_data_available=opening_data_available,
+        )
     # Unknown surface — leave as-is with a debug note.
     return _backfilled_item(
         item,
@@ -397,8 +456,13 @@ def _backfill_wall(
     surface: str,
     room: RoomRecord,
     finish_height_map: dict[str, float],
+    *,
+    room_openings: dict[str, tuple[int, float]],
+    opening_data_available: bool,
 ) -> TakeoffItem:
-    """Wall SF = ``perimeter × height × share`` (share=1.0 ALL, 0.25 compass)."""
+    """Wall SF = ``perimeter × height × share`` minus a share-proportional
+    deduction for doors / windows opening into the room (Phase T5.1).
+    """
     share = _wall_unit_share(surface)
     if share is None:
         return _backfilled_item(
@@ -432,23 +496,144 @@ def _backfill_wall(
             ],
         )
 
-    quantity = perimeter_lf * height_ft * share
+    raw_quantity = perimeter_lf * height_ft * share
     confidence = _BACKFILL_CONF_FALLBACK if fallback_used else _BACKFILL_CONF_FULL
+
+    # Phase T5.1 — opening deduction. Per-room totals were assembled once
+    # at the top of ``backfill_finish_quantities``; here we apply the
+    # share-proportional slice to this one wall direction. Cap is at the
+    # raw wall SF — a wall never goes negative even when openings somehow
+    # over-fill it (rare; tends to be a sign of bad source data).
+    room_key = (room.room_number or "").strip()
+    open_count, open_total_sf = room_openings.get(room_key, (0, 0.0))
+    raw_deduction = open_total_sf * share
+    deduction = min(raw_deduction, raw_quantity)
+    overflow = raw_deduction > raw_quantity
+    net_quantity = max(raw_quantity - deduction, 0.0)
 
     extras: list[str] = []
     if fallback_used:
         extras.append(BACKFILL_NOTE_FALLBACK_PERIM)
     extras.append(BACKFILL_NOTE_OK)
-    # Opening deduction is the T5.1 stretch goal; flag the row so the
-    # operator knows the wall SF is GROSS, not NET-of-openings.
-    extras.append(BACKFILL_NOTE_NO_OPENINGS)
+    if open_count > 0:
+        extras.append(f"openings_deducted={open_count}")
+        extras.append(f"opening_sf={round(open_total_sf, 2)}")
+        extras.append(f"{surface}_deduction={round(deduction, 2)}")
+        if overflow:
+            # Surface explicitly that the cap fired — the row's gross
+            # geometry doesn't agree with the schedule, and the
+            # operator should reconcile rather than trust either side.
+            extras.append(
+                f"openings_overflow: {surface} opening SF exceeded raw wall SF"
+            )
+    elif not opening_data_available:
+        # Preserve the T5 "we don't know about openings" audit hint
+        # only when neither door nor window schedule was supplied at
+        # all. When schedules are supplied but no openings matched
+        # this room, that's an intentional zero-deduction, not a
+        # missing-data condition.
+        extras.append(BACKFILL_NOTE_NO_OPENINGS)
     return _backfilled_item(
         item,
-        quantity=quantity,
+        quantity=net_quantity,
         confidence=confidence,
         extra_notes=extras,
     )
 
 
-def _unused(*_: Any) -> None:  # pragma: no cover
-    """Anchor for the deferred door / window opening-deduction hook."""
+# ---------------------------------------------------------------------------
+# Phase T5.1 — opening deduction helpers
+# ---------------------------------------------------------------------------
+
+
+def _opening_sf_from(
+    width_in: float | None,
+    height_in: float | None,
+    default_sf: float,
+) -> float:
+    """Convert ``width_in × height_in`` → SF (÷ 144); fall back to ``default_sf``.
+
+    The default fires when either dimension is missing or non-positive.
+    Negative dimensions are treated as missing (defensive; the
+    schedule extractors filter these out upstream but a future LLM
+    pass could conceivably emit one).
+    """
+    if (
+        width_in is not None and width_in > 0
+        and height_in is not None and height_in > 0
+    ):
+        return (width_in * height_in) / 144.0
+    return default_sf
+
+
+def _build_room_openings_map(
+    door_schedule: DoorScheduleResult | None,
+    window_schedule: WindowScheduleResult | None,
+    room_map: dict[str, RoomRecord],
+) -> dict[str, tuple[int, float]]:
+    """Aggregate per-room ``(opening_count, total_opening_sf)``.
+
+    Openings are bucketed by their ``room_number`` after stripping
+    whitespace. Three classes of opening are skipped (silently, with a
+    debug log so the auditor can drill in if a number doesn't match
+    expectations):
+
+    * No ``room_number`` (orphan) — can't be attributed to any room.
+    * ``room_number`` not in ``room_map`` — the room schedule didn't
+      see this room; treating the opening as belonging to it would
+      have no wall row to land on.
+
+    Dimensions: when both ``width_in`` and ``height_in`` are present
+    and positive, the opening SF is ``width × height / 144``. Either
+    missing falls back to the standard-commercial defaults
+    (:data:`DOOR_DEFAULT_OPENING_SF` / :data:`WINDOW_DEFAULT_OPENING_SF`)
+    so a schedule that documents the door but elides the dimensions
+    still subtracts something rather than silently overcounting wall
+    paint.
+    """
+    out: dict[str, tuple[int, float]] = {}
+
+    def _add(room_key: str, sf: float) -> None:
+        prev_count, prev_sf = out.get(room_key, (0, 0.0))
+        out[room_key] = (prev_count + 1, prev_sf + sf)
+
+    orphan_doors = 0
+    unknown_room_doors = 0
+    if door_schedule is not None:
+        for d in door_schedule.doors:
+            key = (d.room_number or "").strip() if d.room_number else ""
+            if not key:
+                orphan_doors += 1
+                continue
+            if key not in room_map:
+                unknown_room_doors += 1
+                continue
+            _add(key, _opening_sf_from(
+                d.width_in, d.height_in, DOOR_DEFAULT_OPENING_SF,
+            ))
+
+    orphan_windows = 0
+    unknown_room_windows = 0
+    if window_schedule is not None:
+        for w in window_schedule.windows:
+            key = (w.room_number or "").strip() if w.room_number else ""
+            if not key:
+                orphan_windows += 1
+                continue
+            if key not in room_map:
+                unknown_room_windows += 1
+                continue
+            _add(key, _opening_sf_from(
+                w.width_in, w.height_in, WINDOW_DEFAULT_OPENING_SF,
+            ))
+
+    if orphan_doors or unknown_room_doors or orphan_windows or unknown_room_windows:
+        logger.debug(
+            "backfill_finish_quantities: openings could not be deducted — "
+            "orphan_doors=%d, unknown_room_doors=%d, "
+            "orphan_windows=%d, unknown_room_windows=%d",
+            orphan_doors, unknown_room_doors,
+            orphan_windows, unknown_room_windows,
+        )
+
+    return out

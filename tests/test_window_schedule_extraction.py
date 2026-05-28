@@ -490,3 +490,130 @@ def test_record_attached_with_phrase_only_when_table_unavailable(tmp_path: Path)
     )
     result = extract_window_schedule(pdf, 0)
     assert result.windows == []
+
+
+# ---------------------------------------------------------------------------
+# Phase T5.1 — ``ROOM`` / ``RM`` / ``LOCATION`` column parsing
+# ---------------------------------------------------------------------------
+
+
+def test_window_schedule_parses_room_column(tmp_path: Path) -> None:
+    """``ROOM`` header → records get ``room_number`` populated."""
+    pdf = _build_pdf(
+        tmp_path,
+        title_lines=["WINDOW SCHEDULE"],
+        table=[
+            ["MARK", "ROOM", "TYPE", "WIDTH",  "HEIGHT", "GLAZING", "OPERATION"],
+            ["W1",   "101",  "ALUM", "3'-0\"", "5'-0\"", "INSUL",   "FIXED"],
+            ["W2",   "102",  "ALUM", "3'-0\"", "5'-0\"", "INSUL",   "FIXED"],
+        ],
+        name="room_col.pdf",
+    )
+    result = extract_window_schedule(pdf, 0)
+    by_mark = {w.mark: w for w in result.windows}
+    assert by_mark["W1"].room_number == "101"
+    assert by_mark["W2"].room_number == "102"
+
+
+def test_window_schedule_parses_rm_column(tmp_path: Path) -> None:
+    """``RM`` header populates ``room_number`` without colliding with
+    ``FRAME`` (word-level match only)."""
+    pdf = _build_pdf(
+        tmp_path,
+        title_lines=["WINDOW SCHEDULE"],
+        table=[
+            ["MARK", "RM",  "TYPE", "WIDTH",  "HEIGHT", "FRAME", "GLAZING"],
+            ["W1",   "101", "ALUM", "3'-0\"", "5'-0\"", "ALUM",  "INSUL"],
+        ],
+        name="rm_col.pdf",
+    )
+    result = extract_window_schedule(pdf, 0)
+    assert result.windows[0].room_number == "101"
+    assert result.windows[0].frame == "ALUM"
+
+
+def test_window_schedule_parses_location_column(tmp_path: Path) -> None:
+    """``LOCATION`` is the alternate convention some offices use."""
+    pdf = _build_pdf(
+        tmp_path,
+        title_lines=["WINDOW SCHEDULE"],
+        table=[
+            ["MARK", "LOCATION", "TYPE", "WIDTH",  "HEIGHT", "GLAZING"],
+            ["W1",   "201",      "ALUM", "3'-0\"", "5'-0\"", "INSUL"],
+        ],
+        name="location_col.pdf",
+    )
+    result = extract_window_schedule(pdf, 0)
+    assert result.windows[0].room_number == "201"
+
+
+def test_window_schedule_without_room_column_returns_none(tmp_path: Path) -> None:
+    """A window schedule with no ROOM / RM / LOCATION header → every
+    record's ``room_number`` is ``None`` (typical: window schedules
+    often omit this column)."""
+    pdf = _build_pdf(
+        tmp_path,
+        title_lines=["WINDOW SCHEDULE"],
+        table=[
+            ["MARK", "TYPE", "WIDTH",  "HEIGHT", "GLAZING"],
+            ["W1",   "ALUM", "3'-0\"", "5'-0\"", "INSUL"],
+            ["W2",   "ALUM", "3'-0\"", "5'-0\"", "INSUL"],
+        ],
+        name="no_room.pdf",
+    )
+    result = extract_window_schedule(pdf, 0)
+    assert all(w.room_number is None for w in result.windows)
+
+
+def test_window_schedule_alphanumeric_room_number(tmp_path: Path) -> None:
+    """Alphanumeric room numbers (``"101A"``, ``"M-101"``) survive as strings."""
+    pdf = _build_pdf(
+        tmp_path,
+        title_lines=["WINDOW SCHEDULE"],
+        table=[
+            ["MARK", "ROOM",  "TYPE", "WIDTH",  "HEIGHT", "GLAZING"],
+            ["W1",   "101A",  "ALUM", "3'-0\"", "5'-0\"", "INSUL"],
+            ["W2",   "M-101", "ALUM", "3'-0\"", "5'-0\"", "INSUL"],
+        ],
+        name="alpha_room.pdf",
+    )
+    result = extract_window_schedule(pdf, 0)
+    by_mark = {w.mark: w.room_number for w in result.windows}
+    assert by_mark["W1"] == "101A"
+    assert by_mark["W2"] == "M-101"
+
+
+def test_window_schedule_empty_room_cell_is_none(tmp_path: Path) -> None:
+    """An empty ROOM cell on a per-row basis → that record's
+    ``room_number`` is ``None`` rather than the empty string."""
+    pdf = _build_pdf(
+        tmp_path,
+        title_lines=["WINDOW SCHEDULE"],
+        table=[
+            ["MARK", "ROOM", "TYPE", "WIDTH",  "HEIGHT", "GLAZING"],
+            ["W1",   "101",  "ALUM", "3'-0\"", "5'-0\"", "INSUL"],
+            ["W2",   "",     "ALUM", "3'-0\"", "5'-0\"", "INSUL"],
+        ],
+        name="mixed_room.pdf",
+    )
+    result = extract_window_schedule(pdf, 0)
+    by_mark = {w.mark: w.room_number for w in result.windows}
+    assert by_mark["W1"] == "101"
+    assert by_mark["W2"] is None
+
+
+def test_window_schedule_room_column_does_not_collide_with_frame(tmp_path: Path) -> None:
+    """Regression: ``FRAME`` contains the substring ``RM`` — the room
+    matcher must not falsely claim FRAME as the room column."""
+    pdf = _build_pdf(
+        tmp_path,
+        title_lines=["WINDOW SCHEDULE"],
+        table=[
+            ["MARK", "TYPE", "WIDTH",  "HEIGHT", "FRAME", "GLAZING"],
+            ["W1",   "ALUM", "3'-0\"", "5'-0\"", "ALUM",  "INSUL"],
+        ],
+        name="frame_only.pdf",
+    )
+    result = extract_window_schedule(pdf, 0)
+    assert result.windows[0].room_number is None
+    assert result.windows[0].frame == "ALUM"

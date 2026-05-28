@@ -314,3 +314,136 @@ def test_extract_from_page_directly(tmp_path: Path) -> None:
         result = extract_door_schedule_from_page(doc[0], page_index=7)
     assert result.pages == [7]
     assert all(r.source_page == 7 for r in result.doors)
+
+
+# ---------------------------------------------------------------------------
+# Phase T5.1 — ``ROOM`` / ``RM`` / ``LOCATION`` column parsing
+# ---------------------------------------------------------------------------
+
+
+def test_door_schedule_parses_room_column(tmp_path: Path) -> None:
+    """``ROOM`` header → records get ``room_number`` populated."""
+    pdf = _build_pdf(
+        tmp_path,
+        title_lines=["DOOR SCHEDULE"],
+        table=[
+            ["MARK", "ROOM", "TYPE", "WIDTH",  "HEIGHT", "FRAME", "HARDWARE"],
+            ["101A", "101",  "HM",   "3'-0\"", "7'-0\"", "HM",    "HW-1"],
+            ["102A", "102",  "HM",   "3'-0\"", "7'-0\"", "HM",    "HW-2"],
+        ],
+        name="room_col.pdf",
+    )
+    result = extract_door_schedule(pdf, 0)
+    by_mark = {d.mark: d for d in result.doors}
+    assert by_mark["101A"].room_number == "101"
+    assert by_mark["102A"].room_number == "102"
+
+
+def test_door_schedule_parses_rm_column(tmp_path: Path) -> None:
+    """``RM`` header (the short-form) also populates ``room_number``.
+
+    The matcher uses word-level membership so ``RM`` is not confused
+    with ``FRAME`` (which contains ``RM`` as a substring).
+    """
+    pdf = _build_pdf(
+        tmp_path,
+        title_lines=["DOOR SCHEDULE"],
+        table=[
+            ["MARK", "RM",  "TYPE", "WIDTH",  "HEIGHT", "FRAME", "HARDWARE"],
+            ["101A", "101", "HM",   "3'-0\"", "7'-0\"", "HM",    "HW-1"],
+        ],
+        name="rm_col.pdf",
+    )
+    result = extract_door_schedule(pdf, 0)
+    assert result.doors[0].room_number == "101"
+    # ``FRAME`` must still parse as the frame column, not as room.
+    assert result.doors[0].frame == "HM"
+
+
+def test_door_schedule_parses_location_column(tmp_path: Path) -> None:
+    """``LOCATION`` header also populates ``room_number`` (alternate convention)."""
+    pdf = _build_pdf(
+        tmp_path,
+        title_lines=["DOOR SCHEDULE"],
+        table=[
+            ["MARK", "LOCATION", "TYPE", "WIDTH",  "HEIGHT", "FRAME", "HARDWARE"],
+            ["101A", "101",      "HM",   "3'-0\"", "7'-0\"", "HM",    "HW-1"],
+        ],
+        name="location_col.pdf",
+    )
+    result = extract_door_schedule(pdf, 0)
+    assert result.doors[0].room_number == "101"
+
+
+def test_door_schedule_without_room_column_returns_none(tmp_path: Path) -> None:
+    """A schedule that omits ROOM / RM / LOCATION → ``room_number=None``
+    on every record (graceful fall-back, never raises)."""
+    pdf = _build_pdf(
+        tmp_path,
+        title_lines=["DOOR SCHEDULE"],
+        table=[
+            ["MARK", "TYPE", "WIDTH",  "HEIGHT", "FRAME", "HARDWARE"],
+            ["101A", "HM",   "3'-0\"", "7'-0\"", "HM",    "HW-1"],
+            ["102A", "HM",   "3'-0\"", "7'-0\"", "HM",    "HW-2"],
+        ],
+        name="no_room.pdf",
+    )
+    result = extract_door_schedule(pdf, 0)
+    assert all(d.room_number is None for d in result.doors)
+
+
+def test_door_schedule_alphanumeric_room_number(tmp_path: Path) -> None:
+    """A room number like ``"101A"`` (alphanumeric) is preserved as a
+    string — never coerced to int."""
+    pdf = _build_pdf(
+        tmp_path,
+        title_lines=["DOOR SCHEDULE"],
+        table=[
+            ["MARK", "ROOM",  "TYPE", "WIDTH",  "HEIGHT", "FRAME", "HARDWARE"],
+            ["D1",   "101A",  "HM",   "3'-0\"", "7'-0\"", "HM",    "HW-1"],
+            ["D2",   "M-101", "HM",   "3'-0\"", "7'-0\"", "HM",    "HW-1"],
+        ],
+        name="alpha_room.pdf",
+    )
+    result = extract_door_schedule(pdf, 0)
+    by_mark = {d.mark: d.room_number for d in result.doors}
+    assert by_mark["D1"] == "101A"
+    assert by_mark["D2"] == "M-101"
+
+
+def test_door_schedule_empty_room_cell_is_none(tmp_path: Path) -> None:
+    """An empty ROOM cell on a per-row basis → that record's
+    ``room_number`` is ``None`` (not the empty string)."""
+    pdf = _build_pdf(
+        tmp_path,
+        title_lines=["DOOR SCHEDULE"],
+        table=[
+            ["MARK", "ROOM", "TYPE", "WIDTH",  "HEIGHT", "FRAME", "HARDWARE"],
+            ["101A", "101",  "HM",   "3'-0\"", "7'-0\"", "HM",    "HW-1"],
+            ["102A", "",     "HM",   "3'-0\"", "7'-0\"", "HM",    "HW-2"],
+        ],
+        name="mixed_room.pdf",
+    )
+    result = extract_door_schedule(pdf, 0)
+    by_mark = {d.mark: d.room_number for d in result.doors}
+    assert by_mark["101A"] == "101"
+    assert by_mark["102A"] is None
+
+
+def test_door_schedule_room_column_does_not_collide_with_frame(tmp_path: Path) -> None:
+    """Regression: ``FRAME`` contains the substring ``RM`` — the room
+    matcher must use word-level membership and not steal the FRAME
+    column when only that header is present."""
+    pdf = _build_pdf(
+        tmp_path,
+        title_lines=["DOOR SCHEDULE"],
+        table=[
+            ["MARK", "TYPE", "WIDTH",  "HEIGHT", "FRAME", "HARDWARE"],
+            ["101",  "HM",   "3'-0\"", "7'-0\"", "HM",    "HW-1"],
+        ],
+        name="frame_only.pdf",
+    )
+    result = extract_door_schedule(pdf, 0)
+    # No ROOM column → room_number is None and FRAME is still picked up.
+    assert result.doors[0].room_number is None
+    assert result.doors[0].frame == "HM"

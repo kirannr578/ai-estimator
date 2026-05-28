@@ -17,6 +17,8 @@ from core.extraction.takeoff_backfill import (
     BACKFILL_NOTE_NO_OPENINGS,
     BACKFILL_NOTE_OK,
     BACKFILL_NOTE_SKIP_ROOM,
+    DOOR_DEFAULT_OPENING_SF,
+    WINDOW_DEFAULT_OPENING_SF,
     backfill_finish_quantities,
 )
 from core.extraction.takeoff_synthesis import (
@@ -24,11 +26,15 @@ from core.extraction.takeoff_synthesis import (
     synthesize_finish_takeoff_items,
 )
 from core.schemas import (
+    DoorRecord,
+    DoorScheduleResult,
     FinishRecord,
     FinishScheduleResult,
     RoomRecord,
     RoomScheduleResult,
     TakeoffItem,
+    WindowRecord,
+    WindowScheduleResult,
 )
 
 
@@ -433,19 +439,15 @@ def test_csi_division_section_and_description_preserved() -> None:
 
 
 # ---------------------------------------------------------------------------
-# 10. Door / window schedule params accepted (T5.1 hook)
+# 10. Door / window schedule params — orphan openings (no room_number)
 # ---------------------------------------------------------------------------
 
 
-def test_door_and_window_schedules_accepted_without_effect() -> None:
-    """The door/window schedule params are accepted today but unused
-    (T5.1 stretch goal); function must not crash and must still
-    back-fill correctly.
+def test_orphan_openings_without_room_number_are_not_deducted() -> None:
+    """Doors / windows passed without ``room_number`` (orphans) cannot be
+    attributed to any room — the wall row stays GROSS and carries no
+    ``openings_deducted=`` audit note.
     """
-    from core.schemas import (
-        DoorRecord, DoorScheduleResult, WindowRecord, WindowScheduleResult,
-    )
-
     items = _finish_items_for(FinishRecord(
         room_number="101", wall_finishes={"ALL": "PT-1"},
     ))
@@ -454,6 +456,7 @@ def test_door_and_window_schedules_accepted_without_effect() -> None:
     ))
     door_sched = DoorScheduleResult(
         pages=[0],
+        # No room_number → orphan; cannot be attributed.
         doors=[DoorRecord(mark="101", type="HM", width_in=36, height_in=84)],
         confidence=0.9,
     )
@@ -465,9 +468,13 @@ def test_door_and_window_schedules_accepted_without_effect() -> None:
     out = backfill_finish_quantities(
         items, sched, door_schedule=door_sched, window_schedule=window_sched,
     )
-    # Wall area is still GROSS (54 * 9) — opening deduction is deferred.
+    # Wall area stays GROSS — orphan doors / windows can't be attributed.
     assert out[0].quantity == pytest.approx(54.0 * 9.0, abs=0.01)
-    assert BACKFILL_NOTE_NO_OPENINGS in (out[0].notes or "")
+    # No `openings_deducted=` audit note because nothing was deducted.
+    assert "openings_deducted=" not in (out[0].notes or "")
+    # And the legacy "no openings" hint is suppressed because we DID
+    # have schedules — they just had no usable rows.
+    assert BACKFILL_NOTE_NO_OPENINGS not in (out[0].notes or "")
 
 
 # ---------------------------------------------------------------------------
@@ -587,3 +594,378 @@ def test_three_compass_walls_each_gets_quarter_share() -> None:
     expected = 80.0 * 10.0 / 4.0
     for it in out:
         assert it.quantity == pytest.approx(expected, abs=0.01)
+
+
+# ---------------------------------------------------------------------------
+# 16. Phase T5.1 — door / window opening deduction
+# ---------------------------------------------------------------------------
+
+
+def _door_sched(*doors: DoorRecord) -> DoorScheduleResult:
+    return DoorScheduleResult(
+        pages=[0] if doors else [],
+        doors=list(doors),
+        confidence=0.9 if doors else 0.0,
+    )
+
+
+def _window_sched(*windows: WindowRecord) -> WindowScheduleResult:
+    return WindowScheduleResult(
+        pages=[0] if windows else [],
+        windows=list(windows),
+        confidence=0.9 if windows else 0.0,
+    )
+
+
+def test_single_door_in_room_reduces_wall_all_by_full_opening_sf() -> None:
+    """A single 3'-0\" × 7'-0\" door (21 SF) in a room with a single
+    ``WALL`` column → wall_ALL deduction = 21 SF × share(1.0) = 21 SF."""
+    items = _finish_items_for(FinishRecord(
+        room_number="101", wall_finishes={"ALL": "PT-1"},
+    ))
+    sched = _room_schedule(RoomRecord(
+        room_number="101", perimeter_lf=54.0, ceiling_height_ft=9.0,
+    ))
+    doors = _door_sched(
+        DoorRecord(mark="101A", room_number="101", width_in=36, height_in=84),
+    )
+    out = backfill_finish_quantities(items, sched, door_schedule=doors)
+    raw = 54.0 * 9.0           # 486 SF
+    door_sf = (36 * 84) / 144.0  # 21 SF
+    assert out[0].quantity == pytest.approx(raw - door_sf, abs=0.01)
+    notes = out[0].notes or ""
+    assert "openings_deducted=1" in notes
+    assert "opening_sf=21.0" in notes
+    assert "wall_ALL_deduction=21.0" in notes
+
+
+def test_single_door_in_compass_walls_distributes_quarter_share() -> None:
+    """A 21 SF door with 4 compass walls → each wall deducts 21/4 = 5.25 SF."""
+    items = _finish_items_for(FinishRecord(
+        room_number="101",
+        wall_finishes={"N": "PT-1", "S": "PT-2", "E": "PT-3", "W": "PT-4"},
+    ))
+    sched = _room_schedule(RoomRecord(
+        room_number="101", perimeter_lf=80.0, ceiling_height_ft=10.0,
+    ))
+    doors = _door_sched(
+        DoorRecord(mark="101A", room_number="101", width_in=36, height_in=84),
+    )
+    out = backfill_finish_quantities(items, sched, door_schedule=doors)
+    raw_per_wall = 80.0 * 10.0 / 4.0     # 200 SF
+    deduction_per_wall = 21.0 / 4.0      # 5.25 SF
+    for it in out:
+        assert it.quantity == pytest.approx(raw_per_wall - deduction_per_wall, abs=0.01)
+        notes = it.notes or ""
+        assert "openings_deducted=1" in notes
+        # The per-wall deduction note references this surface specifically.
+        surface = _surface_of(it)
+        assert f"{surface}_deduction=5.25" in notes
+
+
+def test_multiple_doors_same_room_accumulate_deduction() -> None:
+    """Two doors in the same room → wall_ALL deduction = 21 + 21 = 42 SF."""
+    items = _finish_items_for(FinishRecord(
+        room_number="101", wall_finishes={"ALL": "PT-1"},
+    ))
+    sched = _room_schedule(RoomRecord(
+        room_number="101", perimeter_lf=54.0, ceiling_height_ft=9.0,
+    ))
+    doors = _door_sched(
+        DoorRecord(mark="101A", room_number="101", width_in=36, height_in=84),
+        DoorRecord(mark="101B", room_number="101", width_in=36, height_in=84),
+    )
+    out = backfill_finish_quantities(items, sched, door_schedule=doors)
+    raw = 54.0 * 9.0
+    assert out[0].quantity == pytest.approx(raw - 42.0, abs=0.01)
+    assert "openings_deducted=2" in (out[0].notes or "")
+    assert "opening_sf=42.0" in (out[0].notes or "")
+
+
+def test_door_with_room_not_in_schedule_is_silently_skipped() -> None:
+    """Door references room ``999`` but the room schedule only carries
+    room ``101`` → door is skipped (logged at debug); wall ``101`` stays gross.
+    """
+    items = _finish_items_for(FinishRecord(
+        room_number="101", wall_finishes={"ALL": "PT-1"},
+    ))
+    sched = _room_schedule(RoomRecord(
+        room_number="101", perimeter_lf=54.0, ceiling_height_ft=9.0,
+    ))
+    doors = _door_sched(
+        DoorRecord(mark="999A", room_number="999", width_in=36, height_in=84),
+    )
+    out = backfill_finish_quantities(items, sched, door_schedule=doors)
+    assert out[0].quantity == pytest.approx(54.0 * 9.0, abs=0.01)
+    assert "openings_deducted=" not in (out[0].notes or "")
+
+
+def test_door_without_dimensions_uses_default_opening_sf() -> None:
+    """Door with ``room_number`` but missing dimensions → fall back to
+    :data:`DOOR_DEFAULT_OPENING_SF` (21 SF).
+    """
+    assert DOOR_DEFAULT_OPENING_SF == 21.0
+    items = _finish_items_for(FinishRecord(
+        room_number="101", wall_finishes={"ALL": "PT-1"},
+    ))
+    sched = _room_schedule(RoomRecord(
+        room_number="101", perimeter_lf=54.0, ceiling_height_ft=9.0,
+    ))
+    doors = _door_sched(
+        DoorRecord(mark="101A", room_number="101"),  # no width / height
+    )
+    out = backfill_finish_quantities(items, sched, door_schedule=doors)
+    assert out[0].quantity == pytest.approx(54.0 * 9.0 - DOOR_DEFAULT_OPENING_SF, abs=0.01)
+
+
+def test_window_without_dimensions_uses_default_opening_sf() -> None:
+    """Window with ``room_number`` but missing dimensions → fall back to
+    :data:`WINDOW_DEFAULT_OPENING_SF` (12 SF, ~3'-0\" × 4'-0\")."""
+    assert WINDOW_DEFAULT_OPENING_SF == 12.0
+    items = _finish_items_for(FinishRecord(
+        room_number="101", wall_finishes={"ALL": "PT-1"},
+    ))
+    sched = _room_schedule(RoomRecord(
+        room_number="101", perimeter_lf=54.0, ceiling_height_ft=9.0,
+    ))
+    windows = _window_sched(
+        WindowRecord(mark="W1", room_number="101"),  # no width / height
+    )
+    out = backfill_finish_quantities(items, sched, window_schedule=windows)
+    assert out[0].quantity == pytest.approx(
+        54.0 * 9.0 - WINDOW_DEFAULT_OPENING_SF, abs=0.01,
+    )
+
+
+def test_window_with_dimensions_overrides_default() -> None:
+    """A 3'-0\" × 5'-0\" window (15 SF) deducts 15 SF, not the 12 SF default."""
+    items = _finish_items_for(FinishRecord(
+        room_number="101", wall_finishes={"ALL": "PT-1"},
+    ))
+    sched = _room_schedule(RoomRecord(
+        room_number="101", perimeter_lf=54.0, ceiling_height_ft=9.0,
+    ))
+    windows = _window_sched(
+        WindowRecord(mark="W1", room_number="101", width_in=36, height_in=60),
+    )
+    out = backfill_finish_quantities(items, sched, window_schedule=windows)
+    expected_window_sf = (36 * 60) / 144.0    # 15 SF
+    assert out[0].quantity == pytest.approx(54.0 * 9.0 - expected_window_sf, abs=0.01)
+    assert "opening_sf=15.0" in (out[0].notes or "")
+
+
+def test_opening_sf_exceeds_wall_sf_caps_at_raw_wall_sf() -> None:
+    """A door bigger than the wall → quantity floors at 0; cap firing
+    is surfaced in the audit note."""
+    items = _finish_items_for(FinishRecord(
+        room_number="101", wall_finishes={"ALL": "PT-1"},
+    ))
+    # Tiny room: perimeter 8 LF × height 8 ft = 64 SF wall total.
+    sched = _room_schedule(RoomRecord(
+        room_number="101", perimeter_lf=8.0, ceiling_height_ft=8.0,
+    ))
+    # Absurd 100 SF "door".
+    doors = _door_sched(
+        DoorRecord(mark="HUGE", room_number="101", width_in=120, height_in=120),
+    )
+    out = backfill_finish_quantities(items, sched, door_schedule=doors)
+    assert out[0].quantity == 0.0
+    notes = out[0].notes or ""
+    assert "openings_overflow" in notes
+    assert "wall_ALL" in notes  # cap mentions the specific surface
+
+
+def test_overflow_cap_on_one_compass_wall_only() -> None:
+    """When deduction exceeds raw SF on a per-direction basis, only the
+    affected wall caps — other walls remain partially-deducted."""
+    items = _finish_items_for(FinishRecord(
+        room_number="101", wall_finishes={"N": "PT-1", "S": "PT-2"},
+    ))
+    # 16 LF × 8 ft = 128 SF total; per compass wall (2-wall room) =
+    # 128 / 4 = 32 SF. (Yes, the share is 0.25 even with only 2 walls
+    # configured — the synthesiser collapsed to compass mode.)
+    sched = _room_schedule(RoomRecord(
+        room_number="101", perimeter_lf=16.0, ceiling_height_ft=8.0,
+    ))
+    doors = _door_sched(
+        # 200 SF opening: per-wall share at 0.25 = 50 SF, exceeds 32 SF.
+        DoorRecord(mark="HUGE", room_number="101", width_in=120, height_in=240),
+    )
+    out = backfill_finish_quantities(items, sched, door_schedule=doors)
+    for it in out:
+        assert it.quantity == 0.0
+        assert "openings_overflow" in (it.notes or "")
+
+
+def test_mixed_doors_some_with_room_some_orphan() -> None:
+    """Mixed: one door with room=101 (deductible), one orphan (skipped),
+    one referencing room=999 (skipped) → only the deductible one applies."""
+    items = _finish_items_for(FinishRecord(
+        room_number="101", wall_finishes={"ALL": "PT-1"},
+    ))
+    sched = _room_schedule(RoomRecord(
+        room_number="101", perimeter_lf=54.0, ceiling_height_ft=9.0,
+    ))
+    doors = _door_sched(
+        DoorRecord(mark="101A", room_number="101", width_in=36, height_in=84),
+        DoorRecord(mark="ORPHAN", width_in=36, height_in=84),
+        DoorRecord(mark="MISMATCH", room_number="999", width_in=36, height_in=84),
+    )
+    out = backfill_finish_quantities(items, sched, door_schedule=doors)
+    # Only the room=101 door (21 SF) gets deducted.
+    assert out[0].quantity == pytest.approx(54.0 * 9.0 - 21.0, abs=0.01)
+    assert "openings_deducted=1" in (out[0].notes or "")
+
+
+def test_door_plus_window_combined_deduction() -> None:
+    """Door (21 SF) + Window (15 SF) = 36 SF combined deduction on wall_ALL."""
+    items = _finish_items_for(FinishRecord(
+        room_number="101", wall_finishes={"ALL": "PT-1"},
+    ))
+    sched = _room_schedule(RoomRecord(
+        room_number="101", perimeter_lf=54.0, ceiling_height_ft=9.0,
+    ))
+    doors = _door_sched(
+        DoorRecord(mark="101A", room_number="101", width_in=36, height_in=84),
+    )
+    windows = _window_sched(
+        WindowRecord(mark="W1", room_number="101", width_in=36, height_in=60),
+    )
+    out = backfill_finish_quantities(
+        items, sched, door_schedule=doors, window_schedule=windows,
+    )
+    assert out[0].quantity == pytest.approx(54.0 * 9.0 - (21.0 + 15.0), abs=0.01)
+    assert "openings_deducted=2" in (out[0].notes or "")
+
+
+def test_backfill_with_openings_idempotent() -> None:
+    """Running the back-fill twice with the same schedules produces the
+    same quantity and confidence — the function recomputes from the
+    inputs and doesn't double-subtract."""
+    items = _finish_items_for(FinishRecord(
+        room_number="101", wall_finishes={"ALL": "PT-1"},
+    ))
+    sched = _room_schedule(RoomRecord(
+        room_number="101", perimeter_lf=54.0, ceiling_height_ft=9.0,
+    ))
+    doors = _door_sched(
+        DoorRecord(mark="101A", room_number="101", width_in=36, height_in=84),
+    )
+    once = backfill_finish_quantities(items, sched, door_schedule=doors)
+    twice = backfill_finish_quantities(once, sched, door_schedule=doors)
+    assert twice[0].quantity == once[0].quantity
+    assert twice[0].confidence == once[0].confidence
+
+
+def test_non_finish_rows_untouched_by_opening_deduction() -> None:
+    """T5.1 must not perturb door / structural / MEP rows even with opening data."""
+    sched = _room_schedule(RoomRecord(
+        room_number="101", area_sf=180.0, perimeter_lf=54.0, ceiling_height_ft=9.0,
+    ))
+    door_takeoff = TakeoffItem(
+        csi_division="08", csi_section="08 11 13",
+        description="Door 101A — HM 3'-0\" x 7'-0\"",
+        quantity=1.0, unit="EA", confidence=0.92,
+        notes="source=door_schedule_prepass; mark=101A",
+    )
+    doors = _door_sched(
+        DoorRecord(mark="101A", room_number="101", width_in=36, height_in=84),
+    )
+    out = backfill_finish_quantities([door_takeoff], sched, door_schedule=doors)
+    assert out == [door_takeoff]
+
+
+def test_opening_only_finish_no_walls_untouched_by_openings() -> None:
+    """Floor / ceiling rows don't take an opening deduction even when
+    doors exist for the room — openings only affect wall rows."""
+    items = _finish_items_for(FinishRecord(
+        room_number="101", floor_finish="VCT-1", ceiling_finish="ACT-1",
+    ))
+    sched = _room_schedule(RoomRecord(
+        room_number="101", area_sf=180.0, perimeter_lf=54.0, ceiling_height_ft=9.0,
+    ))
+    doors = _door_sched(
+        DoorRecord(mark="101A", room_number="101", width_in=36, height_in=84),
+    )
+    out = backfill_finish_quantities(items, sched, door_schedule=doors)
+    for it in out:
+        # Floor / ceiling get area_sf unchanged.
+        assert it.quantity == 180.0
+        assert "openings_deducted" not in (it.notes or "")
+
+
+def test_room_number_with_alphanumeric_suffix() -> None:
+    """``room_number=\"101A\"`` is preserved as a string and matches a
+    room schedule entry keyed by the same alphanumeric value."""
+    items = _finish_items_for(FinishRecord(
+        room_number="101A", wall_finishes={"ALL": "PT-1"},
+    ))
+    sched = _room_schedule(RoomRecord(
+        room_number="101A", perimeter_lf=54.0, ceiling_height_ft=9.0,
+    ))
+    doors = _door_sched(
+        DoorRecord(mark="D1", room_number="101A", width_in=36, height_in=84),
+    )
+    out = backfill_finish_quantities(items, sched, door_schedule=doors)
+    assert out[0].quantity == pytest.approx(54.0 * 9.0 - 21.0, abs=0.01)
+
+
+def test_no_openings_note_only_when_both_schedules_missing() -> None:
+    """The legacy ``BACKFILL_NOTE_NO_OPENINGS`` fires when neither door
+    nor window schedule was passed — surfaces "we have no data" to
+    the auditor distinct from "we have data but no matches"."""
+    items = _finish_items_for(FinishRecord(
+        room_number="101", wall_finishes={"ALL": "PT-1"},
+    ))
+    sched = _room_schedule(RoomRecord(
+        room_number="101", perimeter_lf=54.0, ceiling_height_ft=9.0,
+    ))
+    out_none = backfill_finish_quantities(items, sched)
+    assert BACKFILL_NOTE_NO_OPENINGS in (out_none[0].notes or "")
+
+    # Now pass at least one schedule, even an empty one — the legacy
+    # hint is suppressed.
+    out_empty = backfill_finish_quantities(
+        items, sched, door_schedule=_door_sched(),
+    )
+    assert BACKFILL_NOTE_NO_OPENINGS not in (out_empty[0].notes or "")
+
+
+def test_window_for_unknown_room_silently_skipped() -> None:
+    """Same as the door equivalent — window referencing a room not
+    in the schedule is logged at debug and contributes nothing."""
+    items = _finish_items_for(FinishRecord(
+        room_number="101", wall_finishes={"ALL": "PT-1"},
+    ))
+    sched = _room_schedule(RoomRecord(
+        room_number="101", perimeter_lf=54.0, ceiling_height_ft=9.0,
+    ))
+    windows = _window_sched(
+        WindowRecord(mark="W999", room_number="999", width_in=36, height_in=60),
+    )
+    out = backfill_finish_quantities(items, sched, window_schedule=windows)
+    assert out[0].quantity == pytest.approx(54.0 * 9.0, abs=0.01)
+    assert "openings_deducted=" not in (out[0].notes or "")
+
+
+def test_opening_deduction_with_fallback_perimeter_keeps_low_confidence() -> None:
+    """When the wall back-fill is already on the perimeter fallback
+    (confidence drops to 0.65), opening deduction still applies on top
+    and the confidence stays at the fallback band, not bumped back up."""
+    items = _finish_items_for(FinishRecord(
+        room_number="101", wall_finishes={"ALL": "PT-1"},
+    ))
+    sched = _room_schedule(RoomRecord(
+        room_number="101", area_sf=100.0, ceiling_height_ft=9.0,
+        # No perimeter_lf → triggers 4 * sqrt(100) = 40 LF fallback.
+    ))
+    doors = _door_sched(
+        DoorRecord(mark="101A", room_number="101", width_in=36, height_in=84),
+    )
+    out = backfill_finish_quantities(items, sched, door_schedule=doors)
+    raw = 40.0 * 9.0
+    assert out[0].quantity == pytest.approx(raw - 21.0, abs=0.01)
+    assert out[0].confidence == pytest.approx(0.65, abs=1e-3)
+    notes = out[0].notes or ""
+    assert BACKFILL_NOTE_FALLBACK_PERIM in notes
+    assert "openings_deducted=1" in notes
