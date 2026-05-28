@@ -161,6 +161,25 @@ class DrawingPrepassResult:
     # ``core.extraction.plumbing_schedule.PlumbingScheduleResult``
     # or ``None``.
     plumbing_schedule: Any = None
+    # T2.10 — typed kitchen-equipment-schedule pre-pass.  Populated
+    # whenever a kitchen equipment schedule was detected on the
+    # page.  Runs INDEPENDENTLY of door / window / finish / room
+    # precedence — kitchen schedules live on K-series sheets that
+    # those upstream detectors never claim, same posture as panels
+    # + lighting + HVAC + plumbing.  Runs ALONGSIDE every other
+    # T2.x hook (different table shapes, different sheets → no
+    # scheduling conflict).  AV + Security extractors are DEFERRED
+    # to Phase T2.11; their schemas already exist on ``core.schemas``
+    # but no extractor / wire-in here yet.  Concretely a
+    # ``core.extraction.kitchen_schedule.KitchenScheduleResult`` or
+    # ``None``.
+    kitchen_schedule: Any = None
+    # T2.10 — typed lab-casework-schedule pre-pass.  Populated
+    # whenever a lab casework / fume hood schedule was detected on
+    # the page.  Same posture as ``kitchen_schedule``.  Concretely
+    # a ``core.extraction.lab_casework_schedule.LabScheduleResult``
+    # or ``None``.
+    lab_schedule: Any = None
 
 
 # ---------------------------------------------------------------------------
@@ -876,6 +895,98 @@ def _maybe_extract_plumbing_schedule(page: "fitz.Page", page_index: int,
     return result if result.fixtures else None
 
 
+def _maybe_extract_kitchen_schedule(page: "fitz.Page", page_index: int,
+                                       schedules: list[Schedule]) -> Any:
+    """T2.10 hook: run the kitchen-equipment-schedule extractor when present.
+
+    Imported lazily so the kitchen_schedule module stays optional
+    at load time.  **Runs independently of door / window / finish
+    / room precedence** — kitchen equipment schedules live on
+    K-series sheets that those upstream detectors never claim,
+    same posture as every other T2.x hook (panel / lighting /
+    HVAC / plumbing).  Runs ALONGSIDE every other T2.x hook
+    (different table shapes, different sheets → no scheduling
+    conflict).  Returns a ``KitchenScheduleResult`` dataclass or
+    ``None``.
+    """
+    text_upper = (page.get_text("text") or "").upper()
+    text_has_phrase = any(
+        kw in text_upper
+        for kw in (
+            "KITCHEN EQUIPMENT SCHEDULE",
+            "FOOD SERVICE EQUIPMENT",
+            "FOODSERVICE EQUIPMENT",
+            "KITCHEN SCHEDULE",
+            "FOOD SERVICE SCHEDULE",
+        )
+    )
+    if not text_has_phrase:
+        try:
+            from .kitchen_schedule import _looks_like_kitchen_header  # type: ignore
+        except Exception:  # pragma: no cover - defensive
+            return None
+        if not any(_looks_like_kitchen_header(s.headers) for s in schedules):
+            return None
+    try:
+        from .kitchen_schedule import extract_kitchen_schedule_from_page
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.debug("kitchen_schedule import failed: %s", exc)
+        return None
+    try:
+        result = extract_kitchen_schedule_from_page(page, page_index)
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.warning("kitchen_schedule extraction failed on page %d: %s",
+                       page_index, exc)
+        return None
+    return result if result.equipment else None
+
+
+def _maybe_extract_lab_schedule(page: "fitz.Page", page_index: int,
+                                   schedules: list[Schedule]) -> Any:
+    """T2.10 hook: run the lab-casework-schedule extractor when present.
+
+    Imported lazily so the lab_casework_schedule module stays
+    optional at load time.  **Runs independently of door / window /
+    finish / room precedence** — lab casework schedules live on
+    lab plans / I-series interior sheets that those upstream
+    detectors rarely claim outright.  Runs ALONGSIDE every other
+    T2.x hook.  Returns a ``LabScheduleResult`` dataclass or
+    ``None``.
+    """
+    text_upper = (page.get_text("text") or "").upper()
+    text_has_phrase = any(
+        kw in text_upper
+        for kw in (
+            "LABORATORY CASEWORK SCHEDULE",
+            "LAB CASEWORK SCHEDULE",
+            "LABORATORY CASEWORK",
+            "LAB CASEWORK",
+            "FUME HOOD SCHEDULE",
+            "LABORATORY FURNITURE",
+            "LAB FURNITURE",
+        )
+    )
+    if not text_has_phrase:
+        try:
+            from .lab_casework_schedule import _looks_like_lab_header  # type: ignore
+        except Exception:  # pragma: no cover - defensive
+            return None
+        if not any(_looks_like_lab_header(s.headers) for s in schedules):
+            return None
+    try:
+        from .lab_casework_schedule import extract_lab_schedule_from_page
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.debug("lab_casework_schedule import failed: %s", exc)
+        return None
+    try:
+        result = extract_lab_schedule_from_page(page, page_index)
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.warning("lab_casework_schedule extraction failed on page %d: %s",
+                       page_index, exc)
+        return None
+    return result if result.casework else None
+
+
 def prepass_drawing_page(pdf_path: Path, page_index: int) -> DrawingPrepassResult:
     """Run the deterministic pre-pass on a single page of a drawing PDF."""
     pdf_path = Path(pdf_path)
@@ -912,6 +1023,12 @@ def prepass_drawing_page(pdf_path: Path, page_index: int) -> DrawingPrepassResul
         plumbing_schedule = _maybe_extract_plumbing_schedule(
             page, page_index, schedules,
         )
+        kitchen_schedule = _maybe_extract_kitchen_schedule(
+            page, page_index, schedules,
+        )
+        lab_schedule = _maybe_extract_lab_schedule(
+            page, page_index, schedules,
+        )
 
     if not text.strip():
         quality_issues.append("page has no embedded text (likely scanned)")
@@ -930,6 +1047,8 @@ def prepass_drawing_page(pdf_path: Path, page_index: int) -> DrawingPrepassResul
         lighting_schedule=lighting_schedule,
         hvac_schedule=hvac_schedule,
         plumbing_schedule=plumbing_schedule,
+        kitchen_schedule=kitchen_schedule,
+        lab_schedule=lab_schedule,
     )
     result.confidence = round(_score(result), 4)
     return result
@@ -968,6 +1087,12 @@ def prepass_drawing_pdf(pdf_path: Path) -> list[DrawingPrepassResult]:
             plumbing_schedule = _maybe_extract_plumbing_schedule(
                 page, i, schedules,
             )
+            kitchen_schedule = _maybe_extract_kitchen_schedule(
+                page, i, schedules,
+            )
+            lab_schedule = _maybe_extract_lab_schedule(
+                page, i, schedules,
+            )
             if not text.strip():
                 quality_issues.append("page has no embedded text (likely scanned)")
 
@@ -985,6 +1110,8 @@ def prepass_drawing_pdf(pdf_path: Path) -> list[DrawingPrepassResult]:
                 lighting_schedule=lighting_schedule,
                 hvac_schedule=hvac_schedule,
                 plumbing_schedule=plumbing_schedule,
+                kitchen_schedule=kitchen_schedule,
+                lab_schedule=lab_schedule,
             )
             r.confidence = round(_score(r), 4)
             results.append(r)
@@ -1047,6 +1174,14 @@ def to_schema(result: DrawingPrepassResult):
     if result.plumbing_schedule is not None:
         from .plumbing_schedule import to_schema as plumbing_to_schema
         plumbing_schedule = plumbing_to_schema(result.plumbing_schedule)
+    kitchen_schedule = None
+    if result.kitchen_schedule is not None:
+        from .kitchen_schedule import to_schema as kitchen_to_schema
+        kitchen_schedule = kitchen_to_schema(result.kitchen_schedule)
+    lab_schedule = None
+    if result.lab_schedule is not None:
+        from .lab_casework_schedule import to_schema as lab_to_schema
+        lab_schedule = lab_to_schema(result.lab_schedule)
     return S.DrawingPrepassResult(
         title_block=S.TitleBlockData(
             project_name=tb.project_name,
@@ -1076,6 +1211,8 @@ def to_schema(result: DrawingPrepassResult):
         lighting_schedule=lighting_schedule,
         hvac_schedule=hvac_schedule,
         plumbing_schedule=plumbing_schedule,
+        kitchen_schedule=kitchen_schedule,
+        lab_schedule=lab_schedule,
     )
 
 

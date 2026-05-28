@@ -29,6 +29,8 @@ from rapidfuzz import fuzz
 from .extraction.door_dedupe import dedupe_doors_against_synthesis
 from .extraction.finish_dedupe import dedupe_finishes_against_synthesis
 from .extraction.hvac_dedupe import dedupe_hvac_against_synthesis
+from .extraction.kitchen_dedupe import dedupe_kitchen_against_synthesis
+from .extraction.lab_dedupe import dedupe_lab_against_synthesis
 from .extraction.lighting_dedupe import dedupe_lighting_against_synthesis
 from .extraction.panel_dedupe import dedupe_panels_against_synthesis
 from .extraction.plumbing_dedupe import dedupe_plumbing_against_synthesis
@@ -38,6 +40,8 @@ from .extraction.takeoff_synthesis import (
     synthesize_door_takeoff_items,
     synthesize_finish_takeoff_items,
     synthesize_hvac_takeoff_items,
+    synthesize_kitchen_takeoff_items,
+    synthesize_lab_takeoff_items,
     synthesize_lighting_takeoff_items,
     synthesize_panel_takeoff_items,
     synthesize_plumbing_takeoff_items,
@@ -727,6 +731,23 @@ def reconcile(
     # T2.9 dedupe runs after the merge.  Closes the Division
     # 22+23+26 typed-schedule trifecta entirely.
     synthesized_plumbing_items: list[TakeoffItem] = []
+    # Phase T2.10: per-sheet kitchen-equipment-schedule pre-pass →
+    # typed TakeoffItem rows.  Each KitchenEquipmentRecord fans out
+    # into 1 EA equipment row + optional 1 LS MEP rough-in row
+    # (water-side / electrical-only / hood ductwork — dominant
+    # utility wins) + optional 1 LS trim / installation-hardware
+    # row (mfr+model gated).  Same survives-through-merge pattern as
+    # panels + lighting + HVAC + plumbing; T2.10 kitchen dedupe runs
+    # after the merge.
+    synthesized_kitchen_items: list[TakeoffItem] = []
+    # Phase T2.10: per-sheet lab-casework-schedule pre-pass →
+    # typed TakeoffItem rows.  Each LabCaseworkRecord fans out into
+    # 1 EA item row + optional 1 LS MEP rough-in row + optional
+    # 1 LS trim / installation-hardware row (mfr+model gated, fume
+    # hood + eyewash exempt).  Same survives-through-merge pattern;
+    # T2.10 lab dedupe runs after the merge.  AV + Security
+    # extractors are DEFERRED to Phase T2.11.
+    synthesized_lab_items: list[TakeoffItem] = []
     # Phase T5: per-sheet room-schedule pre-pass. Unlike doors / windows
     # / finishes there's no synthesis step — the room schedule supplies
     # GEOMETRY (area / perimeter / ceiling height) that the T5 back-fill
@@ -813,6 +834,20 @@ def reconcile(
                     sheet_id=ex.sheet_id,
                 )
             )
+        if ex.prepass is not None and getattr(ex.prepass, "kitchen_schedule", None) is not None:
+            synthesized_kitchen_items.extend(
+                synthesize_kitchen_takeoff_items(
+                    ex.prepass.kitchen_schedule,
+                    sheet_id=ex.sheet_id,
+                )
+            )
+        if ex.prepass is not None and getattr(ex.prepass, "lab_schedule", None) is not None:
+            synthesized_lab_items.extend(
+                synthesize_lab_takeoff_items(
+                    ex.prepass.lab_schedule,
+                    sheet_id=ex.sheet_id,
+                )
+            )
 
     # --- dedupe domain entities ---
     rooms = _dedupe_rooms(rooms)
@@ -883,6 +918,22 @@ def reconcile(
     # dedupe pass.  Closes the Division 22+23+26 typed-schedule
     # trifecta entirely.
     all_takeoffs.extend(synthesized_plumbing_items)
+    # T2.10: append synthesised kitchen-equipment-schedule rows.
+    # Each KitchenEquipmentRecord already fanned out into 1 EA
+    # equipment + optional 1 LS MEP rough-in + optional 1 LS trim
+    # row inside ``synthesize_kitchen_takeoff_items``; every row
+    # is tagged ``source=kitchen_schedule_prepass`` for the
+    # downstream dedupe pass.
+    all_takeoffs.extend(synthesized_kitchen_items)
+    # T2.10: append synthesised lab-casework-schedule rows.  Each
+    # LabCaseworkRecord already fanned out into 1 EA item + optional
+    # 1 LS MEP rough-in + optional 1 LS trim row inside
+    # ``synthesize_lab_takeoff_items``; every row is tagged
+    # ``source=lab_schedule_prepass`` for the downstream dedupe pass.
+    # AV (Div 27) + Security (Div 28) extractors are DEFERRED to
+    # Phase T2.11 — scaffold schemas already present in
+    # ``core/schemas.py`` but no wire-in here.
+    all_takeoffs.extend(synthesized_lab_items)
     # T3: drop legacy LLM door aggregates ("Hollow metal doors", "Solid-core
     # wood doors", "Doors (type unspecified)") and same-mark LLM door rows
     # when a deterministic synthesised row already covers them. Pure on
@@ -938,6 +989,30 @@ def reconcile(
     # project (safety rule, mirrors T3 / T2.5 / T4 / T2.6 / T2.7 /
     # T2.8).
     all_takeoffs = dedupe_plumbing_against_synthesis(all_takeoffs)
+    # T2.10 kitchen dedupe: retire legacy LLM kitchen-equipment
+    # aggregates ("Kitchen Equipment", "Food Service Equipment",
+    # "Walk-in Cooler installation") and same-tag LLM kitchen rows
+    # when a deterministic synthesised row already covers them.
+    # CSI prefix ``11 40`` keeps this pass mutually exclusive with
+    # every preceding dedupe family — kitchen sinks live at
+    # ``11 40 13`` (food service) NOT ``22 41`` (plumbing), so
+    # this pass cannot suppress plumbing fixture rows.  No-op when
+    # no synthesised kitchen equipment exists on the project
+    # (safety rule, mirrors every prior T2.x dedupe).
+    all_takeoffs = dedupe_kitchen_against_synthesis(all_takeoffs)
+    # T2.10 lab dedupe: retire legacy LLM lab-casework aggregates
+    # ("Lab Casework", "Laboratory Furniture", "Fume Hoods",
+    # "Safety Cabinets") and same-tag LLM lab rows when a
+    # deterministic synthesised row already covers them.  CSI
+    # prefixes ``12 35`` + ``11 53`` keep this pass mutually
+    # exclusive with every preceding dedupe family — generic Div 6
+    # millwork stays untouched (regex requires explicit ``lab`` /
+    # ``laboratory`` qualifier), and the eyewash CSI ``22 45 19``
+    # cross-Division row is preserved (CSI prefix ``22`` is
+    # outside the lab dedupe scope, so plumbing dedupe upstream
+    # owns it).  No-op when no synthesised lab casework exists on
+    # the project (safety rule, mirrors every prior T2.x dedupe).
+    all_takeoffs = dedupe_lab_against_synthesis(all_takeoffs)
     # T5 back-fill: replace ``quantity=0.0`` on every finish-synthesis
     # row with the right SF (floor / ceiling = area; base = perimeter
     # in LF; wall = perimeter × height × share). Joins finish rows to

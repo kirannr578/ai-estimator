@@ -51,6 +51,10 @@ from core.schemas import (
     FinishScheduleResult,
     HVACEquipmentRecord,
     HVACScheduleResult,
+    KitchenEquipmentRecord,
+    KitchenScheduleResult,
+    LabCaseworkRecord,
+    LabScheduleResult,
     LightingFixtureRecord,
     LightingScheduleResult,
     PanelRecord,
@@ -70,6 +74,8 @@ __all__ = [
     "SYNTHESIS_SOURCE_TAG_LIGHTING",
     "SYNTHESIS_SOURCE_TAG_HVAC",
     "SYNTHESIS_SOURCE_TAG_PLUMBING",
+    "SYNTHESIS_SOURCE_TAG_KITCHEN",
+    "SYNTHESIS_SOURCE_TAG_LAB",
     "DERIVATION_HAIRCUT_MULTIPLIER",
     "DERIVATION_FLOOR_CONFIDENCE",
     "inherit_with_haircut",
@@ -80,6 +86,8 @@ __all__ = [
     "synthesize_lighting_takeoff_items",
     "synthesize_hvac_takeoff_items",
     "synthesize_plumbing_takeoff_items",
+    "synthesize_kitchen_takeoff_items",
+    "synthesize_lab_takeoff_items",
 ]
 
 
@@ -90,6 +98,8 @@ SYNTHESIS_SOURCE_TAG_PANEL: Final[str] = "panel_schedule_prepass"
 SYNTHESIS_SOURCE_TAG_LIGHTING: Final[str] = "lighting_schedule_prepass"
 SYNTHESIS_SOURCE_TAG_HVAC: Final[str] = "hvac_schedule_prepass"
 SYNTHESIS_SOURCE_TAG_PLUMBING: Final[str] = "plumbing_schedule_prepass"
+SYNTHESIS_SOURCE_TAG_KITCHEN: Final[str] = "kitchen_schedule_prepass"
+SYNTHESIS_SOURCE_TAG_LAB: Final[str] = "lab_schedule_prepass"
 
 
 # ---------------------------------------------------------------------------
@@ -2106,6 +2116,673 @@ def synthesize_plumbing_takeoff_items(
                 confidence=_PLUMB_TRIM_CONFIDENCE,
                 source_sheet_ids=list(sheets),
                 notes=_plumbing_notes_for(record, role="trim"),
+            ))
+
+    return items
+
+
+# ====== Phase T2.10 — Specialty (Kitchen + Lab) ======
+#
+# Specialty schedules close the typed-extraction long-tail.  Kitchen
+# equipment (Division 11 — Equipment) and lab casework / fume hoods
+# (Division 12 — Furnishings, with cross-routes to Division 11 lab
+# safety + Division 22 eyewash) are the two slices that ship in
+# Phase T2.10.  AV (Division 27) + Security (Division 28) are
+# DEFERRED to Phase T2.11 — their scaffold schemas already exist on
+# :mod:`core.schemas`, but no extractor / synthesiser / dedupe is
+# wired yet.
+#
+# Per-record fan-out shape (same architecture as plumbing T2.9):
+#
+# 1. **N × EA primary item** — CSI per item family (kitchen routes
+#    Cooking / Refrigeration / Dishwashing / Hood / Generic to
+#    distinct subsections under ``11 40``; lab routes BASE/WALL/TALL
+#    cabinets + LAB_BENCH to ``12 35 53.13``, FUME_HOOD to
+#    ``11 53 13``, SAFETY_CABINET to ``11 53 43``, and EYEWASH_STATION
+#    to ``22 45 19`` — yes, eyewashes are plumbing scope even when
+#    they live on a lab casework schedule).  Quantity = ``record.
+#    quantity`` when the schedule published a QTY column (confidence
+#    ``0.90``); otherwise quantity ``1.0`` (confidence ``0.55`` →
+#    HAND_TAKEOFF queue).  Matches the plumbing T2.9 / HVAC T2.8 /
+#    lighting T2.7 routing.
+# 2. **1 × LS MEP rough-in** — emitted only when the record carries
+#    at least one utility flag (gas / electric / water / drain for
+#    kitchen; gas / vacuum / water / electric for lab).  The rough-in
+#    CSI is picked by a "dominant utility" rule:
+#      * Kitchen HOOD / EXHAUST_FAN → ``23 31 13`` (HVAC ductwork
+#        dominates — the exhaust duct is the cost driver, even though
+#        the hood enclosure itself is foodservice equipment in
+#        Division 11).
+#      * Kitchen with water / drain / gas piping → ``22 11 16``
+#        (water-side rough-in; gas piping rolls into this bucket per
+#        the T2.10 brief which collapses gas into water-side).
+#      * Kitchen with electric only (no piping) → ``26 27 26``
+#        (equipment wiring devices).
+#      * Lab with water / drain (or gas / vacuum piping) → ``22 11
+#        16`` — lab plumbing rough-in mirrors kitchen plumbing rough-in.
+#      * Lab with electric only → ``26 27 26``.
+#    Confidence inherits the parent record's confidence with the T6.1
+#    haircut so a 0.85 parent yields a 0.808 rough-in (floored at
+#    0.45 — well above PARAMETRIC but routable to OPERATOR_REVIEW on
+#    a fully-decorated record).
+# 3. **1 × LS trim / installation hardware** — emitted only when
+#    BOTH ``manufacturer`` AND ``model_number`` are populated AND the
+#    item is NOT a fume hood.  Trim package is mfr-specific; the
+#    fume-hood exception is documented per the T2.10 brief: lab fume
+#    hoods always ship from the factory with integrated trim (sash,
+#    light, cup sinks, service fittings, baffles) and a separate trim
+#    line would double-count.  Confidence ``inherit_with_haircut ×
+#    0.70`` — applies the T6.1 derivation haircut AND a fixed 0.70
+#    trim multiplier so a 0.85-parent yields ``0.85 × 0.95 × 0.70 =
+#    0.5653`` → routes to HAND_TAKEOFF for the operator to verify
+#    the trim spec against the manufacturer cut sheet.
+
+
+# ---------------------------------------------------------------------------
+# Kitchen — CSI families
+# ---------------------------------------------------------------------------
+#
+# Kitchen mapping (per the T2.10 brief):
+#   RANGE / GRIDDLE / FRYER / OVEN       → 11 40 13.13 (Food Cooking)
+#   REFRIGERATOR / FREEZER / WALK_IN /
+#     ICE_MACHINE                         → 11 40 16.13 (Food Refrigeration)
+#   DISHWASHER                            → 11 40 19.13 (Food Dishwashing)
+#   MIXER / PREP_TABLE / SINK             → 11 40 13     (generic Foodservice)
+#   HOOD / EXHAUST_FAN                    → 11 40 13.16 (Food Service Hoods)
+#                                           — cross-listed in 23 38 13
+#                                           Commercial Kitchen Hoods, but
+#                                           Division 11 wins per spec
+#                                           convention (the foodservice
+#                                           contractor furnishes the hood;
+#                                           the mechanical sub installs
+#                                           the duct).
+#   OTHER                                 → 11 40 00     (generic Foodservice)
+
+_CSI_KITCHEN_COOKING:  Final[tuple[str, str, str]] = (
+    "11", "11 40 13.13", "Food Cooking Equipment",
+)
+_CSI_KITCHEN_REFRIG:   Final[tuple[str, str, str]] = (
+    "11", "11 40 16.13", "Food Refrigeration Equipment",
+)
+_CSI_KITCHEN_DISH:     Final[tuple[str, str, str]] = (
+    "11", "11 40 19.13", "Food Dishwashing Equipment",
+)
+_CSI_KITCHEN_GENERIC:  Final[tuple[str, str, str]] = (
+    "11", "11 40 13", "Food Service Equipment",
+)
+_CSI_KITCHEN_HOOD:     Final[tuple[str, str, str]] = (
+    "11", "11 40 13.16", "Food Service Hood",
+)
+_CSI_KITCHEN_OTHER:    Final[tuple[str, str, str]] = (
+    "11", "11 40 00", "Foodservice Equipment",
+)
+
+# Kitchen rough-in CSI families.
+_CSI_KITCHEN_ROUGHIN_WATER: Final[tuple[str, str, str]] = (
+    "22", "22 11 16", "Kitchen Water / Gas Piping Rough-In",
+)
+_CSI_KITCHEN_ROUGHIN_ELEC:  Final[tuple[str, str, str]] = (
+    "26", "26 27 26", "Kitchen Equipment Wiring Rough-In",
+)
+_CSI_KITCHEN_ROUGHIN_DUCT:  Final[tuple[str, str, str]] = (
+    "23", "23 31 13", "Kitchen Hood Exhaust Ductwork Rough-In",
+)
+
+_KITCHEN_CSI_BY_TYPE: Final[dict[str, tuple[str, str, str]]] = {
+    "RANGE":        _CSI_KITCHEN_COOKING,
+    "GRIDDLE":      _CSI_KITCHEN_COOKING,
+    "FRYER":        _CSI_KITCHEN_COOKING,
+    "OVEN":         _CSI_KITCHEN_COOKING,
+    "REFRIGERATOR": _CSI_KITCHEN_REFRIG,
+    "FREEZER":      _CSI_KITCHEN_REFRIG,
+    "WALK_IN":      _CSI_KITCHEN_REFRIG,
+    "ICE_MACHINE":  _CSI_KITCHEN_REFRIG,
+    "DISHWASHER":   _CSI_KITCHEN_DISH,
+    "MIXER":        _CSI_KITCHEN_GENERIC,
+    "PREP_TABLE":   _CSI_KITCHEN_GENERIC,
+    "SINK":         _CSI_KITCHEN_GENERIC,
+    "HOOD":         _CSI_KITCHEN_HOOD,
+    "EXHAUST_FAN":  _CSI_KITCHEN_HOOD,
+    "OTHER":        _CSI_KITCHEN_OTHER,
+}
+
+# Kitchen item types that ALWAYS skip the trim row regardless of
+# whether mfr+model are populated.  Currently empty for kitchen —
+# the fume-hood exception is lab-only.  Held as an explicit constant
+# so a future maintainer can add (e.g.) WALK_IN exclusions without
+# touching the main loop.
+_KITCHEN_TRIM_EXCLUDED: Final[frozenset[str]] = frozenset()
+
+_KITCHEN_QTY_CONFIDENCE: Final[float] = 0.90
+_KITCHEN_HAND_TAKEOFF_CONFIDENCE: Final[float] = 0.55
+# Fixed multiplier applied AFTER the T6.1 derivation haircut on the
+# trim row.  The 0.70 ratio matches the plumbing trim confidence
+# (Phase T2.9) so trim rows across both specialty + plumbing
+# stacks share a consistent banding outcome.
+_SPECIALTY_TRIM_MULTIPLIER: Final[float] = 0.70
+
+
+def _classify_kitchen_item(
+    record: KitchenEquipmentRecord,
+) -> tuple[str, str, str]:
+    """Return ``(csi_division, csi_section, family_label)`` for one kitchen item.
+
+    Routes via ``record.item_type`` (set by the extractor's tag-prefix
+    detector); unknown types land on the generic ``11 40 00``
+    foodservice section.
+    """
+    itype = (record.item_type or "OTHER").upper()
+    return _KITCHEN_CSI_BY_TYPE.get(itype, _CSI_KITCHEN_OTHER)
+
+
+def _kitchen_roughin_csi(
+    record: KitchenEquipmentRecord,
+) -> tuple[str, str, str] | None:
+    """Pick the dominant-utility rough-in CSI; ``None`` when no utility flags.
+
+    Dominance rules (per the T2.10 brief):
+      1. HOOD / EXHAUST_FAN → ductwork (``23 31 13``) — the duct is
+         the cost driver regardless of any electrical accessory on
+         the hood itself.
+      2. Any piped utility (water / drain / gas) → water-side
+         (``22 11 16``).  Gas piping collapses into this bucket per
+         the brief's three-way split — keeps the rough-in row count
+         per record to one (vs. fanning out a separate gas-piping
+         row that would double-bill on combined gas+water equipment).
+      3. Electric only (no piping) → equipment wiring (``26 27 26``).
+      4. No utility flags at all → ``None`` (skip the rough-in row).
+    """
+    itype = (record.item_type or "OTHER").upper()
+    if itype in {"HOOD", "EXHAUST_FAN"}:
+        return _CSI_KITCHEN_ROUGHIN_DUCT
+    if (record.utility_water is True or record.utility_drain is True
+            or record.utility_gas is True):
+        return _CSI_KITCHEN_ROUGHIN_WATER
+    if record.utility_electric is True:
+        return _CSI_KITCHEN_ROUGHIN_ELEC
+    return None
+
+
+def _kitchen_label(record: KitchenEquipmentRecord) -> str:
+    tag = (record.tag or "").strip()
+    if not tag:
+        return "Kitchen equipment (unmarked)"
+    return f"Kitchen equipment {tag}"
+
+
+def _describe_kitchen_item(record: KitchenEquipmentRecord,
+                              family: str) -> str:
+    """Build a human-readable description for the primary kitchen item row.
+
+    Examples::
+
+        "Kitchen equipment RANGE-1 — Food Cooking Equipment 60\" 6-burner (Vulcan VHP660) 120K BTU GAS"
+        "Kitchen equipment WI-1 — Food Refrigeration Equipment 8' x 10' walk-in cooler"
+        "Kitchen equipment HOOD-1 — Food Service Hood 10' island canopy"
+    """
+    head = _kitchen_label(record)
+    parts: list[str] = []
+    desc = (record.description or "").strip()
+    parts.append(desc if desc else family)
+    mfr_bits: list[str] = []
+    if record.manufacturer:
+        mfr_bits.append(record.manufacturer.strip())
+    if record.model_number:
+        mfr_bits.append(record.model_number.strip())
+    if mfr_bits:
+        parts.append(f"({' '.join(mfr_bits)})")
+    if record.btu_rating is not None:
+        parts.append(f"{record.btu_rating} BTU")
+    if record.voltage:
+        parts.append(record.voltage)
+    if record.utility_gas is True:
+        parts.append("GAS")
+    return f"{head} — {' '.join(parts)}".rstrip()
+
+
+def _describe_kitchen_roughin(record: KitchenEquipmentRecord,
+                                 family: str) -> str:
+    """Build a description for the per-item rough-in LS row."""
+    return f"{_kitchen_label(record)} — {family}"
+
+
+def _describe_kitchen_trim(record: KitchenEquipmentRecord) -> str:
+    """Build a description for the per-item trim / hardware LS row."""
+    return f"{_kitchen_label(record)} — trim / installation hardware"
+
+
+def _kitchen_notes_for(record: KitchenEquipmentRecord, *, role: str) -> str:
+    """Stable, source-tagged notes string for kitchen dedupe to grep.
+
+    Format mirrors door + plumbing + HVAC: ``key=value`` pairs joined
+    by ``"; "``.  First pair is always
+    ``source=kitchen_schedule_prepass`` so a prefix-match is cheap.
+    ``role`` disambiguates ``equipment`` / ``roughin`` / ``trim``.
+    """
+    bits: list[str] = [f"source={SYNTHESIS_SOURCE_TAG_KITCHEN}"]
+    if record.tag:
+        bits.append(f"mark={record.tag}")
+    bits.append(f"role={role}")
+    if record.item_type:
+        bits.append(f"item_type={record.item_type}")
+    if record.manufacturer:
+        bits.append(f"manufacturer={record.manufacturer}")
+    if record.model_number:
+        bits.append(f"model={record.model_number}")
+    if record.btu_rating is not None:
+        bits.append(f"btu={record.btu_rating}")
+    if record.voltage:
+        bits.append(f"voltage={record.voltage}")
+    if record.utility_gas is True:
+        bits.append("utility_gas=true")
+    if record.utility_electric is True:
+        bits.append("utility_electric=true")
+    if record.utility_water is True:
+        bits.append("utility_water=true")
+    if record.utility_drain is True:
+        bits.append("utility_drain=true")
+    if record.quantity is not None:
+        bits.append(f"qty_from_schedule={record.quantity}")
+    return "; ".join(bits)
+
+
+def synthesize_kitchen_takeoff_items(
+    equipment: list[KitchenEquipmentRecord] | KitchenScheduleResult | None,
+    *,
+    sheet_id: str | None = None,
+) -> list[TakeoffItem]:
+    """Convert each ``KitchenEquipmentRecord`` into 1-3 ``TakeoffItem`` rows.
+
+    Per-record fan-out (mirrors the T2.9 plumbing shape):
+
+    * One **equipment** row at the per-family CSI section under
+      Division 11 (``11 40 13.13`` cooking / ``11 40 16.13``
+      refrigeration / ``11 40 19.13`` dishwashing / ``11 40 13.16``
+      hood / ``11 40 13`` generic foodservice / ``11 40 00`` other),
+      unit ``EA``.  Quantity = ``record.quantity`` when the schedule
+      published a QTY column (confidence ``0.90``); otherwise
+      quantity ``1.0`` (confidence ``0.55`` → HAND_TAKEOFF queue).
+    * One **MEP rough-in** row, unit ``LS``, ONLY when at least one
+      utility flag is True.  Dominant-utility rule picks the CSI:
+      hood/exhaust → ``23 31 13`` (ductwork); piped (water/drain/gas)
+      → ``22 11 16`` (water-side); electric-only → ``26 27 26``.
+      Confidence inherits the equipment row's confidence with the
+      T6.1 haircut.
+    * One **trim / installation hardware** row at the SAME equipment
+      CSI section, unit ``LS``, ONLY when BOTH ``manufacturer`` AND
+      ``model_number`` are populated.  Confidence ``inherit_with_
+      haircut × 0.70`` so the trim row's banding tracks the parent's.
+
+    A record with no usable ``tag`` is skipped entirely (defensive —
+    the extractor already filters these).  ``sheet_id`` (when
+    provided) is stored on ``source_sheet_ids`` so downstream
+    consumers can trace each row back to its sheet.
+    """
+    if equipment is None:
+        return []
+    if hasattr(equipment, "equipment"):
+        record_list: list[KitchenEquipmentRecord] = list(equipment.equipment)
+    else:
+        record_list = list(equipment)
+    if not record_list:
+        return []
+
+    items: list[TakeoffItem] = []
+    for record in record_list:
+        if not (record.tag and record.tag.strip()):
+            continue
+        sheets: list[str] = []
+        if sheet_id:
+            sheets.append(sheet_id)
+        elif record.source_sheet:
+            sheets.append(record.source_sheet)
+
+        # 1. Equipment row.
+        division, section, family = _classify_kitchen_item(record)
+        if record.quantity is not None and record.quantity > 0:
+            qty = float(record.quantity)
+            equipment_confidence = _KITCHEN_QTY_CONFIDENCE
+        else:
+            qty = 1.0
+            equipment_confidence = _KITCHEN_HAND_TAKEOFF_CONFIDENCE
+        items.append(TakeoffItem(
+            csi_division=division,
+            csi_section=section,
+            description=_describe_kitchen_item(record, family),
+            quantity=qty,
+            unit="EA",
+            confidence=equipment_confidence,
+            source_sheet_ids=list(sheets),
+            notes=_kitchen_notes_for(record, role="equipment"),
+        ))
+
+        # 2. MEP rough-in — only when at least one utility flag fires.
+        roughin = _kitchen_roughin_csi(record)
+        if roughin is not None:
+            r_div, r_sec, r_fam = roughin
+            items.append(TakeoffItem(
+                csi_division=r_div,
+                csi_section=r_sec,
+                description=_describe_kitchen_roughin(record, r_fam),
+                quantity=1.0,
+                unit="LS",
+                confidence=inherit_with_haircut(equipment_confidence),
+                source_sheet_ids=list(sheets),
+                notes=_kitchen_notes_for(record, role="roughin"),
+            ))
+
+        # 3. Trim / installation hardware — mfr+model gated; honour
+        # the per-type exclusion set (currently empty for kitchen).
+        itype = (record.item_type or "OTHER").upper()
+        if (record.manufacturer and record.model_number
+                and itype not in _KITCHEN_TRIM_EXCLUDED):
+            items.append(TakeoffItem(
+                csi_division=division,
+                csi_section=section,
+                description=_describe_kitchen_trim(record),
+                quantity=1.0,
+                unit="LS",
+                confidence=inherit_with_haircut(
+                    equipment_confidence,
+                    multiplier=DERIVATION_HAIRCUT_MULTIPLIER
+                                  * _SPECIALTY_TRIM_MULTIPLIER,
+                ),
+                source_sheet_ids=list(sheets),
+                notes=_kitchen_notes_for(record, role="trim"),
+            ))
+
+    return items
+
+
+# ---------------------------------------------------------------------------
+# Lab — CSI families
+# ---------------------------------------------------------------------------
+#
+# Lab mapping (per the T2.10 brief):
+#   BASE_CABINET / WALL_CABINET /
+#     TALL_CABINET / LAB_BENCH         → 12 35 53.13 (Lab Bench Casework)
+#   FUME_HOOD                          → 11 53 13    (Lab Fume Hoods)
+#   SAFETY_CABINET                     → 11 53 43    (Lab Safety Equipment)
+#   EYEWASH_STATION                    → 22 45 19    (Eyewash Equipment) —
+#                                        cross-Division route!  Eyewashes
+#                                        live on the lab casework schedule
+#                                        but are a plumbing scope item.
+#                                        Keeping them on Division 12 would
+#                                        misroute the cost and break the
+#                                        plumber's bid-package roll-up.
+#   OTHER                              → 12 35 53    (generic Lab Casework)
+
+_CSI_LAB_CASEWORK:    Final[tuple[str, str, str]] = (
+    "12", "12 35 53.13", "Laboratory Bench Casework",
+)
+_CSI_LAB_GENERIC:     Final[tuple[str, str, str]] = (
+    "12", "12 35 53", "Laboratory Casework",
+)
+_CSI_LAB_FUME_HOOD:   Final[tuple[str, str, str]] = (
+    "11", "11 53 13", "Laboratory Fume Hood",
+)
+_CSI_LAB_SAFETY:      Final[tuple[str, str, str]] = (
+    "11", "11 53 43", "Laboratory Safety Equipment",
+)
+_CSI_LAB_EYEWASH:     Final[tuple[str, str, str]] = (
+    "22", "22 45 19", "Eyewash Equipment",
+)
+
+# Lab rough-in CSI families.
+_CSI_LAB_ROUGHIN_WATER: Final[tuple[str, str, str]] = (
+    "22", "22 11 16", "Lab Water / Gas / Vacuum Piping Rough-In",
+)
+_CSI_LAB_ROUGHIN_ELEC:  Final[tuple[str, str, str]] = (
+    "26", "26 27 26", "Lab Equipment Wiring Rough-In",
+)
+
+_LAB_CSI_BY_TYPE: Final[dict[str, tuple[str, str, str]]] = {
+    "BASE_CABINET":     _CSI_LAB_CASEWORK,
+    "WALL_CABINET":     _CSI_LAB_CASEWORK,
+    "TALL_CABINET":     _CSI_LAB_CASEWORK,
+    "LAB_BENCH":        _CSI_LAB_CASEWORK,
+    "FUME_HOOD":        _CSI_LAB_FUME_HOOD,
+    "SAFETY_CABINET":   _CSI_LAB_SAFETY,
+    "EYEWASH_STATION":  _CSI_LAB_EYEWASH,
+    "OTHER":            _CSI_LAB_GENERIC,
+}
+
+# Lab item types that ALWAYS skip the trim row.  FUME_HOOD is the
+# documented exception per the T2.10 brief: factory-supplied fume
+# hoods ship with integrated trim (sash + light + service fittings
+# + cup sinks + baffles), and a separate trim line would double-
+# count.  EYEWASH_STATION is also excluded because the eyewash trim
+# is captured by the plumbing connection (the eyewash IS the trim,
+# essentially — there's no separate finish carpentry layer).
+_LAB_TRIM_EXCLUDED: Final[frozenset[str]] = frozenset({
+    "FUME_HOOD", "EYEWASH_STATION",
+})
+
+_LAB_QTY_CONFIDENCE: Final[float] = 0.90
+_LAB_HAND_TAKEOFF_CONFIDENCE: Final[float] = 0.55
+
+
+def _classify_lab_item(
+    record: LabCaseworkRecord,
+) -> tuple[str, str, str]:
+    """Return ``(csi_division, csi_section, family_label)`` for one lab item.
+
+    Routes via ``record.item_type`` (set by the extractor's tag-prefix
+    detector); unknown types land on the generic ``12 35 53`` lab
+    casework section.
+    """
+    itype = (record.item_type or "OTHER").upper()
+    return _LAB_CSI_BY_TYPE.get(itype, _CSI_LAB_GENERIC)
+
+
+def _lab_roughin_csi(
+    record: LabCaseworkRecord,
+) -> tuple[str, str, str] | None:
+    """Pick the dominant-utility rough-in CSI; ``None`` when no utility flags.
+
+    Dominance rules (per the T2.10 brief):
+      1. Any piped utility (water / gas / vacuum) → water-side
+         (``22 11 16``).  Gas + vacuum collapse into the same bucket
+         as water+drain — they all need a piped service rough-in from
+         the lab plumber.
+      2. Electric only (no piping) → equipment wiring (``26 27 26``).
+      3. No utility flags at all → ``None`` (skip the rough-in row).
+
+    Note that ``EYEWASH_STATION`` always carries water — even when
+    the extractor didn't fire the water flag on the schedule, the
+    primary item CSI (``22 45 19``) already routes the cost to the
+    plumber's scope, so a missing rough-in row is acceptable.
+    """
+    if (record.utility_water is True or record.utility_gas is True
+            or record.utility_vacuum is True):
+        return _CSI_LAB_ROUGHIN_WATER
+    if record.utility_electric is True:
+        return _CSI_LAB_ROUGHIN_ELEC
+    return None
+
+
+def _lab_label(record: LabCaseworkRecord) -> str:
+    tag = (record.tag or "").strip()
+    if not tag:
+        return "Lab casework (unmarked)"
+    return f"Lab casework {tag}"
+
+
+def _describe_lab_item(record: LabCaseworkRecord, family: str) -> str:
+    """Build a human-readable description for the primary lab item row.
+
+    Examples::
+
+        "Lab casework BC-1 — Laboratory Bench Casework 36\" x 22\" base cabinet EPOXY"
+        "Lab casework FH-1 — Laboratory Fume Hood 6' bench-top (Labconco 1166000) GAS VACUUM"
+        "Lab casework EW-1 — Eyewash Equipment wall-mount combination eyewash/drench"
+    """
+    head = _lab_label(record)
+    parts: list[str] = []
+    desc = (record.description or "").strip()
+    parts.append(desc if desc else family)
+    mfr_bits: list[str] = []
+    if record.manufacturer:
+        mfr_bits.append(record.manufacturer.strip())
+    if record.model_number:
+        mfr_bits.append(record.model_number.strip())
+    if mfr_bits:
+        parts.append(f"({' '.join(mfr_bits)})")
+    if record.material:
+        parts.append(record.material.upper())
+    utility_bits: list[str] = []
+    if record.utility_gas is True:
+        utility_bits.append("GAS")
+    if record.utility_vacuum is True:
+        utility_bits.append("VACUUM")
+    if record.utility_water is True:
+        utility_bits.append("WATER")
+    if utility_bits:
+        parts.append(" ".join(utility_bits))
+    return f"{head} — {' '.join(parts)}".rstrip()
+
+
+def _describe_lab_roughin(record: LabCaseworkRecord, family: str) -> str:
+    return f"{_lab_label(record)} — {family}"
+
+
+def _describe_lab_trim(record: LabCaseworkRecord) -> str:
+    return f"{_lab_label(record)} — trim / installation hardware"
+
+
+def _lab_notes_for(record: LabCaseworkRecord, *, role: str) -> str:
+    """Stable, source-tagged notes string for lab dedupe to grep.
+
+    First pair is always ``source=lab_schedule_prepass``; ``role``
+    disambiguates ``casework`` / ``roughin`` / ``trim``.
+    """
+    bits: list[str] = [f"source={SYNTHESIS_SOURCE_TAG_LAB}"]
+    if record.tag:
+        bits.append(f"mark={record.tag}")
+    bits.append(f"role={role}")
+    if record.item_type:
+        bits.append(f"item_type={record.item_type}")
+    if record.manufacturer:
+        bits.append(f"manufacturer={record.manufacturer}")
+    if record.model_number:
+        bits.append(f"model={record.model_number}")
+    if record.material:
+        bits.append(f"material={record.material}")
+    if record.utility_gas is True:
+        bits.append("utility_gas=true")
+    if record.utility_vacuum is True:
+        bits.append("utility_vacuum=true")
+    if record.utility_water is True:
+        bits.append("utility_water=true")
+    if record.utility_electric is True:
+        bits.append("utility_electric=true")
+    if record.quantity is not None:
+        bits.append(f"qty_from_schedule={record.quantity}")
+    return "; ".join(bits)
+
+
+def synthesize_lab_takeoff_items(
+    casework: list[LabCaseworkRecord] | LabScheduleResult | None,
+    *,
+    sheet_id: str | None = None,
+) -> list[TakeoffItem]:
+    """Convert each ``LabCaseworkRecord`` into 1-3 ``TakeoffItem`` rows.
+
+    Per-record fan-out (mirrors the T2.10 kitchen shape):
+
+    * One **primary** row at the per-family CSI section: BASE / WALL
+      / TALL cabinets + LAB_BENCH route to ``12 35 53.13`` (Lab Bench
+      Casework); FUME_HOOD → ``11 53 13`` (Lab Fume Hoods);
+      SAFETY_CABINET → ``11 53 43`` (Lab Safety Equipment);
+      EYEWASH_STATION → ``22 45 19`` (Eyewash, cross-Division to
+      plumbing); OTHER → ``12 35 53`` (generic Lab Casework).  Unit
+      ``EA``.  Quantity = ``record.quantity`` when the schedule
+      published a QTY column (confidence ``0.90``); otherwise
+      quantity ``1.0`` (confidence ``0.55`` → HAND_TAKEOFF queue).
+    * One **MEP rough-in** row, unit ``LS``, ONLY when at least one
+      utility flag is True.  Piped (water/gas/vacuum) → ``22 11 16``;
+      electric-only → ``26 27 26``.  Confidence inherits the parent
+      with the T6.1 haircut.
+    * One **trim / installation hardware** row at the SAME primary
+      CSI section, unit ``LS``, ONLY when BOTH ``manufacturer`` AND
+      ``model_number`` are populated AND the item is NOT in
+      :data:`_LAB_TRIM_EXCLUDED` (FUME_HOOD always ships with
+      integrated trim; EYEWASH is itself the trim).  Confidence
+      ``inherit_with_haircut × 0.70``.
+
+    A record with no usable ``tag`` is skipped entirely.
+    """
+    if casework is None:
+        return []
+    if hasattr(casework, "casework"):
+        record_list: list[LabCaseworkRecord] = list(casework.casework)
+    else:
+        record_list = list(casework)
+    if not record_list:
+        return []
+
+    items: list[TakeoffItem] = []
+    for record in record_list:
+        if not (record.tag and record.tag.strip()):
+            continue
+        sheets: list[str] = []
+        if sheet_id:
+            sheets.append(sheet_id)
+        elif record.source_sheet:
+            sheets.append(record.source_sheet)
+
+        # 1. Primary item row.
+        division, section, family = _classify_lab_item(record)
+        if record.quantity is not None and record.quantity > 0:
+            qty = float(record.quantity)
+            primary_confidence = _LAB_QTY_CONFIDENCE
+        else:
+            qty = 1.0
+            primary_confidence = _LAB_HAND_TAKEOFF_CONFIDENCE
+        items.append(TakeoffItem(
+            csi_division=division,
+            csi_section=section,
+            description=_describe_lab_item(record, family),
+            quantity=qty,
+            unit="EA",
+            confidence=primary_confidence,
+            source_sheet_ids=list(sheets),
+            notes=_lab_notes_for(record, role="casework"),
+        ))
+
+        # 2. MEP rough-in — only when at least one utility flag fires.
+        roughin = _lab_roughin_csi(record)
+        if roughin is not None:
+            r_div, r_sec, r_fam = roughin
+            items.append(TakeoffItem(
+                csi_division=r_div,
+                csi_section=r_sec,
+                description=_describe_lab_roughin(record, r_fam),
+                quantity=1.0,
+                unit="LS",
+                confidence=inherit_with_haircut(primary_confidence),
+                source_sheet_ids=list(sheets),
+                notes=_lab_notes_for(record, role="roughin"),
+            ))
+
+        # 3. Trim / installation hardware — mfr+model gated AND
+        # item_type not in the per-family exclusion set.
+        itype = (record.item_type or "OTHER").upper()
+        if (record.manufacturer and record.model_number
+                and itype not in _LAB_TRIM_EXCLUDED):
+            items.append(TakeoffItem(
+                csi_division=division,
+                csi_section=section,
+                description=_describe_lab_trim(record),
+                quantity=1.0,
+                unit="LS",
+                confidence=inherit_with_haircut(
+                    primary_confidence,
+                    multiplier=DERIVATION_HAIRCUT_MULTIPLIER
+                                  * _SPECIALTY_TRIM_MULTIPLIER,
+                ),
+                source_sheet_ids=list(sheets),
+                notes=_lab_notes_for(record, role="trim"),
             ))
 
     return items
