@@ -1,0 +1,61 @@
+{
+  "$schema_note": "BPC TX-state-CSP-HSP pricing-form skeleton. Mirror the agency Proposal Form fields. Lump-sum + unit prices + alternates + allowances per CSP §00 21 00 / §00 42 13.",
+  "project": {
+    "name": "CHS Cafeteria Serving Line Renovation",
+    "solicitation_number": "2026-0608-01",
+    "agency": "Cleburne Independent School District",
+    "submission_date": "2026-06-08"
+  },
+  "lump_sum_proposal_price_usd": 0,
+  "substantial_completion_days_from_ntp": 0,
+  "final_completion_days_from_ntp": 0,
+  "unit_prices": [
+    {
+      "item": "{{ITEM}}",
+      "unit": "{{UNIT}}",
+      "unit_price_usd": 0,
+      "notes": "Per CSP unit-price schedule"
+    }
+  ],
+  "alternates": [
+    {
+      "alternate_number": "ALT-001",
+      "description": "{{DESCRIPTION}}",
+      "add_or_deduct": "ADD|DEDUCT",
+      "price_usd": 0
+    }
+  ],
+  "allowances_carried_separately": [
+    {
+      "description": "{{ALLOWANCE_DESC}}",
+      "amount_usd": 0,
+      "notes": "Per CSP allowance schedule — NOT rolled into lump-sum, NOT marked up"
+    }
+  ],
+  "hsp_commitment": {
+    "total_subcontracted_usd": 0,
+    "hub_committed_usd": 0,
+    "hub_committed_pct": 0.0,
+    "applicable_goal_pct": "N/A"
+  },
+  "addenda_acknowledged": ["{{ADDENDA_LIST}}"],
+  "acceptance_period_days": 90,
+  "bid_bond": {
+    "pct_of_proposal": 5.0,
+    "amount_usd": 0,
+    "surety_name": "[USER TO FILL]",
+    "treasury_circular_570_listed": false,
+    "tx_licensed_surety": true
+  },
+  "compliance_attestations": {
+    "no_exceptions_taken": true,
+    "addenda_acknowledged_on_form": true,
+    "ciq_attached": true,
+    "hb1295_filed_with_tec_if_over_1m": false,
+    "non_collusion_signed": true,
+    "tx_resident_bidder_attestation": true,
+    "boycott_israel_negative_attestation": true,
+    "tx_franchise_tax_good_standing_verified": false,
+    "tx_hub_cert_current_if_claimed": false
+  }
+}
