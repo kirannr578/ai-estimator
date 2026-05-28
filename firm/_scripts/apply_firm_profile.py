@@ -416,11 +416,56 @@ def _summarize_pick(project: str) -> dict[str, str]:
 PICKS_BANNER_MARK = "<!-- firm-profile:picks-banner -->"
 
 
-def fill_past_perf_section(workspace: str, text: str) -> tuple[str, int]:
+def _pick_already_present(project: str, text: str) -> bool:
+    """Return True if `project` (a firm-profile past-project pick name)
+    already appears in `text` outside the picks-banner blockquote.
+
+    The picks-banner is a stable injected paragraph (`PICKS_BANNER_MARK`)
+    that lists every pick by name regardless of whether it has landed in
+    a per-reference header slot. If we counted the banner as evidence,
+    Layer 3 would refuse to fill *any* header slot after a single run.
+    So we strip the banner block (everything from the marker through the
+    first thematic break ``---``) before searching.
+    """
+    if PICKS_BANNER_MARK in text:
+        marker_idx = text.find(PICKS_BANNER_MARK)
+        rule_idx = text.find("\n---", marker_idx)
+        if rule_idx > 0:
+            haystack = text[:marker_idx] + text[rule_idx:]
+        else:
+            haystack = text[:marker_idx]
+    else:
+        haystack = text
+    return project in haystack
+
+
+def fill_past_perf_section(
+    workspace: str, text: str, *, force: bool = False
+) -> tuple[str, int]:
     picks = picks_for(workspace)
     if not picks:
         return text, 0
     filled = 0
+
+    # Build the set of picks already present in the document BEFORE we
+    # mutate it (banner injection, at-a-glance row fill, per-reference
+    # header fill). This snapshots the document's incoming state so the
+    # idempotency guard at the per-reference-header step doesn't see a
+    # pick name that *we* just wrote in this same invocation (which
+    # would defeat the first-run fill).
+    #
+    # Re-runs of this script must NOT propagate picks[0] / picks[1] into
+    # Optional Project Reference #4 / #5 when those picks are already
+    # filled into the primary #1/#2/#3 slots — the regex only matches
+    # `[USER TO FILL ...]` markers and therefore only picks up the
+    # still-open optional slots on a re-run, which is exactly when this
+    # bug used to fire. `--force` bypasses the guard for users who
+    # explicitly want the old (now intentional) overwrite behavior.
+    already_present_picks: set[str] = set()
+    if not force:
+        for project in picks:
+            if _pick_already_present(project, text):
+                already_present_picks.add(project)
 
     # Inject (once, idempotently) a banner at the top of the file that tells the
     # user which past projects firm-profile.json picked for this bid. Survives
@@ -480,10 +525,20 @@ def fill_past_perf_section(workspace: str, text: str) -> tuple[str, int]:
         if not headers:
             continue
         chunks: list[tuple[int, int, str]] = []
-        for i, m in enumerate(headers):
-            if i >= len(picks):
+        pick_iter = iter(picks)
+        for m in headers:
+            # Advance to the next pick that's not already represented
+            # in the document body (idempotency guard). With --force,
+            # `already_present_picks` is empty and every header burns
+            # the next pick.
+            project: str | None = None
+            for candidate in pick_iter:
+                if candidate in already_present_picks:
+                    continue
+                project = candidate
                 break
-            project = picks[i]
+            if project is None:
+                break
             blurb = PAST_PROJECT_BLURBS.get(project, project)
             replacement = f"{m.group(1)} \u2014 {project}\n\n{blurb}\n"
             chunks.append((m.start(), m.end(), replacement))
@@ -508,7 +563,7 @@ def fill_past_perf_section(workspace: str, text: str) -> tuple[str, int]:
 PLACEHOLDER_RE = re.compile(r"\[(?:USER TO FILL|TBD|FILL|FIRM [^\]]+|BPC [^\]]+)[^\]]*\]")
 
 
-def process_file(path: Path, workspace: str) -> dict:
+def process_file(path: Path, workspace: str, *, force: bool = False) -> dict:
     text = path.read_text(encoding="utf-8")
     original = text
     before = len(PLACEHOLDER_RE.findall(text))
@@ -534,7 +589,7 @@ def process_file(path: Path, workspace: str) -> dict:
     # Layer 3 — only on known past-perf files
     rel = path.relative_to(BIDS / workspace).as_posix()
     if rel in PAST_PERF_FILES:
-        text, n = fill_past_perf_section(workspace, text)
+        text, n = fill_past_perf_section(workspace, text, force=force)
         layer_counts["L3"] += n
 
     after = len(PLACEHOLDER_RE.findall(text))
@@ -552,17 +607,69 @@ def process_file(path: Path, workspace: str) -> dict:
     }
 
 
-def main() -> int:
+def _resolve_workspace_dirs(target: Path | None) -> list[Path]:
+    """Return the workspaces to scan. If `target` is given, scope to
+    that single workspace (must be a direct child of `bids/`).
+    Otherwise scan every active workspace under `bids/`."""
+    if target is None:
+        return sorted(
+            p for p in BIDS.iterdir()
+            if p.is_dir() and not p.name.startswith("_")
+        )
+    resolved = Path(target).resolve()
+    if not resolved.is_dir():
+        raise SystemExit(f"workspace not found: {target}")
+    if resolved.parent != BIDS:
+        raise SystemExit(
+            f"workspace must be a direct child of bids/: {target}"
+        )
+    return [resolved]
+
+
+def main(argv: list[str] | None = None) -> int:
+    import argparse
+
+    p = argparse.ArgumentParser(
+        description=(
+            "Apply firm-profile.json values to placeholders across bid "
+            "workspaces. Idempotent by default — re-runs are safe."
+        )
+    )
+    p.add_argument(
+        "workspace",
+        nargs="?",
+        type=Path,
+        help=(
+            "Optional single workspace under bids/ to process. If "
+            "omitted, every active workspace is processed."
+        ),
+    )
+    p.add_argument(
+        "--force",
+        action="store_true",
+        help=(
+            "Bypass the Layer-3 idempotency guard: re-fill the Optional "
+            "Project Reference slots even when those picks are already "
+            "filled into the primary slots earlier in the document. "
+            "Default behavior is to skip picks that are already present."
+        ),
+    )
+    args = p.parse_args(argv)
+
+    workspaces = _resolve_workspace_dirs(args.workspace)
     report = {
-        "by_workspace": defaultdict(lambda: {"files_changed": 0, "before": 0, "after": 0, "L1": 0, "L2": 0, "L3": 0}),
+        "by_workspace": defaultdict(lambda: {
+            "files_changed": 0, "before": 0, "after": 0,
+            "L1": 0, "L2": 0, "L3": 0,
+        }),
         "files": [],
+        "force": args.force,
     }
-    workspaces = sorted([p for p in BIDS.iterdir() if p.is_dir() and not p.name.startswith("_")])
     for ws in workspaces:
         for f in sorted(ws.rglob("*")):
             if not f.is_file() or f.suffix.lower() not in (".md", ".json"):
                 continue
-            r = process_file(f, ws.name)
+            r = process_file(f, ws.name, force=args.force)
             report["files"].append(r)
             bucket = report["by_workspace"][ws.name]
             bucket["before"] += r["before"]
@@ -582,6 +689,7 @@ def main() -> int:
             f"{ws}: {b['files_changed']} files changed; "
             f"placeholders {b['before']} -> {b['after']} (-{delta}); "
             f"L1={b['L1']} L2={b['L2']} L3={b['L3']}"
+            f"{' [--force]' if args.force else ''}"
         )
     return 0
 
