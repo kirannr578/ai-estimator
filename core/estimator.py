@@ -31,12 +31,15 @@ from .pricing.cwicr_matcher import (
     min_similarity_threshold,
 )
 from .schemas import (
+    COST_TIER_SEED_DB_PRICE_CONFIDENCE,
     CostBand,
     CostCategory,
     CostLine,
+    CostSourceTier,
     Estimate,
     TakeoffItem,
     band_for_confidence,
+    price_confidence_from_similarity,
 )
 from .takeoff import ProjectModel
 
@@ -166,6 +169,42 @@ def _waste_for_cwicr(item: TakeoffItem) -> float:
     return _WASTE_BY_DIVISION.get(item.csi_division, 1.0)
 
 
+# ---------------------------------------------------------------------------
+# Phase T7 — combined-confidence band assignment
+# ---------------------------------------------------------------------------
+
+
+def _combined_band(
+    qty_confidence: float | None,
+    price_confidence: float,
+    *,
+    suppressed: bool,
+) -> CostBand:
+    """Return the band for ``qty_confidence × price_confidence``.
+
+    Mirrors the inline math of :pyattr:`CostLine.combined_confidence` so
+    callers in ``price_takeoff`` can pick a band BEFORE constructing the
+    CostLine (the band is set in the constructor and the
+    ``combined_confidence`` property reads from already-set fields).
+
+    ``suppressed=True`` short-circuits to ``HAND_TAKEOFF`` per the
+    Phase T6 contract — preserves the calibration-v2 unit-mismatch
+    guard regardless of how good the price-side confidence happens to
+    be.
+
+    ``qty_confidence is None`` is treated as the schema default 0.7,
+    matching the no-confidence-from-LLM legacy path. Both inputs are
+    clamped into ``[0, 1]`` before multiplying.
+    """
+    if suppressed:
+        return CostBand.HAND_TAKEOFF
+    qty = 0.7 if qty_confidence is None else float(qty_confidence)
+    qty = max(0.0, min(1.0, qty))
+    price = max(0.0, min(1.0, float(price_confidence)))
+    combined = round(qty * price, 4)
+    return band_for_confidence(combined, suppressed=False)
+
+
 def _build_cwicr_line(
     item: TakeoffItem,
     candidate: CwicrCandidate,
@@ -187,6 +226,10 @@ def _build_cwicr_line(
     cost_source = f"cwicr:{candidate.source_row_id}"
     confidence = max(0.0, min(1.0, float(candidate.similarity)))
 
+    # Phase T7 — bridge CWICR similarity into a (tier, price_confidence) pair.
+    # The helper is the single source of truth for the boundary semantics.
+    tier, price_conf = price_confidence_from_similarity(candidate.similarity)
+
     takeoff_unit = (item.unit or "").upper().strip()
     cand_unit = (candidate.unit or "").upper().strip()
     unit_mismatch = bool(takeoff_unit) and bool(cand_unit) and takeoff_unit != cand_unit
@@ -198,6 +241,9 @@ def _build_cwicr_line(
             f"differently-keyed. Add a conversion factor or override unit_cost "
             f"manually to include this line."
         )
+        # Suppressed → tier=MISSING, price_confidence=0 (mirrors the
+        # Phase T7 contract that suppressed lines effectively have no
+        # usable cost data, even though CWICR did surface a candidate).
         return CostLine(
             csi_division=item.csi_division,
             csi_section=item.csi_section or "",
@@ -214,7 +260,9 @@ def _build_cwicr_line(
             cost_source=cost_source,
             notes=" | ".join(filter(None, [item.notes, mismatch_note])) or None,
             suppressed=True,
-            cost_band=band_for_confidence(confidence, suppressed=True),
+            cost_band=_combined_band(confidence, 0.0, suppressed=True),
+            price_confidence=0.0,
+            cost_source_tier=CostSourceTier.MISSING,
         )
 
     total = round(unit_cost * ordered_qty, 2)
@@ -233,7 +281,9 @@ def _build_cwicr_line(
         source_sheet_ids=item.source_sheet_ids,
         cost_source=cost_source,
         notes=item.notes,
-        cost_band=band_for_confidence(confidence, suppressed=False),
+        cost_band=_combined_band(confidence, price_conf, suppressed=False),
+        price_confidence=price_conf,
+        cost_source_tier=tier,
     )
 
 
@@ -320,6 +370,12 @@ def price_takeoff(
             # band assignment only affects which queue this line lands in
             # downstream (operator-review or hand-takeoff). A $0 line is
             # still useful as a "needs pricing" worklist marker.
+            #
+            # Phase T7 — no-match → tier=MISSING (no cost data was
+            # available at all; mirrors the suppressed-line semantics).
+            # ``price_confidence=0`` collapses ``combined_confidence`` to
+            # 0, which lands the row in HAND_TAKEOFF via the band helper
+            # — matching the brief's "informational, not in totals" rule.
             line_items.append(CostLine(
                 csi_division=t.csi_division,
                 csi_section=t.csi_section,
@@ -335,7 +391,9 @@ def price_takeoff(
                 source_sheet_ids=t.source_sheet_ids,
                 cost_source="(no match)",
                 notes=(t.notes + " | " if t.notes else "") + "Unit cost not found - add to cost_database.json",
-                cost_band=band_for_confidence(t.confidence, suppressed=False),
+                cost_band=_combined_band(t.confidence, 0.0, suppressed=False),
+                price_confidence=0.0,
+                cost_source_tier=CostSourceTier.MISSING,
             ))
             continue
 
@@ -377,6 +435,8 @@ def price_takeoff(
                 f"cost suppressed from total — fix takeoff unit or add a "
                 f"conversion factor to the cost DB"
             )
+            # Phase T7 — suppressed seed-DB hit → tier=MISSING + price_conf=0,
+            # exactly as the suppressed CWICR branch above.
             line_items.append(CostLine(
                 csi_division=t.csi_division,
                 csi_section=t.csi_section or key,
@@ -393,11 +453,18 @@ def price_takeoff(
                 cost_source=key,
                 notes=" | ".join(filter(None, [t.notes, mismatch_note])) or None,
                 suppressed=True,
-                cost_band=band_for_confidence(t.confidence, suppressed=True),
+                cost_band=_combined_band(t.confidence, 0.0, suppressed=True),
+                price_confidence=0.0,
+                cost_source_tier=CostSourceTier.MISSING,
             ))
             continue
 
         total = round(unit_cost * ordered_qty, 2)
+        # Phase T7 — seed-DB hit → tier=EXACT_MATCH with the fixed
+        # ``COST_TIER_SEED_DB_PRICE_CONFIDENCE`` (0.95) discount. The
+        # seed catalog is hand-curated against MasterFormat sections,
+        # so any seed-DB hit is treated as exact; the 0.95 (vs 1.00)
+        # acknowledges that the seed's coverage is narrower than CWICR.
         line_items.append(CostLine(
             csi_division=t.csi_division,
             csi_section=t.csi_section or key,
@@ -413,7 +480,11 @@ def price_takeoff(
             source_sheet_ids=t.source_sheet_ids,
             cost_source=key,
             notes=t.notes,
-            cost_band=band_for_confidence(t.confidence, suppressed=False),
+            cost_band=_combined_band(
+                t.confidence, COST_TIER_SEED_DB_PRICE_CONFIDENCE, suppressed=False
+            ),
+            price_confidence=COST_TIER_SEED_DB_PRICE_CONFIDENCE,
+            cost_source_tier=CostSourceTier.EXACT_MATCH,
         ))
 
     # Sort: by division ascending, suppressed lines below priced lines within

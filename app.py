@@ -41,6 +41,7 @@ from core.pdf_processor import DocumentBundle, process_pdfs
 from core.schemas import (
     ClientInfo,
     CompanyInfo,
+    CostSourceTier,
     Estimate,
     PaymentMilestone,
     PaymentSchedule,
@@ -49,6 +50,30 @@ from core.schemas import (
     Sheet,
     SheetExtraction,
 )
+
+
+# Phase T7 — display labels for the catalog-completeness tiers, mirroring
+# ``core.exporter._TIER_LABELS`` so the UI and Excel export agree exactly
+# on user-visible strings.
+_T7_TIER_LABELS: dict[CostSourceTier, str] = {
+    CostSourceTier.EXACT_MATCH: "Exact Match",
+    CostSourceTier.CATEGORY_MATCH: "Category Match",
+    CostSourceTier.INTERPOLATED: "Interpolated",
+    CostSourceTier.PARAMETRIC: "Parametric",
+    CostSourceTier.MANUAL_OVERRIDE: "Manual Override",
+    CostSourceTier.MISSING: "Missing",
+}
+
+
+def _t7_tier_label(li) -> str:
+    """Resolve the display label for a CostLine's ``cost_source_tier``."""
+    tier = getattr(li, "cost_source_tier", CostSourceTier.EXACT_MATCH)
+    if isinstance(tier, CostSourceTier):
+        return _T7_TIER_LABELS[tier]
+    try:
+        return _T7_TIER_LABELS[CostSourceTier(tier)]
+    except Exception:
+        return str(tier)
 from core.sheet_classifier import classify_sheet
 from core.takeoff import ProjectModel, reconcile
 
@@ -1078,20 +1103,82 @@ if "estimate" in st.session_state:
             help="Conservative floor — markups computed against the AUTO-only subtotal.",
         )
 
+        # Phase T7 — Cost Source Mix expander. Sits BELOW the T6 band
+        # tiles so the reader's mental flow is "qty-side confidence
+        # (band) → price-side confidence (tier)". Auto-collapsed by
+        # default; opens on demand for the operator who wants to see
+        # which CSI rows came from CWICR / seed-DB / no match.
+        with st.expander(
+            "Cost Source Mix (Phase T7)",
+            expanded=False,
+        ):
+            st.caption(
+                "Catalog-completeness breakdown of every line, regardless of "
+                "band. **Exact Match** = direct CWICR hit at \u2265 0.92 sim or "
+                "any seed-DB hit. **Category Match** = CWICR sim 0.75\u20130.92 "
+                "(same CSI family, slightly off description). **Interpolated** "
+                "= CWICR sim 0.50\u20130.75 (region-adjusted neighbour). "
+                "**Parametric** = CWICR sim < 0.50 (rare). **Manual Override** "
+                "= operator-set unit cost. **Missing** = no cost data found."
+            )
+            tier_counts = estimate.count_by_tier
+            tier_totals = estimate.total_by_tier
+            tier_rows = [
+                {
+                    "Tier": _T7_TIER_LABELS[tier],
+                    "Lines": tier_counts.get(tier, 0),
+                    "Total $": tier_totals.get(tier, 0.0),
+                }
+                for tier in CostSourceTier
+            ]
+            tier_df = pd.DataFrame(tier_rows)
+            st.dataframe(
+                tier_df, hide_index=True, use_container_width=True,
+                column_config={
+                    "Total $": st.column_config.NumberColumn(format="$%.2f"),
+                },
+            )
+
         with st.expander(
             "Review Queues "
             f"(Review: {estimate.operator_review_count}, "
             f"Hand: {estimate.hand_takeoff_count})",
             expanded=estimate.hand_takeoff_count > 0,
         ):
+            # Phase T7 — tier-filter dropdown applied to BOTH queues.
+            # Default "All" preserves the pre-T7 behaviour exactly.
+            tier_filter_options = ["All"] + list(_T7_TIER_LABELS.values())
+            queue_tier_filter = st.selectbox(
+                "Filter queues by Cost Source Tier",
+                options=tier_filter_options,
+                index=0,
+                key="t7_queue_tier_filter",
+                help=(
+                    "Narrow both queues to lines from a single catalog-"
+                    "completeness tier. Useful for triaging the Missing / "
+                    "Interpolated rows separately from the Category-Match ones."
+                ),
+            )
+
+            def _matches_tier_filter(li) -> bool:
+                if queue_tier_filter == "All":
+                    return True
+                return _t7_tier_label(li) == queue_tier_filter
+
             st.markdown("##### Operator Review Queue")
             st.caption(
                 "Confidence 0.65\u20130.84 — included in totals but flagged "
                 "for an eyeball before submitting."
             )
-            review_lines = estimate.operator_review_line_items
+            review_lines = [
+                li for li in estimate.operator_review_line_items
+                if _matches_tier_filter(li)
+            ]
             if not review_lines:
-                st.caption("(empty — every priced row cleared the 0.85 auto-approve threshold.)")
+                if queue_tier_filter == "All":
+                    st.caption("(empty — every priced row cleared the 0.85 auto-approve threshold.)")
+                else:
+                    st.caption(f"(no operator-review lines match tier '{queue_tier_filter}'.)")
             else:
                 review_df = pd.DataFrame([
                     {
@@ -1102,6 +1189,7 @@ if "estimate" in st.session_state:
                         "Unit Cost": li.unit_cost,
                         "Total": li.total_cost,
                         "Conf": li.confidence,
+                        "Tier": _t7_tier_label(li),
                         "Source": ", ".join(li.source_sheet_ids),
                         "Notes": li.notes or "",
                     }
@@ -1122,9 +1210,15 @@ if "estimate" in st.session_state:
                 "Confidence < 0.65 (or unit-mismatch suppressed) \u2014 excluded "
                 "from the grand total. Each row needs an in-person takeoff."
             )
-            hand_lines = estimate.hand_takeoff_line_items
+            hand_lines = [
+                li for li in estimate.hand_takeoff_line_items
+                if _matches_tier_filter(li)
+            ]
             if not hand_lines:
-                st.caption("(empty \u2014 no rows under 0.65 confidence and no unit-mismatch suppression.)")
+                if queue_tier_filter == "All":
+                    st.caption("(empty \u2014 no rows under 0.65 confidence and no unit-mismatch suppression.)")
+                else:
+                    st.caption(f"(no hand-takeoff lines match tier '{queue_tier_filter}'.)")
             else:
                 hand_df = pd.DataFrame([
                     {
@@ -1135,6 +1229,7 @@ if "estimate" in st.session_state:
                         "Unit Cost": li.unit_cost,
                         "Total": li.total_cost,
                         "Conf": li.confidence,
+                        "Tier": _t7_tier_label(li),
                         "Source": ", ".join(li.source_sheet_ids),
                         "Action": "Manual takeoff required",
                         "Notes": li.notes or "",

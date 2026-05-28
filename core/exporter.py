@@ -11,7 +11,7 @@ from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 
-from .schemas import CostBand, Estimate, SheetExtraction
+from .schemas import CostBand, CostSourceTier, Estimate, SheetExtraction
 from .takeoff import ProjectModel
 
 
@@ -38,6 +38,20 @@ _BAND_LABELS: dict[CostBand, str] = {
 }
 
 
+# Phase T7 — human-readable tier labels for Excel cells. The enum's
+# string value (e.g. ``"exact_match"``) is fine for JSON / API consumers
+# but a spreadsheet column reader expects Title Case. Exposed at module
+# level so tests can pin the exact strings.
+_TIER_LABELS: dict[CostSourceTier, str] = {
+    CostSourceTier.EXACT_MATCH: "Exact Match",
+    CostSourceTier.CATEGORY_MATCH: "Category Match",
+    CostSourceTier.INTERPOLATED: "Interpolated",
+    CostSourceTier.PARAMETRIC: "Parametric",
+    CostSourceTier.MANUAL_OVERRIDE: "Manual Override",
+    CostSourceTier.MISSING: "Missing",
+}
+
+
 def _band_label(li) -> str:
     """Resolve the short ``AUTO/REVIEW/HAND`` label for a CostLine.
 
@@ -52,6 +66,21 @@ def _band_label(li) -> str:
         return _BAND_LABELS[CostBand(band)]
     except Exception:
         return str(band)
+
+
+def _tier_label(li) -> str:
+    """Resolve the Title-Case tier label for a CostLine (Phase T7).
+
+    Mirrors :func:`_band_label` — tolerates either the enum form or the
+    string form delivered by a JSON round-trip.
+    """
+    tier = getattr(li, "cost_source_tier", CostSourceTier.EXACT_MATCH)
+    if isinstance(tier, CostSourceTier):
+        return _TIER_LABELS[tier]
+    try:
+        return _TIER_LABELS[CostSourceTier(tier)]
+    except Exception:
+        return str(tier)
 
 
 _SUPPORTING_DOC_KIND_PATTERNS: tuple[tuple[str, str], ...] = (
@@ -143,7 +172,10 @@ def _write_header(ws, row: int, headers: list[str]) -> None:
 
 # Column schema shared by the two Phase T6 queue sheets. Kept as a
 # module-level tuple so tests can reference it and any future column
-# addition lands in one place.
+# addition lands in one place. Phase T7 appended ``Price Confidence``,
+# ``Cost Source Tier`` and ``Combined Confidence`` after ``Confidence``
+# so a reviewer scanning either queue sees the catalog-completeness
+# axis right next to the qty-side confidence.
 _QUEUE_SHEET_HEADERS: tuple[str, ...] = (
     "CSI Code",
     "Description",
@@ -152,6 +184,9 @@ _QUEUE_SHEET_HEADERS: tuple[str, ...] = (
     "Unit Cost",
     "Total Cost",
     "Confidence",
+    "Price Confidence",
+    "Cost Source Tier",
+    "Combined Confidence",
     "Source",
     "Notes",
 )
@@ -204,8 +239,13 @@ def _render_queue_sheet(
         ws.cell(row=r_idx, column=5, value=li.unit_cost).number_format = "$#,##0.00"
         ws.cell(row=r_idx, column=6, value=li.total_cost).number_format = "$#,##0.00"
         ws.cell(row=r_idx, column=7, value=li.confidence).number_format = "0.00"
-        ws.cell(row=r_idx, column=8, value=", ".join(li.source_sheet_ids))
-        ws.cell(row=r_idx, column=9, value=li.notes or "").alignment = Alignment(
+        # Phase T7 — price-side axis next to the qty-side ``Confidence`` cell.
+        ws.cell(row=r_idx, column=8, value=getattr(li, "price_confidence", 1.0)).number_format = "0.00"
+        ws.cell(row=r_idx, column=9, value=_tier_label(li))
+        combined = li.combined_confidence if hasattr(li, "combined_confidence") else li.confidence
+        ws.cell(row=r_idx, column=10, value=combined).number_format = "0.00"
+        ws.cell(row=r_idx, column=11, value=", ".join(li.source_sheet_ids))
+        ws.cell(row=r_idx, column=12, value=li.notes or "").alignment = Alignment(
             wrap_text=True, vertical="top"
         )
 
@@ -313,6 +353,49 @@ def export_estimate_xlsx(
             c_pct.number_format = "0.00\"%\""
             row += 1
 
+    # Phase T7 — Cost Source Tier Breakdown. One row per
+    # :class:`CostSourceTier` in enum order so the table reads top-to-
+    # bottom as "best → worst" catalog quality. Always emitted (even on
+    # a fully-empty estimate) so downstream parsers can rely on the
+    # block existing. The percentage denominator is the headline
+    # subtotal (AUTO + REVIEW; excludes HAND_TAKEOFF / suppressed)
+    # which matches the PDF subscript denominator and reconciles back
+    # to the same number the reader sees on the headline tile.
+    row += 1
+    ws.cell(row=row, column=1, value="Cost Source Tier Breakdown").font = Font(bold=True)
+    row += 1
+    _write_header(ws, row, ["Tier", "Line Count", "Total $", "% of Subtotal"])
+    row += 1
+    tier_counts = estimate.count_by_tier
+    tier_totals = estimate.total_by_tier
+    subtotal_for_tier = estimate.subtotal or 0.0
+    total_lines_all = 0
+    total_dollars_all = 0.0
+    for tier in CostSourceTier:
+        cnt = tier_counts.get(tier, 0)
+        amount = tier_totals.get(tier, 0.0)
+        ws.cell(row=row, column=1, value=_TIER_LABELS[tier])
+        ws.cell(row=row, column=2, value=cnt)
+        c_total = ws.cell(row=row, column=3, value=amount)
+        c_total.number_format = "$#,##0.00"
+        pct = (amount / subtotal_for_tier * 100.0) if subtotal_for_tier else 0.0
+        c_pct = ws.cell(row=row, column=4, value=round(pct, 2))
+        c_pct.number_format = "0.00\"%\""
+        total_lines_all += cnt
+        total_dollars_all += amount
+        row += 1
+    # Reconciliation row matching the per-tier table — sums to the
+    # full ``len(line_items)`` and to the sum of ``total_cost`` across
+    # every tier (which is NOT identical to ``estimate.subtotal`` since
+    # it includes MISSING / HAND_TAKEOFF dollars at $0; the row makes
+    # the reconciliation explicit).
+    ws.cell(row=row, column=1, value=f"Total: {total_lines_all} lines").font = Font(bold=True)
+    ws.cell(row=row, column=2, value=total_lines_all).font = Font(bold=True)
+    c_total = ws.cell(row=row, column=3, value=round(total_dollars_all, 2))
+    c_total.number_format = "$#,##0.00"
+    c_total.font = Font(bold=True)
+    row += 1
+
     _autosize(ws)
 
     # ----- Line items (a.k.a. "Cost Estimate") -----
@@ -321,7 +404,14 @@ def export_estimate_xlsx(
         "Div", "CSI Section", "Category", "Description",
         "Raw Qty", "Waste", "Quantity", "Unit",
         "Unit Cost", "Total", "Band", "Suppressed",
-        "Confidence", "Source Sheets",
+        "Confidence",
+        # Phase T7 — three new columns inserted immediately after the
+        # qty-side ``Confidence`` column so a reviewer sees both
+        # confidence axes side by side. The order
+        # (Confidence → Price Confidence → Cost Source Tier →
+        # Combined Confidence) is fixed by the Phase T7 brief.
+        "Price Confidence", "Cost Source Tier", "Combined Confidence",
+        "Source Sheets",
         "Cost Source", "CWICR Similarity", "Cost-DB Key", "Notes",
     ]
     _write_header(ws, 1, headers)
@@ -366,13 +456,19 @@ def export_estimate_xlsx(
         ws.cell(row=row, column=11, value=_band_label(li))
         ws.cell(row=row, column=12, value="YES" if li.suppressed else "")
         ws.cell(row=row, column=13, value=li.confidence).number_format = "0.00"
-        ws.cell(row=row, column=14, value=", ".join(li.source_sheet_ids))
-        ws.cell(row=row, column=15, value=src_family)
-        sim_cell = ws.cell(row=row, column=16, value=cwicr_sim)
+        # Phase T7 columns — same numeric format as ``Confidence`` for
+        # the price-side and combined values; tier is a string label.
+        ws.cell(row=row, column=14, value=getattr(li, "price_confidence", 1.0)).number_format = "0.00"
+        ws.cell(row=row, column=15, value=_tier_label(li))
+        combined = li.combined_confidence if hasattr(li, "combined_confidence") else li.confidence
+        ws.cell(row=row, column=16, value=combined).number_format = "0.00"
+        ws.cell(row=row, column=17, value=", ".join(li.source_sheet_ids))
+        ws.cell(row=row, column=18, value=src_family)
+        sim_cell = ws.cell(row=row, column=19, value=cwicr_sim)
         if cwicr_sim is not None:
             sim_cell.number_format = "0.00"
-        ws.cell(row=row, column=17, value=raw_src)
-        ws.cell(row=row, column=18, value=li.notes or "")
+        ws.cell(row=row, column=20, value=raw_src)
+        ws.cell(row=row, column=21, value=li.notes or "")
 
         if li.suppressed:
             # Grey-shade the entire row and italicize so the reader sees at a
@@ -692,6 +788,19 @@ def export_estimate_json(estimate: Estimate, project: ProjectModel) -> str:
         "auto_approve_count": estimate.auto_approve_count,
         "operator_review_count": estimate.operator_review_count,
         "hand_takeoff_count": estimate.hand_takeoff_count,
+        # Phase T7 — catalog-completeness aggregates. Keys are the
+        # CostSourceTier string values (``exact_match`` / ``category_match``
+        # / ``interpolated`` / ``parametric`` / ``manual_override`` /
+        # ``missing``) so JSON consumers can render the breakdown
+        # without re-walking ``line_items``.
+        "total_by_tier": {
+            tier.value: round(amount, 2)
+            for tier, amount in estimate.total_by_tier.items()
+        },
+        "count_by_tier": {
+            tier.value: count
+            for tier, count in estimate.count_by_tier.items()
+        },
         "by_division": estimate.by_division,
         "by_cost_category": estimate.by_cost_category,
         "line_items": [li.model_dump() for li in estimate.line_items],

@@ -35,7 +35,7 @@ from reportlab.platypus import (
     TableStyle,
 )
 
-from .schemas import Estimate, QuoteConfig
+from .schemas import CostSourceTier, Estimate, QuoteConfig
 from .takeoff import ProjectModel
 
 logger = logging.getLogger(__name__)
@@ -522,6 +522,68 @@ def _band_subscript_text(estimate: Estimate) -> str:
     return ", ".join(parts)
 
 
+def _tier_subscript_text(estimate: Estimate) -> str | None:
+    """Phase T7 catalog-completeness subscript under the grand total.
+
+    Returns ``None`` when the project is fully covered by exact catalog
+    matches (zero INTERPOLATED + zero PARAMETRIC lines) — clean output
+    for high-coverage projects where surfacing 100% / 0% / 0% would
+    just be visual noise.
+
+    Otherwise returns a one-line phrase: ``"of which X% from exact
+    catalog matches, Y% interpolated, Z% parametric defaults"``.
+    Percentages are computed against the headline subtotal (AUTO +
+    REVIEW; excludes HAND_TAKEOFF / MISSING) so the denominator
+    reconciles to the same number printed on the headline tile.
+    Rounded to whole numbers; the EXACT_MATCH percentage absorbs the
+    rounding residual so the three figures always sum to 100.
+    """
+    counts = estimate.count_by_tier
+    if (
+        counts.get(CostSourceTier.INTERPOLATED, 0)
+        + counts.get(CostSourceTier.PARAMETRIC, 0)
+        == 0
+    ):
+        return None
+
+    totals = estimate.total_by_tier
+    denom = estimate.subtotal or 0.0
+    if denom <= 0:
+        # Edge case: every line is suppressed / MISSING / HAND-banded.
+        # The PDF exec-summary already renders the empty-state banner
+        # in this case; suppress the subscript too rather than show a
+        # divide-by-zero placeholder.
+        return None
+
+    # EXACT_MATCH absorbs both EXACT_MATCH and (by convention)
+    # MANUAL_OVERRIDE — both represent "the operator vouches for the
+    # exact line", just via different routes. CATEGORY_MATCH is
+    # surfaced via the EXACT bucket too because the brief's three-way
+    # split is "exact / interpolated / parametric"; CATEGORY is a
+    # near-exact match and rolling it in keeps the bucket count to
+    # the three the brief asked for.
+    exact_dollars = (
+        totals.get(CostSourceTier.EXACT_MATCH, 0.0)
+        + totals.get(CostSourceTier.CATEGORY_MATCH, 0.0)
+        + totals.get(CostSourceTier.MANUAL_OVERRIDE, 0.0)
+    )
+    interp_dollars = totals.get(CostSourceTier.INTERPOLATED, 0.0)
+    param_dollars = totals.get(CostSourceTier.PARAMETRIC, 0.0)
+
+    interp_pct = round(interp_dollars / denom * 100.0)
+    param_pct = round(param_dollars / denom * 100.0)
+    # Absorb the rounding residual into the EXACT bucket so the
+    # three figures sum to exactly 100 — the brief's "100 ± rounding"
+    # invariant. Clamped to ``[0, 100]`` so a downstream MISSING
+    # dollar slug can't push EXACT negative.
+    exact_pct = max(0, min(100, 100 - interp_pct - param_pct))
+    return (
+        f"of which {exact_pct}% from exact catalog matches, "
+        f"{interp_pct}% interpolated, "
+        f"{param_pct}% parametric defaults"
+    )
+
+
 def _render_band_tiles(
     estimate: Estimate, styles: dict[str, ParagraphStyle]
 ) -> Table | None:
@@ -619,6 +681,17 @@ def _executive_summary(
                 styles["tile_label"],
             )
         )
+        # Phase T7 — second subscript line, only emitted when at least
+        # one INTERPOLATED or PARAMETRIC line exists. Hidden on
+        # high-coverage runs (100% EXACT) so the proposal stays clean.
+        tier_text = _tier_subscript_text(estimate)
+        if tier_text is not None:
+            flow.append(
+                Paragraph(
+                    f"<font size=9 color='#555555'>{tier_text}</font>",
+                    styles["tile_label"],
+                )
+            )
     flow.append(Spacer(1, 0.15 * inch))
 
     if cfg.quote_meta.scope_blurb:
