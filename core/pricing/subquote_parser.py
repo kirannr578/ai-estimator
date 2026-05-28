@@ -101,8 +101,13 @@ import fitz
 
 from core.pricing.batch_override import (
     _COLUMN_ALIASES,
+    SOURCE_TAG_SUBQUOTE_LLM,
+    SOURCE_TAG_SUBQUOTE_TABULAR,
     BatchOverrideRow,
+    BatchOverridePlan,
+    apply_batch_plan,
 )
+from core.schemas import Estimate
 
 if TYPE_CHECKING:  # pragma: no cover — typing only
     from core.llm_client import LLMClient
@@ -1457,3 +1462,68 @@ def parse_subquote_pdf_with_llm(
         )
 
     return result
+
+
+# ---------------------------------------------------------------------------
+# Phase T6.4.c — sub-quote apply with provenance-aware source tag
+# ---------------------------------------------------------------------------
+
+
+def apply_subquote_plan(
+    estimate: Estimate,
+    plan: BatchOverridePlan,
+    *,
+    llm: bool = False,
+    auto_apply_matched: bool = True,
+    resolved_ambiguous: dict[int, int] | None = None,
+    skip_rows: set[int] | None = None,
+) -> tuple[Estimate, list[str]]:
+    """Apply a sub-quote match plan with the right provenance tag.
+
+    Thin wrapper around :func:`core.pricing.batch_override.apply_batch_plan`
+    that picks the canonical ``source_tag`` for the sub-quote ingestion
+    path:
+
+    * ``llm=False`` (default) → :data:`SOURCE_TAG_SUBQUOTE_TABULAR`
+      (``"[sub-quote]"``) — used after :func:`parse_subquote_pdf`
+      succeeds on a tabular vendor PDF (T8.1 deterministic path).
+    * ``llm=True`` → :data:`SOURCE_TAG_SUBQUOTE_LLM`
+      (``"[sub-quote-llm]"``) — used after
+      :func:`parse_subquote_pdf_with_llm` succeeds on a scanned /
+      free-form PDF (T8.2 LLM-vision fallback).
+
+    Every other argument round-trips to ``apply_batch_plan`` unchanged.
+    The returned ``(new_estimate, summary)`` pair has the same shape
+    and semantics as the underlying T6.3 backend; the only delta is
+    that every overridden :class:`~core.schemas.CostLine` carries the
+    correct sub-quote provenance tag at position 0 of its ``notes``
+    field.
+
+    This wrapper exists so a downstream Streamlit / CLI caller does
+    not have to import :data:`SOURCE_TAG_SUBQUOTE_TABULAR` /
+    :data:`SOURCE_TAG_SUBQUOTE_LLM` directly — the boolean ``llm``
+    flag captures the intent. Pure-logic; no I/O, no Streamlit.
+
+    Args:
+        estimate: The :class:`Estimate` to update. NOT mutated.
+        plan: Match plan from
+            :func:`core.pricing.batch_override.match_cost_lines`.
+        llm: Whether the plan came out of the T8.2 LLM-vision path.
+            Default ``False`` (T8.1 tabular path).
+        auto_apply_matched: See :func:`apply_batch_plan`.
+        resolved_ambiguous: See :func:`apply_batch_plan`.
+        skip_rows: See :func:`apply_batch_plan`.
+
+    Returns:
+        ``(new_estimate, applied_summary_lines)`` — same shape as
+        :func:`apply_batch_plan`.
+    """
+    source_tag = SOURCE_TAG_SUBQUOTE_LLM if llm else SOURCE_TAG_SUBQUOTE_TABULAR
+    return apply_batch_plan(
+        estimate,
+        plan,
+        auto_apply_matched=auto_apply_matched,
+        resolved_ambiguous=resolved_ambiguous,
+        skip_rows=skip_rows,
+        source_tag=source_tag,
+    )

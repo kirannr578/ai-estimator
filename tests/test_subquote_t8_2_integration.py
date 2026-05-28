@@ -343,15 +343,23 @@ class TestT81VsT82SourceTags:
 
 class TestT82BackendIntegrity:
     def test_t63_backend_invoked_unchanged_from_t82(self) -> None:
-        """The T8.2 path reaches the T6.3 backend with NO new kwargs.
+        """The T8.2 path reaches the T6.3 backend across T6.3 → T8.2 → T6.4.c.
 
         Mirrors the T8.1 integrity test — pinning the contract that the
         LLM-vision path emits the same ``BatchOverrideRow`` shape and
         invokes ``match_cost_lines`` / ``apply_batch_plan`` with their
-        original signatures. Any signature drift in either function
-        would fail this test loudly.
+        documented signatures.
+
+        Phase T6.4.c added a keyword-only ``source_tag`` parameter to
+        :func:`apply_batch_plan` (default :data:`SOURCE_TAG_BATCH`
+        preserves byte-identical behaviour for every pre-T6.4.c
+        caller). This test pins the contract: the original five
+        parameters appear in the original order with the original
+        defaults, and ``source_tag`` is the trailing keyword-only
+        addition.
         """
         import inspect
+        from core.pricing.batch_override import SOURCE_TAG_BATCH
 
         match_sig = inspect.signature(match_cost_lines)
         assert list(match_sig.parameters.keys()) == [
@@ -361,13 +369,20 @@ class TestT82BackendIntegrity:
             "ambiguity_margin",
         ]
         apply_sig = inspect.signature(apply_batch_plan)
+        # Original five params unchanged + trailing keyword-only source_tag (T6.4.c).
         assert list(apply_sig.parameters.keys()) == [
             "estimate",
             "plan",
             "auto_apply_matched",
             "resolved_ambiguous",
             "skip_rows",
+            "source_tag",
         ]
+        # source_tag is KEYWORD_ONLY with the legacy [batch] default so
+        # every pre-T6.4.c positional call site keeps working.
+        st_param = apply_sig.parameters["source_tag"]
+        assert st_param.kind == inspect.Parameter.KEYWORD_ONLY
+        assert st_param.default == SOURCE_TAG_BATCH
 
         # And confirm the T8.2 entry point exists with the documented
         # signature.

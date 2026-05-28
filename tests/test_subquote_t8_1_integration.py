@@ -133,13 +133,22 @@ class TestSubquoteEndToEnd:
             assert li.cost_source_tier == CostSourceTier.MANUAL_OVERRIDE
 
     def test_t63_backend_invoked_unchanged(self) -> None:
-        """Confirm match_cost_lines + apply_batch_plan signatures unchanged.
+        """Confirm match_cost_lines + apply_batch_plan signatures stay
+        backward-compatible across the T6.3 → T8.1 → T6.4.c evolution.
 
         The integration here is intentional: the sub-quote pipeline
-        reaches the T6.3 backend with NO sub-quote-specific kwargs.
-        Any signature drift would fail this test loudly.
+        reaches the T6.3 backend with NO breaking signature change.
+
+        Phase T6.4.c added a keyword-only ``source_tag`` parameter to
+        :func:`apply_batch_plan` (default :data:`SOURCE_TAG_BATCH`
+        preserves byte-identical behaviour for every pre-T6.4.c
+        caller). This test pins the contract: the original five
+        parameters appear in the original order with the original
+        defaults, and ``source_tag`` is the trailing keyword-only
+        addition.
         """
         import inspect
+        from core.pricing.batch_override import SOURCE_TAG_BATCH
         match_sig = inspect.signature(match_cost_lines)
         # No new kwargs — must still be (rows, cost_lines, threshold, margin).
         assert list(match_sig.parameters.keys()) == [
@@ -149,14 +158,20 @@ class TestSubquoteEndToEnd:
             "ambiguity_margin",
         ]
         apply_sig = inspect.signature(apply_batch_plan)
-        # No new kwargs — must still match the T6.3 signature exactly.
+        # Original five params unchanged + trailing keyword-only source_tag (T6.4.c).
         assert list(apply_sig.parameters.keys()) == [
             "estimate",
             "plan",
             "auto_apply_matched",
             "resolved_ambiguous",
             "skip_rows",
+            "source_tag",
         ]
+        # source_tag is KEYWORD_ONLY with the legacy [batch] default so
+        # every pre-T6.4.c positional call site keeps working.
+        st_param = apply_sig.parameters["source_tag"]
+        assert st_param.kind == inspect.Parameter.KEYWORD_ONLY
+        assert st_param.default == SOURCE_TAG_BATCH
 
     def test_subquote_source_tag_survives_to_operator_note(self) -> None:
         """A sub-quote-tagged note carries through format_batch_operator_note."""

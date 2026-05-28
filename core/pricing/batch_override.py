@@ -218,6 +218,49 @@ _TOP_K_CANDIDATES: int = 5
 
 
 # ---------------------------------------------------------------------------
+# Phase T6.4.c — canonical source-tag constants
+# ---------------------------------------------------------------------------
+#
+# Every batch-apply path (vendor CSV, sub-quote PDF tabular, sub-quote PDF
+# LLM-vision fallback) stamps a ``source_tag`` at the start of the
+# ``CostLine.notes`` field so a downstream auditor (Excel exporter, client
+# PDF, Streamlit history viewer) can attribute a priced-line override to
+# its provenance at a glance. The tag is always the FIRST characters of
+# the notes string and matches the pattern ``^\[[a-z-]+\] `` — i.e. an
+# anchored single bracketed lowercase-and-hyphen token followed by a
+# single space.
+#
+# ``SOURCE_TAG_BATCH`` is the legacy default carried since T6.3 ship. Kept
+# as the default for :func:`format_batch_operator_note` so every
+# pre-T6.4.c test + caller (whose snapshots literal-match ``[batch] ``)
+# stays byte-identical. Callers that want explicit provenance pass one
+# of the more specific constants below.
+
+SOURCE_TAG_BATCH: str = "[batch]"
+SOURCE_TAG_VENDOR_CSV: str = "[vendor-csv]"
+SOURCE_TAG_SUBQUOTE_TABULAR: str = "[sub-quote]"
+SOURCE_TAG_SUBQUOTE_LLM: str = "[sub-quote-llm]"
+SOURCE_TAG_MANUAL_OVERRIDE: str = "[manual-override]"
+
+
+# Frozen set of every canonical tag, exposed so tests and downstream
+# pattern-matchers can iterate without hard-coding the string literals.
+SOURCE_TAGS_CANONICAL: frozenset[str] = frozenset({
+    SOURCE_TAG_BATCH,
+    SOURCE_TAG_VENDOR_CSV,
+    SOURCE_TAG_SUBQUOTE_TABULAR,
+    SOURCE_TAG_SUBQUOTE_LLM,
+    SOURCE_TAG_MANUAL_OVERRIDE,
+})
+
+
+# Regex that every canonical source tag matches when anchored at the
+# start of a notes string. Used by tests to assert tag-first placement
+# without naming a specific tag.
+SOURCE_TAG_PATTERN: str = r"^\[[a-z][a-z\-]*\] "
+
+
+# ---------------------------------------------------------------------------
 # Normalisation
 # ---------------------------------------------------------------------------
 
@@ -594,7 +637,7 @@ def match_cost_lines(
 
 def format_batch_operator_note(
     row: BatchOverrideRow,
-    source_tag: str = "[batch]",
+    source_tag: str = SOURCE_TAG_BATCH,
 ) -> str:
     """Format the operator note for a batch-applied override.
 
@@ -643,12 +686,79 @@ def format_batch_operator_note(
 # ---------------------------------------------------------------------------
 
 
+def _rewrite_notes_with_tag_first(
+    *,
+    source_tag: str,
+    note_payload: str,
+    prior_notes: str | None,
+) -> str:
+    """Phase T6.4.c — rewrite a post-override notes string so ``source_tag``
+    is the FIRST token in the line, preserving prior notes as a suffix.
+
+    Background: :func:`core.estimator.apply_manual_override` produces a
+    string of the form ``"<prior_notes> | operator override: <payload>"``
+    (or just ``"operator override: <payload>"`` when ``prior_notes`` is
+    empty). That layout buries the provenance tag in the middle of the
+    cell, where a narrow Excel / PDF column truncates it out of sight.
+    This helper rebuilds the string so:
+
+        "{source_tag} operator override: {payload-without-leading-tag}
+            [| previous: {prior_notes}]"
+
+    so a downstream reader sees the tag immediately, the override
+    sentinel ("operator override") next, and the prior notes preserved
+    as an explicit suffix.
+
+    Idempotency: re-applying the same override (same ``source_tag`` +
+    same ``note_payload``) does NOT accumulate duplicate tags. The
+    helper detects when ``prior_notes`` already starts with the same
+    head string and short-circuits (returns ``prior_notes`` unchanged).
+
+    Args:
+        source_tag: A canonical source tag (e.g. ``[sub-quote]``).
+            Should match :data:`SOURCE_TAG_PATTERN` but the helper is
+            permissive — any string is accepted so the contract works
+            for operator-extension tags too.
+        note_payload: The full operator-note string returned by
+            :func:`format_batch_operator_note`. MUST start with
+            ``source_tag + " "`` (that is the contract of
+            ``format_batch_operator_note``).
+        prior_notes: The line's ``notes`` field BEFORE the override
+            was applied. ``None`` / empty → no "previous" suffix.
+
+    Returns:
+        A new notes string with ``source_tag`` at position 0.
+    """
+    prefix = source_tag + " "
+    if note_payload.startswith(prefix):
+        rest_of_payload = note_payload[len(prefix):]
+    else:
+        # Defensive: ``format_batch_operator_note`` always prefixes
+        # ``source_tag + " "`` but a misuse / future drift shouldn't
+        # crash the apply path. Fall back to using the payload as-is.
+        rest_of_payload = note_payload
+    head = f"{source_tag} operator override: {rest_of_payload}"
+
+    prior = (prior_notes or "").strip()
+    if not prior:
+        return head
+
+    # Idempotency: prior_notes already represents the same head (with
+    # or without an existing "| previous: ..." chain). Don't accumulate.
+    if prior == head or prior.startswith(head + " | previous: "):
+        return prior
+
+    return f"{head} | previous: {prior}"
+
+
 def apply_batch_plan(
     estimate: Estimate,
     plan: BatchOverridePlan,
     auto_apply_matched: bool = True,
     resolved_ambiguous: dict[int, int] | None = None,
     skip_rows: set[int] | None = None,
+    *,
+    source_tag: str = SOURCE_TAG_BATCH,
 ) -> tuple[Estimate, list[str]]:
     """Apply the match plan to an Estimate.
 
@@ -676,10 +786,21 @@ def apply_batch_plan(
     Idempotency: applying the same plan twice produces an Estimate
     with identical CostLine fields on every overridden row (inherited
     from the T6.1 single-line ``apply_manual_override`` idempotency
-    contract). The operator note is appended once per call when
-    supplied, so calling ``apply_batch_plan`` twice WILL grow the
-    ``notes`` blob — callers wanting strict idempotency should de-dup
-    the plan before re-applying.
+    contract). Phase T6.4.c additionally guarantees that re-applying
+    the same plan does NOT accumulate duplicate source tags in
+    ``CostLine.notes`` — :func:`_rewrite_notes_with_tag_first`
+    detects an already-stamped tag and short-circuits.
+
+    Phase T6.4.c — ``source_tag`` (keyword-only) propagates an explicit
+    provenance marker into every overridden line's ``notes`` field at
+    position 0 so a downstream auditor (Excel exporter, client PDF,
+    history viewer) sees the override origin at a glance even when the
+    cell is narrow. Default :data:`SOURCE_TAG_BATCH` preserves byte-
+    identical behaviour for every pre-T6.4.c caller (T6.3 vendor CSV).
+    Sub-quote callers should pass :data:`SOURCE_TAG_SUBQUOTE_TABULAR`
+    or :data:`SOURCE_TAG_SUBQUOTE_LLM` (or use
+    :func:`core.pricing.subquote_parser.apply_subquote_plan` which
+    wires the right tag for each path).
     """
     resolved = resolved_ambiguous or {}
     skip = skip_rows or set()
@@ -700,11 +821,13 @@ def apply_batch_plan(
                 continue
             if result.best_match_index is None:
                 continue
-            note = format_batch_operator_note(result.row)
+            note = format_batch_operator_note(result.row, source_tag=source_tag)
+            idx = result.best_match_index
+            prior_notes = current.line_items[idx].notes
             try:
                 current = apply_manual_override(
                     current,
-                    result.best_match_index,
+                    idx,
                     new_unit_cost=result.row.unit_cost,
                     operator_note=note,
                 )
@@ -714,6 +837,19 @@ def apply_batch_plan(
                     f"({exc})."
                 )
                 continue
+            # Phase T6.4.c — hoist source_tag to position 0 of CostLine.notes
+            # so the provenance is visible at a glance in exports.
+            new_notes_value = _rewrite_notes_with_tag_first(
+                source_tag=source_tag,
+                note_payload=note,
+                prior_notes=prior_notes,
+            )
+            updated_line = current.line_items[idx].model_copy(
+                update={"notes": new_notes_value}
+            )
+            new_lines = list(current.line_items)
+            new_lines[idx] = updated_line
+            current = current.model_copy(update={"line_items": new_lines})
             summary.append(
                 f"Row {result.row.row_index}: APPLIED to line "
                 f"#{result.best_match_index} "
@@ -748,7 +884,8 @@ def apply_batch_plan(
             )
             skipped_count += 1
             continue
-        note = format_batch_operator_note(result.row)
+        note = format_batch_operator_note(result.row, source_tag=source_tag)
+        prior_notes = current.line_items[chosen].notes
         try:
             current = apply_manual_override(
                 current,
@@ -761,6 +898,18 @@ def apply_batch_plan(
                 f"Row {result.row.row_index}: APPLY FAILED ({exc})."
             )
             continue
+        # Phase T6.4.c — hoist source_tag to position 0 (see MATCHED branch).
+        new_notes_value = _rewrite_notes_with_tag_first(
+            source_tag=source_tag,
+            note_payload=note,
+            prior_notes=prior_notes,
+        )
+        updated_line = current.line_items[chosen].model_copy(
+            update={"notes": new_notes_value}
+        )
+        new_lines = list(current.line_items)
+        new_lines[chosen] = updated_line
+        current = current.model_copy(update={"line_items": new_lines})
         summary.append(
             f"Row {result.row.row_index}: APPLIED ambiguous to line "
             f"#{chosen} (operator-resolved) "
