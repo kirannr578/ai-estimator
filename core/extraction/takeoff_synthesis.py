@@ -49,6 +49,8 @@ from core.schemas import (
     DoorScheduleResult,
     FinishRecord,
     FinishScheduleResult,
+    PanelRecord,
+    PanelScheduleResult,
     TakeoffItem,
     WindowRecord,
     WindowScheduleResult,
@@ -58,15 +60,18 @@ __all__ = [
     "SYNTHESIS_SOURCE_TAG",
     "SYNTHESIS_SOURCE_TAG_WINDOW",
     "SYNTHESIS_SOURCE_TAG_FINISH",
+    "SYNTHESIS_SOURCE_TAG_PANEL",
     "synthesize_door_takeoff_items",
     "synthesize_window_takeoff_items",
     "synthesize_finish_takeoff_items",
+    "synthesize_panel_takeoff_items",
 ]
 
 
 SYNTHESIS_SOURCE_TAG: Final[str] = "door_schedule_prepass"
 SYNTHESIS_SOURCE_TAG_WINDOW: Final[str] = "window_schedule_prepass"
 SYNTHESIS_SOURCE_TAG_FINISH: Final[str] = "finish_schedule_prepass"
+SYNTHESIS_SOURCE_TAG_PANEL: Final[str] = "panel_schedule_prepass"
 
 
 # ---------------------------------------------------------------------------
@@ -778,4 +783,290 @@ def synthesize_finish_takeoff_items(
                 classifier=_classify_ceiling,
                 sheets=sheets,
             )
+    return items
+
+
+# ---------------------------------------------------------------------------
+# Panel helpers (Phase T2.6)
+# ---------------------------------------------------------------------------
+#
+# Electrical panel schedules fan each ``PanelRecord`` out into four
+# families of ``TakeoffItem``:
+#
+# 1. **1 EA panel enclosure** — CSI 26 24 16 (panelboards) up to and
+#    including 400A bus, or 26 24 13 (switchboards) above 400A. The
+#    400A threshold matches NEMA / NEC convention: NEMA-1 panelboards
+#    are typically rated to 400A bus; > 400A loads ship as floor-
+#    mounted switchboards (26 24 13) or distribution boards.
+# 2. **N EA branch breakers** grouped by amp size — CSI 26 28 16
+#    (circuit breakers, enclosed and motor-circuit protectors). One
+#    item per distinct breaker rating (20A, 30A, 50A, ...) with the
+#    quantity = circuit-count at that rating.
+# 3. **50 LF feeder conductor** — CSI 26 05 19 (low-voltage wire and
+#    cable). Parametric default; flagged for hand-takeoff via the
+#    0.55 confidence (HAND_TAKEOFF band on the Phase T6 banding).
+# 4. **50 LF feeder conduit** — CSI 26 05 33 (raceways).
+#    Parametric default; same 0.55 confidence.
+#
+# Why 50 LF default: on a typical commercial TI / light-commercial
+# project the feeder run from the upstream distribution panel to a
+# branch panel averages 35-65 LF (electrical riser observations from
+# the calibration set). 50 LF is the midpoint and produces a takeoff
+# row that lands in OPERATOR_REVIEW band at 0.55 → forcing the
+# estimator to verify against the riser diagram. A non-zero quantity
+# is intentional — a zero-quantity row would suppress the line at
+# pricing time and the estimator could miss the feeder entirely.
+
+
+# 400A boundary between panelboard (26 24 16) and switchboard (26 24 13).
+# NEMA classifies ≤ 400A bus as panelboard, > 400A as switchboard /
+# distribution board. Exposed so a future maintainer / test can lift
+# the threshold without spelunking the module.
+_PANEL_BOARD_BUS_THRESHOLD_A: Final[int] = 400
+
+# Parametric feeder length (LF). Documented inline at the top of the
+# panel-helpers section above. Exposed for tests + future tuning.
+_FEEDER_PARAMETRIC_LF: Final[float] = 50.0
+
+# Confidence assigned to parametric feeder rows. 0.55 lands in
+# ``CostBand.OPERATOR_REVIEW`` on the Phase T6 banding (0.55 < 0.65 → HAND);
+# actually 0.55 < 0.65 → HAND_TAKEOFF, which is the desired routing
+# so the estimator sees the row in the hand-takeoff queue and supplies
+# a real LF.
+_FEEDER_CONFIDENCE: Final[float] = 0.55
+
+# CSI families used by panel synthesis. Tuples are (division, section,
+# family-label-for-description), mirroring the shape used by the door
+# / window / finish synthesisers.
+_CSI_PANELBOARD:   Final[tuple[str, str, str]] = ("26", "26 24 16", "Panelboard")
+_CSI_SWITCHBOARD:  Final[tuple[str, str, str]] = ("26", "26 24 13", "Switchboard")
+_CSI_BREAKER:      Final[tuple[str, str, str]] = ("26", "26 28 16", "Branch Circuit Breaker")
+_CSI_FEEDER_WIRE:  Final[tuple[str, str, str]] = ("26", "26 05 19", "Feeder Conductor")
+_CSI_FEEDER_RACE:  Final[tuple[str, str, str]] = ("26", "26 05 33", "Feeder Raceway")
+
+
+def _classify_panel_enclosure(panel: PanelRecord) -> tuple[str, str, str]:
+    """Return ``(csi_division, csi_section, family_label)`` for a panel.
+
+    Panelboard vs switchboard is decided by ``bus_amps`` when published,
+    falling back to ``main_breaker_amps`` (MCB rating sets the panel
+    class when bus_amps is absent), defaulting to panelboard otherwise.
+    """
+    rating = panel.bus_amps or panel.main_breaker_amps or 0
+    if rating > _PANEL_BOARD_BUS_THRESHOLD_A:
+        return _CSI_SWITCHBOARD
+    return _CSI_PANELBOARD
+
+
+def _panel_label(panel: PanelRecord) -> str:
+    """Render a ``Panel <ID>`` label, fallback to ``Panel (unmarked)``."""
+    pid = (panel.panel_id or "").strip()
+    if not pid:
+        return "Panel (unmarked)"
+    return f"Panel {pid}"
+
+
+def _describe_panel_enclosure(panel: PanelRecord, family: str) -> str:
+    """Build a human-readable description for the panel-enclosure row.
+
+    Examples::
+
+        "Panel PNL-A — Panelboard 200A MCB, 120/208V 3-phase"
+        "Panel MDP — Switchboard 800A MLO, 277/480V 3-phase"
+        "Panel RP-1 — Panelboard"
+    """
+    parts: list[str] = [_panel_label(panel), "—", family]
+    rating = panel.main_breaker_amps or panel.bus_amps
+    designation = panel.mcb_or_mlo
+    if rating and designation:
+        parts.append(f"{rating}A {designation},")
+    elif rating:
+        parts.append(f"{rating}A,")
+    elif designation:
+        parts.append(f"{designation},")
+    if panel.voltage:
+        parts.append(panel.voltage)
+    if panel.phase_count:
+        parts.append(f"{panel.phase_count}-phase")
+    rendered = " ".join(parts).rstrip(",")
+    rendered = rendered.rstrip(",").rstrip()
+    return rendered
+
+
+def _describe_breaker_group(panel: PanelRecord, amps: int, count: int) -> str:
+    """Build a description for a per-amp breaker group row."""
+    return f"{_panel_label(panel)} — Branch breakers {amps}A ({count} ckt)"
+
+
+def _describe_feeder_conductor(panel: PanelRecord) -> str:
+    pid = panel.panel_id
+    extra = ""
+    if panel.feeder_conductor_size:
+        extra = f" {panel.feeder_conductor_size}"
+    return f"Panel {pid} — Feeder conductor{extra}"
+
+
+def _describe_feeder_raceway(panel: PanelRecord) -> str:
+    pid = panel.panel_id
+    extra = ""
+    if panel.feeder_conduit_size:
+        extra = f" {panel.feeder_conduit_size}"
+    return f"Panel {pid} — Feeder conduit{extra}"
+
+
+def _panel_notes_for(panel: PanelRecord, *, role: str,
+                       amps: int | None = None,
+                       count: int | None = None) -> str:
+    """Stable, source-tagged notes string for panel dedupe to grep.
+
+    Format mirrors door + window + finish: ``key=value`` pairs joined
+    by ``"; "``. The first pair is always
+    ``source=panel_schedule_prepass`` so prefix-match is cheap. The
+    ``role`` token disambiguates which of the four synthesis families
+    the row belongs to (``enclosure`` / ``breakers`` / ``feeder_wire``
+    / ``feeder_conduit``).
+    """
+    bits: list[str] = [f"source={SYNTHESIS_SOURCE_TAG_PANEL}"]
+    if panel.panel_id:
+        bits.append(f"mark={panel.panel_id}")
+    bits.append(f"role={role}")
+    if panel.voltage:
+        bits.append(f"voltage={panel.voltage}")
+    if panel.phase_count:
+        bits.append(f"phase_count={panel.phase_count}")
+    if panel.main_breaker_amps is not None:
+        bits.append(f"main_breaker_amps={panel.main_breaker_amps}")
+    if panel.bus_amps is not None:
+        bits.append(f"bus_amps={panel.bus_amps}")
+    if panel.mcb_or_mlo:
+        bits.append(f"mcb_or_mlo={panel.mcb_or_mlo}")
+    if amps is not None:
+        bits.append(f"breaker_amps={amps}")
+    if count is not None:
+        bits.append(f"circuit_count={count}")
+    if role == "feeder_wire" and panel.feeder_conductor_size:
+        bits.append(f"feeder_conductor={panel.feeder_conductor_size}")
+    if role == "feeder_conduit" and panel.feeder_conduit_size:
+        bits.append(f"feeder_conduit={panel.feeder_conduit_size}")
+    return "; ".join(bits)
+
+
+def _branch_breaker_groups(panel: PanelRecord) -> list[tuple[int, int]]:
+    """Group circuit entries by breaker amp size; return ``[(amps, count), ...]``.
+
+    Stable order: ascending by amp size. Skips circuits without a
+    breaker rating so the synthesiser doesn't fabricate a ``None``-A
+    breaker group. Multi-pole breakers (phase ``A,B,C``) count as
+    ONE breaker even though they consume 2 or 3 circuit numbers — the
+    schedule typically lists one row per pole with the same amp rating,
+    and the synthesiser counts the rows as-published rather than
+    de-duplicating poles (the calibration data shows this matches the
+    estimator's mental model better than collapsing).
+    """
+    counts: dict[int, int] = {}
+    for c in panel.circuits:
+        if c.breaker_amps is None:
+            continue
+        counts[c.breaker_amps] = counts.get(c.breaker_amps, 0) + 1
+    return sorted(counts.items(), key=lambda kv: kv[0])
+
+
+def synthesize_panel_takeoff_items(
+    panels: list[PanelRecord] | PanelScheduleResult | None,
+    *,
+    sheet_id: str | None = None,
+) -> list[TakeoffItem]:
+    """Convert each ``PanelRecord`` into 1 + N + 2 ``TakeoffItem`` rows.
+
+    Per-panel fan-out (the structural shape of T2.6 vs. T1 / T2.5 1:1):
+
+    * One **panel enclosure** at 26 24 16 (or 26 24 13 if bus > 400A).
+      Confidence = ``panel.confidence`` (typically 0.85+).
+    * **N branch-breaker groups** at 26 28 16, one per distinct
+      breaker amp size. Confidence = 0.85 (panel data is reliable).
+      A panel with no circuits emits zero breaker rows.
+    * One **feeder conductor** at 26 05 19, quantity = 50 LF (parametric
+      default). Confidence = 0.55 → routes to HAND_TAKEOFF queue on
+      Phase T6 banding so the estimator supplies a real LF.
+    * One **feeder conduit** at 26 05 33, same 50 LF / 0.55 default.
+
+    A panel with no usable ``panel_id`` is skipped entirely (defensive —
+    the extractor already filters these). ``sheet_id`` (when provided)
+    is stored on ``source_sheet_ids`` so downstream consumers can trace
+    each row back to its sheet.
+    """
+    if panels is None:
+        return []
+    # Accept either the schema PanelScheduleResult OR a plain list per
+    # the brief — the integration call site in core.takeoff uses the
+    # PanelScheduleResult directly.
+    if hasattr(panels, "panels"):
+        panel_list: list[PanelRecord] = list(panels.panels)
+    else:
+        panel_list = list(panels)
+    if not panel_list:
+        return []
+
+    items: list[TakeoffItem] = []
+    for panel in panel_list:
+        if not (panel.panel_id and panel.panel_id.strip()):
+            continue
+        sheets: list[str] = []
+        if sheet_id:
+            sheets.append(sheet_id)
+        elif panel.source_sheet:
+            sheets.append(panel.source_sheet)
+
+        # 1. Panel enclosure.
+        division, section, family = _classify_panel_enclosure(panel)
+        items.append(TakeoffItem(
+            csi_division=division,
+            csi_section=section,
+            description=_describe_panel_enclosure(panel, family),
+            quantity=1.0,
+            unit="EA",
+            confidence=panel.confidence,
+            source_sheet_ids=list(sheets),
+            notes=_panel_notes_for(panel, role="enclosure"),
+        ))
+
+        # 2. Branch breakers grouped by amp size.
+        for amps, count in _branch_breaker_groups(panel):
+            items.append(TakeoffItem(
+                csi_division=_CSI_BREAKER[0],
+                csi_section=_CSI_BREAKER[1],
+                description=_describe_breaker_group(panel, amps, count),
+                quantity=float(count),
+                unit="EA",
+                confidence=0.85,
+                source_sheet_ids=list(sheets),
+                notes=_panel_notes_for(
+                    panel, role="breakers", amps=amps, count=count,
+                ),
+            ))
+
+        # 3. Feeder conductor (parametric default).
+        items.append(TakeoffItem(
+            csi_division=_CSI_FEEDER_WIRE[0],
+            csi_section=_CSI_FEEDER_WIRE[1],
+            description=_describe_feeder_conductor(panel),
+            quantity=_FEEDER_PARAMETRIC_LF,
+            unit="LF",
+            confidence=_FEEDER_CONFIDENCE,
+            source_sheet_ids=list(sheets),
+            notes=_panel_notes_for(panel, role="feeder_wire"),
+        ))
+
+        # 4. Feeder conduit (parametric default).
+        items.append(TakeoffItem(
+            csi_division=_CSI_FEEDER_RACE[0],
+            csi_section=_CSI_FEEDER_RACE[1],
+            description=_describe_feeder_raceway(panel),
+            quantity=_FEEDER_PARAMETRIC_LF,
+            unit="LF",
+            confidence=_FEEDER_CONFIDENCE,
+            source_sheet_ids=list(sheets),
+            notes=_panel_notes_for(panel, role="feeder_conduit"),
+        ))
+
     return items

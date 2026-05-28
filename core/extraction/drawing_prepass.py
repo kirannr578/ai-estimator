@@ -119,6 +119,15 @@ class DrawingPrepassResult:
     # Concretely a ``core.extraction.room_schedule.RoomScheduleResult``
     # or ``None``.
     room_schedule: Any = None
+    # T2.6 — typed electrical-panel-schedule pre-pass. Populated
+    # whenever an electrical panel schedule was detected on the page.
+    # Runs INDEPENDENTLY of door / window / finish / room precedence:
+    # panel schedules live on E-series sheets that those upstream
+    # detectors never claim, so there is no scheduling conflict to
+    # resolve. Concretely a
+    # ``core.extraction.panel_schedule.PanelScheduleResult`` or
+    # ``None``.
+    panel_schedule: Any = None
 
 
 # ---------------------------------------------------------------------------
@@ -659,6 +668,47 @@ def _maybe_extract_room_schedule(page: "fitz.Page", page_index: int,
     return result if result.rooms else None
 
 
+def _maybe_extract_panel_schedule(page: "fitz.Page", page_index: int,
+                                     schedules: list[Schedule]) -> Any:
+    """T2.6 hook: run the panel-schedule extractor when this page may have one.
+
+    Imported lazily so the panel-schedule module stays optional at
+    load time. **Runs independently of door / window / finish / room
+    precedence** — electrical panel schedules live on E-series sheets
+    those upstream detectors never claim, so there's no scheduling
+    conflict to resolve. Returns a ``PanelScheduleResult`` dataclass
+    or ``None``.
+    """
+    text_upper = (page.get_text("text") or "").upper()
+    text_has_phrase = any(
+        kw in text_upper
+        for kw in (
+            "PANEL SCHEDULE", "PANEL SCHED",
+            "PNL SCHEDULE", "PNL SCHED",
+            "ELECTRICAL PANEL",
+        )
+    )
+    if not text_has_phrase:
+        try:
+            from .panel_schedule import _looks_like_panel_header  # type: ignore
+        except Exception:  # pragma: no cover - defensive
+            return None
+        if not any(_looks_like_panel_header(s.headers) for s in schedules):
+            return None
+    try:
+        from .panel_schedule import extract_panel_schedule_from_page
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.debug("panel_schedule import failed: %s", exc)
+        return None
+    try:
+        result = extract_panel_schedule_from_page(page, page_index)
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.warning("panel_schedule extraction failed on page %d: %s",
+                       page_index, exc)
+        return None
+    return result if result.panels else None
+
+
 def prepass_drawing_page(pdf_path: Path, page_index: int) -> DrawingPrepassResult:
     """Run the deterministic pre-pass on a single page of a drawing PDF."""
     pdf_path = Path(pdf_path)
@@ -683,6 +733,9 @@ def prepass_drawing_page(pdf_path: Path, page_index: int) -> DrawingPrepassResul
         room_schedule = _maybe_extract_room_schedule(
             page, page_index, schedules, door_schedule, window_schedule,
         )
+        panel_schedule = _maybe_extract_panel_schedule(
+            page, page_index, schedules,
+        )
 
     if not text.strip():
         quality_issues.append("page has no embedded text (likely scanned)")
@@ -697,6 +750,7 @@ def prepass_drawing_page(pdf_path: Path, page_index: int) -> DrawingPrepassResul
         window_schedule=window_schedule,
         finish_schedule=finish_schedule,
         room_schedule=room_schedule,
+        panel_schedule=panel_schedule,
     )
     result.confidence = round(_score(result), 4)
     return result
@@ -723,6 +777,9 @@ def prepass_drawing_pdf(pdf_path: Path) -> list[DrawingPrepassResult]:
             room_schedule = _maybe_extract_room_schedule(
                 page, i, schedules, door_schedule, window_schedule,
             )
+            panel_schedule = _maybe_extract_panel_schedule(
+                page, i, schedules,
+            )
             if not text.strip():
                 quality_issues.append("page has no embedded text (likely scanned)")
 
@@ -736,6 +793,7 @@ def prepass_drawing_pdf(pdf_path: Path) -> list[DrawingPrepassResult]:
                 window_schedule=window_schedule,
                 finish_schedule=finish_schedule,
                 room_schedule=room_schedule,
+                panel_schedule=panel_schedule,
             )
             r.confidence = round(_score(r), 4)
             results.append(r)
@@ -782,6 +840,10 @@ def to_schema(result: DrawingPrepassResult):
     if result.room_schedule is not None:
         from .room_schedule import to_schema as room_to_schema
         room_schedule = room_to_schema(result.room_schedule)
+    panel_schedule = None
+    if result.panel_schedule is not None:
+        from .panel_schedule import to_schema as panel_to_schema
+        panel_schedule = panel_to_schema(result.panel_schedule)
     return S.DrawingPrepassResult(
         title_block=S.TitleBlockData(
             project_name=tb.project_name,
@@ -807,6 +869,7 @@ def to_schema(result: DrawingPrepassResult):
         window_schedule=window_schedule,
         finish_schedule=finish_schedule,
         room_schedule=room_schedule,
+        panel_schedule=panel_schedule,
     )
 
 

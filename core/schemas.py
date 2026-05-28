@@ -593,6 +593,64 @@ class RoomScheduleResult(BaseModel):
     raw_table_text: str = ""                   # joined-headers debug string
 
 
+class CircuitEntry(BaseModel):
+    """One row in an electrical panel schedule's circuit table (Phase T2.6).
+
+    A 3-pole breaker carries the same load across phases ``A,B,C``;
+    ``phase`` is the literal text of the schedule's PHASE column so the
+    multi-pole case round-trips without lossy parsing. ``circuit_number``
+    is also stored as-published (``"1"``, ``"1,3,5"``, ``"21"``) for the
+    same reason.
+    """
+
+    circuit_number: str                        # "1", "1,3,5", "21", ...
+    breaker_amps: Optional[int] = None         # 20, 30, 50, ...
+    load_description: str
+    load_watts: Optional[float] = None
+    phase: Optional[str] = None                # "A", "B", "C", "A,B,C", ...
+
+
+class PanelRecord(BaseModel):
+    """One electrical panel pulled off a panel schedule (Phase T2.6).
+
+    Electrical panel schedules are the highest-dollar single drawing
+    artefact in BPC's calibration set — each panel synthesises into
+    four families of TakeoffItem (panel enclosure, branch breakers,
+    feeder conductor, feeder conduit). Phase T2.6 is the EA-unit
+    dispatcher analogue of T1/T2.5 (doors, windows) extended into
+    Division 26 (electrical).
+    """
+
+    panel_id: str                              # "PNL-A", "MDP", "RP-1", ...
+    voltage: Optional[str] = None              # "120/208V", "277/480V", ...
+    phase_count: Optional[int] = None          # 1 or 3
+    main_breaker_amps: Optional[int] = None
+    bus_amps: Optional[int] = None
+    mcb_or_mlo: Optional[str] = None           # "MCB" | "MLO"
+    feeder_conductor_size: Optional[str] = None  # "3/0 AWG Cu", ...
+    feeder_conduit_size: Optional[str] = None    # "2 inch", ...
+    location: Optional[str] = None             # room or area description
+    circuits: list[CircuitEntry] = Field(default_factory=list)
+    confidence: float = 0.85
+    source_sheet: Optional[str] = None
+    source_page: int = 0
+
+
+class PanelScheduleResult(BaseModel):
+    """Aggregate panel-schedule pre-pass result for a drawing page (Phase T2.6).
+
+    Attached alongside (not replacing) the generic :class:`Schedule`
+    rows on :class:`DrawingPrepassResult` so the existing prepass
+    surface keeps working while downstream takeoff (Phase T2.6
+    synthesis) consumes the richer typed records.
+    """
+
+    pages: list[int] = Field(default_factory=list)
+    panels: list[PanelRecord] = Field(default_factory=list)
+    confidence: float = 0.0                    # 0..1
+    raw_table_text: str = ""                   # joined-headers debug string
+
+
 class DrawingPrepassResult(BaseModel):
     """Snapshot of everything the deterministic pre-pass could pull off
     a single drawing page without invoking the vision LLM."""
@@ -606,6 +664,7 @@ class DrawingPrepassResult(BaseModel):
     window_schedule: Optional[WindowScheduleResult] = None  # T2.5 typed window records
     finish_schedule: Optional[FinishScheduleResult] = None  # T4 typed finish records
     room_schedule: Optional[RoomScheduleResult] = None  # T5 typed room geometry
+    panel_schedule: Optional[PanelScheduleResult] = None  # T2.6 typed electrical panels
 
 
 class SheetExtraction(BaseModel):
