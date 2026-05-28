@@ -30,6 +30,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
+from collections import OrderedDict
 from collections.abc import Mapping
 from typing import Any
 
@@ -69,6 +70,10 @@ from core.pricing.subquote_parser import (
     apply_subquote_plan,
     parse_subquote_pdf,
     parse_subquote_pdf_with_llm,
+)
+from core.pricing.xlsx_parser import (
+    merge_xlsx_plans,
+    parse_vendor_xlsx,
 )
 from core.schemas import (
     AlternateLineEstimate,
@@ -2824,15 +2829,20 @@ if "estimate" in st.session_state:
             )
 
             uploaded_csv = st.file_uploader(
-                "Vendor pricing CSV",
-                type=["csv"],
+                "Vendor pricing CSV or xlsx workbook",
+                type=["csv", "xlsx"],
                 key="batch_override_csv_uploader",
                 help=(
                     "Required columns (any of the case-insensitive "
                     "aliases): description / desc / item / "
                     "item_description / line_item AND unit_cost / price / "
                     "unit_price / cost / $/unit / rate. Optional: "
-                    "vendor, quote_ref, notes, quantity."
+                    "vendor, quote_ref, notes, quantity, "
+                    "unit_of_measure. "
+                    "Phase T6.4.a: .xlsx workbooks are accepted too — "
+                    "each sheet is treated as a separate vendor table "
+                    "and the operator picks which sheets to merge "
+                    "before applying."
                 ),
             )
 
@@ -2882,30 +2892,186 @@ if "estimate" in st.session_state:
             )
 
             if preview_clicked and uploaded_csv is not None:
-                try:
-                    raw_bytes = uploaded_csv.getvalue()
-                    csv_text = raw_bytes.decode("utf-8-sig")
-                except Exception as exc:
-                    st.error(f"Could not decode CSV: {exc}")
+                # Phase T6.4.a — branch on the upload extension. The
+                # ``.xlsx`` path produces a dict of per-sheet plans and
+                # routes through the sheet-selector UI below; the
+                # ``.csv`` path is the legacy T6.3 flow unchanged.
+                uploaded_name = (uploaded_csv.name or "").lower()
+                if uploaded_name.endswith(".xlsx"):
+                    try:
+                        raw_bytes = uploaded_csv.getvalue()
+                    except Exception as exc:
+                        st.error(f"Could not read xlsx bytes: {exc}")
+                    else:
+                        try:
+                            xlsx_plans = parse_vendor_xlsx(raw_bytes)
+                        except ValueError as exc:
+                            st.error(f"xlsx parse failed: {exc}")
+                        else:
+                            st.session_state["batch_override_xlsx_plans"] = (
+                                xlsx_plans
+                            )
+                            st.session_state[
+                                "batch_override_xlsx_selected"
+                            ] = list(xlsx_plans.keys())
+                            st.session_state.pop("batch_override_plan", None)
+                            st.session_state.pop(
+                                "batch_override_csv_lines", None
+                            )
+                            st.session_state["batch_override_resolved"] = {}
                 else:
                     try:
-                        parsed_rows, parse_errors = parse_vendor_csv(csv_text)
-                    except ValueError as exc:
-                        st.error(f"CSV parse failed: {exc}")
-                        parsed_rows, parse_errors = [], []
-                    if parse_errors:
-                        for err in parse_errors:
-                            st.warning(err)
-                    if parsed_rows:
-                        plan = match_cost_lines(
-                            parsed_rows,
-                            list(estimate.line_items),
-                            similarity_threshold=float(similarity_threshold),
-                            ambiguity_margin=float(ambiguity_margin),
+                        raw_bytes = uploaded_csv.getvalue()
+                        csv_text = raw_bytes.decode("utf-8-sig")
+                    except Exception as exc:
+                        st.error(f"Could not decode CSV: {exc}")
+                    else:
+                        # Drop any stale xlsx state so the sheet-selector
+                        # UI doesn't render alongside a CSV-only flow.
+                        st.session_state.pop(
+                            "batch_override_xlsx_plans", None
                         )
-                        st.session_state["batch_override_plan"] = plan
-                        st.session_state["batch_override_csv_lines"] = parsed_rows
-                        st.session_state["batch_override_resolved"] = {}
+                        st.session_state.pop(
+                            "batch_override_xlsx_selected", None
+                        )
+                        try:
+                            parsed_rows, parse_errors = parse_vendor_csv(
+                                csv_text
+                            )
+                        except ValueError as exc:
+                            st.error(f"CSV parse failed: {exc}")
+                            parsed_rows, parse_errors = [], []
+                        if parse_errors:
+                            for err in parse_errors:
+                                st.warning(err)
+                        if parsed_rows:
+                            plan = match_cost_lines(
+                                parsed_rows,
+                                list(estimate.line_items),
+                                similarity_threshold=float(
+                                    similarity_threshold
+                                ),
+                                ambiguity_margin=float(ambiguity_margin),
+                            )
+                            st.session_state["batch_override_plan"] = plan
+                            st.session_state["batch_override_csv_lines"] = (
+                                parsed_rows
+                            )
+                            st.session_state["batch_override_resolved"] = {}
+
+            # Phase T6.4.a — xlsx multi-sheet selector + merge + match.
+            # Renders when a workbook has been parsed (session-state
+            # carries ``batch_override_xlsx_plans``) so a deselect /
+            # re-select triggers a rerun → re-merge → re-match against
+            # the current threshold + margin without re-parsing the
+            # workbook bytes. The downstream preview / apply block
+            # consumes whatever lands in ``batch_override_plan``, so
+            # the rest of the section is xlsx-agnostic.
+            xlsx_plans = st.session_state.get(
+                "batch_override_xlsx_plans"
+            )
+            if xlsx_plans:
+                sheet_names = list(xlsx_plans.keys())
+                summary_rows = []
+                for sheet_name, sheet_plan in xlsx_plans.items():
+                    plan_rows = [
+                        r.row for r in sheet_plan.no_match
+                    ]
+                    if plan_rows:
+                        sample = plan_rows[0]
+                        sample_bits = [
+                            sample.description[:40],
+                            sample.vendor or "",
+                            sample.unit_of_measure or "",
+                        ]
+                        sample_header = " | ".join(
+                            bit for bit in sample_bits if bit
+                        )
+                    else:
+                        sample_header = "(no data rows)"
+                    summary_rows.append({
+                        "Sheet": sheet_name,
+                        "Row count": sheet_plan.total_rows,
+                        "Sample row": sample_header,
+                    })
+                st.markdown("##### Workbook sheet summary")
+                st.dataframe(
+                    pd.DataFrame(summary_rows),
+                    hide_index=True,
+                    use_container_width=True,
+                )
+
+                default_selection = st.session_state.get(
+                    "batch_override_xlsx_selected", sheet_names
+                )
+                # Defensive: drop stale entries if the workbook changed.
+                default_selection = [
+                    s for s in default_selection if s in sheet_names
+                ]
+                selected_sheets = st.multiselect(
+                    "Sheets to apply",
+                    options=sheet_names,
+                    default=default_selection,
+                    key="batch_override_xlsx_selector",
+                    help=(
+                        "Deselect cover sheets / summary tabs / sheets "
+                        "you don't want to apply. Selected sheets are "
+                        "merged into a single match plan; sheet "
+                        "provenance is preserved in each row's notes "
+                        "field via the '[sheet: <name>]' prefix."
+                    ),
+                )
+                st.session_state["batch_override_xlsx_selected"] = (
+                    selected_sheets
+                )
+
+                if not selected_sheets:
+                    st.info(
+                        "No sheets selected — choose at least one "
+                        "sheet to build the match plan."
+                    )
+                    st.session_state.pop("batch_override_plan", None)
+                    st.session_state.pop(
+                        "batch_override_csv_lines", None
+                    )
+                else:
+                    filtered_plans = OrderedDict(
+                        (name, xlsx_plans[name])
+                        for name in selected_sheets
+                    )
+                    try:
+                        merged = merge_xlsx_plans(filtered_plans)
+                    except ValueError as exc:
+                        st.error(f"xlsx merge failed: {exc}")
+                    else:
+                        merged_rows = [
+                            r.row for r in merged.no_match
+                        ]
+                        if merged_rows:
+                            plan = match_cost_lines(
+                                merged_rows,
+                                list(estimate.line_items),
+                                similarity_threshold=float(
+                                    similarity_threshold
+                                ),
+                                ambiguity_margin=float(
+                                    ambiguity_margin
+                                ),
+                            )
+                            st.session_state[
+                                "batch_override_plan"
+                            ] = plan
+                            st.session_state[
+                                "batch_override_csv_lines"
+                            ] = merged_rows
+                        else:
+                            st.info(
+                                "Selected sheets contain no priceable "
+                                "rows (all sheets had only a header)."
+                            )
+                            st.session_state.pop(
+                                "batch_override_plan", None
+                            )
 
             plan: BatchOverridePlan | None = st.session_state.get(
                 "batch_override_plan"
@@ -3126,6 +3292,15 @@ if "estimate" in st.session_state:
                         st.session_state.pop("batch_override_plan", None)
                         st.session_state.pop("batch_override_csv_lines", None)
                         st.session_state.pop("batch_override_resolved", None)
+                        # Phase T6.4.a — also clear xlsx-specific state
+                        # so the next upload starts fresh and the sheet
+                        # selector doesn't render against a stale dict.
+                        st.session_state.pop(
+                            "batch_override_xlsx_plans", None
+                        )
+                        st.session_state.pop(
+                            "batch_override_xlsx_selected", None
+                        )
 
                         applied_count = sum(
                             1 for line in apply_summary
