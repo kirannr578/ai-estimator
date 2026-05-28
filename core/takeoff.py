@@ -28,6 +28,8 @@ from rapidfuzz import fuzz
 
 from .extraction.door_dedupe import dedupe_doors_against_synthesis
 from .extraction.finish_dedupe import dedupe_finishes_against_synthesis
+from .extraction.room_schedule import merge_room_schedules
+from .extraction.takeoff_backfill import backfill_finish_quantities
 from .extraction.takeoff_synthesis import (
     synthesize_door_takeoff_items,
     synthesize_finish_takeoff_items,
@@ -441,6 +443,76 @@ def _derive_takeoffs(
     return derived
 
 
+def _merge_finish_schedules(results: list):
+    """Concatenate per-sheet finish schedules into one for the T5 back-fill.
+
+    The back-fill only consumes the rooms' ``ceiling_height_ft`` for
+    its wall-area fallback when the room schedule didn't carry the
+    column, so the merge is a simple concat. Returns ``None`` when the
+    input is empty so the back-fill can skip the fallback lookup
+    entirely.
+    """
+    if not results:
+        return None
+    from .schemas import FinishScheduleResult
+    rooms = []
+    pages: list[int] = []
+    confidence = 0.0
+    for r in results:
+        if r is None:
+            continue
+        rooms.extend(r.rooms or [])
+        for pg in (r.pages or []):
+            if pg not in pages:
+                pages.append(pg)
+        confidence = max(confidence, float(r.confidence or 0.0))
+    return FinishScheduleResult(
+        pages=pages, rooms=rooms, confidence=round(confidence, 4),
+    )
+
+
+def _merge_door_schedules(results: list):
+    """Concatenate per-sheet door schedules into one for the T5.1 follow-up."""
+    if not results:
+        return None
+    from .schemas import DoorScheduleResult
+    doors = []
+    pages: list[int] = []
+    confidence = 0.0
+    for r in results:
+        if r is None:
+            continue
+        doors.extend(r.doors or [])
+        for pg in (r.pages or []):
+            if pg not in pages:
+                pages.append(pg)
+        confidence = max(confidence, float(r.confidence or 0.0))
+    return DoorScheduleResult(
+        pages=pages, doors=doors, confidence=round(confidence, 4),
+    )
+
+
+def _merge_window_schedules(results: list):
+    """Concatenate per-sheet window schedules into one for the T5.1 follow-up."""
+    if not results:
+        return None
+    from .schemas import WindowScheduleResult
+    windows = []
+    pages: list[int] = []
+    confidence = 0.0
+    for r in results:
+        if r is None:
+            continue
+        windows.extend(r.windows or [])
+        for pg in (r.pages or []):
+            if pg not in pages:
+                pages.append(pg)
+        confidence = max(confidence, float(r.confidence or 0.0))
+    return WindowScheduleResult(
+        pages=pages, windows=windows, confidence=round(confidence, 4),
+    )
+
+
 def _merge_takeoffs(items: list[TakeoffItem]) -> list[TakeoffItem]:
     """Merge takeoffs that share (csi_section or division, normalized desc, unit)."""
     buckets: dict[tuple[str, str, str], TakeoffItem] = {}
@@ -620,6 +692,20 @@ def reconcile(
     # surface: floor / base / wall / ceiling). Survives _merge_takeoffs
     # for the same reason as doors + windows; T4 dedupe runs after.
     synthesized_finish_items: list[TakeoffItem] = []
+    # Phase T5: per-sheet room-schedule pre-pass. Unlike doors / windows
+    # / finishes there's no synthesis step — the room schedule supplies
+    # GEOMETRY (area / perimeter / ceiling height) that the T5 back-fill
+    # joins to the existing T4 finish rows by room_number to fill in
+    # the quantity placeholders. Accumulated here, merged after the
+    # extraction loop, and passed to ``backfill_finish_quantities`` at
+    # the end of the reconcile pipeline.
+    room_schedule_results: list = []
+    # Phase T5 back-fill also wants the schema-side finish schedules
+    # so the back-fill can fall back to the FinishRecord's
+    # ceiling_height_ft when the room schedule didn't carry the column.
+    finish_schedule_results: list = []
+    door_schedule_results: list = []
+    window_schedule_results: list = []
 
     for ex in extractions:
         rooms.extend(ex.rooms)
@@ -657,6 +743,13 @@ def reconcile(
                     sheet_id=ex.sheet_id,
                 )
             )
+            finish_schedule_results.append(ex.prepass.finish_schedule)
+        if ex.prepass is not None and ex.prepass.room_schedule is not None:
+            room_schedule_results.append(ex.prepass.room_schedule)
+        if ex.prepass is not None and ex.prepass.door_schedule is not None:
+            door_schedule_results.append(ex.prepass.door_schedule)
+        if ex.prepass is not None and ex.prepass.window_schedule is not None:
+            window_schedule_results.append(ex.prepass.window_schedule)
 
     # --- dedupe domain entities ---
     rooms = _dedupe_rooms(rooms)
@@ -715,6 +808,26 @@ def reconcile(
     # finish row covers the project. No-op safety rule mirrors T3 /
     # T2.5; never touches door or window rows (CSI prefix discriminator).
     all_takeoffs = dedupe_finishes_against_synthesis(all_takeoffs)
+    # T5 back-fill: replace ``quantity=0.0`` on every finish-synthesis
+    # row with the right SF (floor / ceiling = area; base = perimeter
+    # in LF; wall = perimeter × height × share). Joins finish rows to
+    # room schedules by ``room_number`` via notes-prefix parsing.
+    # Door / window schedules are passed for the deferred T5.1
+    # opening-deduction follow-up — currently logged-but-unused.
+    # When no room schedule was extracted on any sheet the function
+    # is a no-op and the finish rows stay at quantity=0.0.
+    if room_schedule_results:
+        merged_room_schedule = merge_room_schedules(room_schedule_results)
+        merged_finish_schedule = _merge_finish_schedules(finish_schedule_results)
+        merged_door_schedule = _merge_door_schedules(door_schedule_results)
+        merged_window_schedule = _merge_window_schedules(window_schedule_results)
+        all_takeoffs = backfill_finish_quantities(
+            all_takeoffs,
+            merged_room_schedule,
+            finish_schedule=merged_finish_schedule,
+            door_schedule=merged_door_schedule,
+            window_schedule=merged_window_schedule,
+        )
 
     project_info = _consolidate_project_info(bid_packages)
     scope_matrix = _build_scope_matrix(bid_packages)

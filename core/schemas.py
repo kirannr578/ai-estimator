@@ -470,6 +470,48 @@ class FinishScheduleResult(BaseModel):
     raw_table_text: str = ""                   # joined-headers debug string
 
 
+class RoomRecord(BaseModel):
+    """One room's geometry extracted from a room-schedule table (Phase T5).
+
+    Room schedules supply the **area** and **ceiling height** that the
+    Phase T4 finish synthesis needed to compute real SF quantities.
+    A single ``RoomRecord`` joined to its matching ``FinishRecord``
+    (by ``room_number``) lets the back-fill pass replace the
+    ``quantity=0.0`` placeholder on every floor/base/wall/ceiling
+    finish TakeoffItem with the right square-footage.
+
+    ``perimeter_lf`` is optional — many schedules don't publish it but
+    when present it lets the back-fill bypass the ``4 * sqrt(area)``
+    square-room fallback for base and wall computations.
+    """
+
+    room_number: str                           # "101", "M101", ...
+    room_name: Optional[str] = None
+    area_sf: Optional[float] = None            # square feet, floor area
+    perimeter_lf: Optional[float] = None       # linear feet (when published)
+    ceiling_height_ft: Optional[float] = None
+    ceiling_height_raw: Optional[str] = None
+    occupancy_type: Optional[str] = None       # "OFFICE", "STORAGE", ...
+    notes: Optional[str] = None
+    raw_cells: dict[str, str] = Field(default_factory=dict)
+    source_page: int = 0
+
+
+class RoomScheduleResult(BaseModel):
+    """Aggregate room-schedule pre-pass result for a drawing page (Phase T5).
+
+    Attached alongside (not replacing) the generic :class:`Schedule`
+    rows on :class:`DrawingPrepassResult` so the existing prepass
+    surface keeps working while downstream takeoff (Phase T5 back-fill)
+    consumes the richer typed records.
+    """
+
+    pages: list[int] = Field(default_factory=list)
+    rooms: list[RoomRecord] = Field(default_factory=list)
+    confidence: float = 0.0                    # 0..1
+    raw_table_text: str = ""                   # joined-headers debug string
+
+
 class DrawingPrepassResult(BaseModel):
     """Snapshot of everything the deterministic pre-pass could pull off
     a single drawing page without invoking the vision LLM."""
@@ -482,6 +524,7 @@ class DrawingPrepassResult(BaseModel):
     door_schedule: Optional[DoorScheduleResult] = None  # T1 typed door records
     window_schedule: Optional[WindowScheduleResult] = None  # T2.5 typed window records
     finish_schedule: Optional[FinishScheduleResult] = None  # T4 typed finish records
+    room_schedule: Optional[RoomScheduleResult] = None  # T5 typed room geometry
 
 
 class SheetExtraction(BaseModel):

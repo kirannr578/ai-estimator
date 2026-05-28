@@ -109,6 +109,16 @@ class DrawingPrepassResult:
     # ``core.extraction.finish_schedule.FinishScheduleResult`` or
     # ``None``.
     finish_schedule: Any = None
+    # T5 — typed room-schedule pre-pass. Populated whenever a room
+    # schedule was detected. Runs in parallel with the finish detector
+    # WITHOUT a precedence ordering (Option A from the T5 brief): a
+    # combined ``ROOM FINISH SCHEDULE`` produces BOTH a finish and a
+    # room result so the back-fill can join them by ``room_number``.
+    # Door/window precedence still applies (a page already claimed by
+    # the door/window detectors won't run the room detector).
+    # Concretely a ``core.extraction.room_schedule.RoomScheduleResult``
+    # or ``None``.
+    room_schedule: Any = None
 
 
 # ---------------------------------------------------------------------------
@@ -593,6 +603,62 @@ def _maybe_extract_finish_schedule(page: "fitz.Page", page_index: int,
     return result if result.rooms else None
 
 
+def _maybe_extract_room_schedule(page: "fitz.Page", page_index: int,
+                                    schedules: list[Schedule],
+                                    door_schedule: Any,
+                                    window_schedule: Any) -> Any:
+    """T5 hook: run the room-schedule extractor when this page may have one.
+
+    Imported lazily so the room-schedule module stays optional at load
+    time. **No precedence vs. the finish detector** (Option A from the
+    T5 brief): a combined ``ROOM FINISH SCHEDULE`` produces BOTH a
+    finish result AND a room result so the Phase T5 back-fill can join
+    them by ``room_number``. Door/window precedence DOES apply — if
+    either of those has already been detected on this page we skip the
+    room pass entirely (defensive — a door / window schedule never
+    carries area / ceiling-height columns so this is unlikely to fire
+    in practice, but it preserves the invariant that the upstream
+    detectors win on ambiguous pages). Returns a
+    ``RoomScheduleResult`` dataclass or ``None``.
+    """
+    if door_schedule is not None and getattr(door_schedule, "doors", None):
+        return None
+    if window_schedule is not None and getattr(window_schedule, "windows", None):
+        return None
+
+    has_room_schedule = any(s.kind == "room" for s in schedules)
+    text_upper = (page.get_text("text") or "").upper()
+    text_has_phrase = (
+        "ROOM SCHEDULE" in text_upper
+        or "ROOM FINISH SCHEDULE" in text_upper
+    )
+    if not (has_room_schedule or text_has_phrase):
+        # One more cheap signal — a detected generic schedule whose
+        # headers look room-shaped. Avoids missing room schedules on
+        # pages whose phrase trigger uses non-standard wording.
+        try:
+            from .room_schedule import _looks_like_room_header  # type: ignore
+        except Exception:  # pragma: no cover - defensive
+            return None
+        any_room_header = any(
+            _looks_like_room_header(s.headers) for s in schedules
+        )
+        if not any_room_header:
+            return None
+    try:
+        from .room_schedule import extract_room_schedule_from_page
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.debug("room_schedule import failed: %s", exc)
+        return None
+    try:
+        result = extract_room_schedule_from_page(page, page_index)
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.warning("room_schedule extraction failed on page %d: %s",
+                       page_index, exc)
+        return None
+    return result if result.rooms else None
+
+
 def prepass_drawing_page(pdf_path: Path, page_index: int) -> DrawingPrepassResult:
     """Run the deterministic pre-pass on a single page of a drawing PDF."""
     pdf_path = Path(pdf_path)
@@ -614,6 +680,9 @@ def prepass_drawing_page(pdf_path: Path, page_index: int) -> DrawingPrepassResul
         finish_schedule = _maybe_extract_finish_schedule(
             page, page_index, schedules, door_schedule, window_schedule,
         )
+        room_schedule = _maybe_extract_room_schedule(
+            page, page_index, schedules, door_schedule, window_schedule,
+        )
 
     if not text.strip():
         quality_issues.append("page has no embedded text (likely scanned)")
@@ -627,6 +696,7 @@ def prepass_drawing_page(pdf_path: Path, page_index: int) -> DrawingPrepassResul
         door_schedule=door_schedule,
         window_schedule=window_schedule,
         finish_schedule=finish_schedule,
+        room_schedule=room_schedule,
     )
     result.confidence = round(_score(result), 4)
     return result
@@ -650,6 +720,9 @@ def prepass_drawing_pdf(pdf_path: Path) -> list[DrawingPrepassResult]:
             finish_schedule = _maybe_extract_finish_schedule(
                 page, i, schedules, door_schedule, window_schedule,
             )
+            room_schedule = _maybe_extract_room_schedule(
+                page, i, schedules, door_schedule, window_schedule,
+            )
             if not text.strip():
                 quality_issues.append("page has no embedded text (likely scanned)")
 
@@ -662,6 +735,7 @@ def prepass_drawing_pdf(pdf_path: Path) -> list[DrawingPrepassResult]:
                 door_schedule=door_schedule,
                 window_schedule=window_schedule,
                 finish_schedule=finish_schedule,
+                room_schedule=room_schedule,
             )
             r.confidence = round(_score(r), 4)
             results.append(r)
@@ -704,6 +778,10 @@ def to_schema(result: DrawingPrepassResult):
     if result.finish_schedule is not None:
         from .finish_schedule import to_schema as finish_to_schema
         finish_schedule = finish_to_schema(result.finish_schedule)
+    room_schedule = None
+    if result.room_schedule is not None:
+        from .room_schedule import to_schema as room_to_schema
+        room_schedule = room_to_schema(result.room_schedule)
     return S.DrawingPrepassResult(
         title_block=S.TitleBlockData(
             project_name=tb.project_name,
@@ -728,6 +806,7 @@ def to_schema(result: DrawingPrepassResult):
         door_schedule=door_schedule,
         window_schedule=window_schedule,
         finish_schedule=finish_schedule,
+        room_schedule=room_schedule,
     )
 
 
