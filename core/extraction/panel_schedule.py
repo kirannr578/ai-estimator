@@ -51,7 +51,12 @@ from typing import Iterable
 
 import fitz  # PyMuPDF
 
-from .door_schedule import _header_index_excluding
+# Phase T3.6 promoted ``_header_index_excluding`` from ``door_schedule``
+# to a shared ``header_utils`` module once the helper became load-bearing
+# across three extractors (door, panel, lighting).  Imported under the
+# legacy underscore-prefixed name to keep this module's internal
+# call-sites unchanged from their T2.6 shape.
+from .header_utils import header_index_excluding as _header_index_excluding
 
 logger = logging.getLogger(__name__)
 

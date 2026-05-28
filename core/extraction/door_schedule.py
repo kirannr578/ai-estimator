@@ -25,7 +25,20 @@ from typing import Iterable
 
 import fitz  # PyMuPDF
 
+from .header_utils import header_index_excluding
+
 logger = logging.getLogger(__name__)
+
+
+# Phase T3.6: ``_header_index_excluding`` was promoted to
+# :mod:`core.extraction.header_utils` once the helper became
+# load-bearing across three extractors (door, panel, lighting) — and
+# four with the T2.8 HVAC slice.  The legacy underscore-prefixed name
+# is preserved here so frozen downstream consumers
+# (``finish_schedule``, ``room_schedule``, ``window_schedule``) keep
+# their existing imports working without a coordinated import-site
+# update in this commit.
+_header_index_excluding = header_index_excluding
 
 
 # ---------------------------------------------------------------------------
@@ -230,29 +243,6 @@ def _room_header_index(headers: list[str]) -> int | None:
         norm = _normalize_header(h)
         norm_words = set(norm.split())
         if norm_words & _ROOM_HEADER_WORDS:
-            return i
-    return None
-
-
-def _header_index_excluding(
-    headers: list[str], candidates: tuple[str, ...], *, exclude: set[int],
-) -> int | None:
-    """Like :func:`_header_index` but ignores any column in ``exclude``.
-
-    Used by the T5.1 room-column wire-in: when ``ROOM NUMBER`` is the
-    header, the substring-tolerant mark matcher would otherwise grab
-    it via the ``NUMBER`` candidate. Pinning the room column first
-    and re-running mark with that column excluded keeps both anchored
-    correctly.
-    """
-    for i, h in enumerate(headers):
-        if i in exclude:
-            continue
-        norm = _normalize_header(h)
-        norm_words = set(norm.split())
-        if any(c in norm_words for c in candidates):
-            return i
-        if any(c in norm for c in candidates):
             return i
     return None
 
