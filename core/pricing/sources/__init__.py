@@ -10,7 +10,9 @@ Each module exports a `PricingSource` subclass. Public adapters today:
 - ``davis_bacon``   — SAM.gov Wage Determinations lookup
 - ``tx_prevailing_wage`` (Phase B, stub) — TWC per-county PDF parser
 - ``gsa_schedule``  (Phase B, stub) — GSA Advantage construction schedules
-- ``tx_smartbuy_awards`` (Phase C, stub) — TX SmartBuy / ESBD award postings
+- ``tx_smartbuy_awards`` (Phase C) — TX SmartBuy / ESBD historical-awards
+                                       scraper (competitive intel: vendor,
+                                       amount, NAICS, period per award)
 - ``hd_pro_catalog`` (Phase C, stub) — Pro-catalog scraper (public prices only)
 - ``enr_cci``       (Phase C) — ENR 20-City Construction Cost Index
 - ``agc_cci``       (Phase C) — AGC PPI-based Construction Cost Index

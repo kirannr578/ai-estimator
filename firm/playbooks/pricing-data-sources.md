@@ -32,7 +32,7 @@ This playbook documents:
 | Davis-Bacon Wage Determinations | `core/pricing/sources/davis_bacon.py` | U.S. Public Domain — DOL WHD | None (public SAM.gov search) | On-demand per project | Active WD trade × hourly rate rows for any (state, county, project type) | **Shipped** |
 | TX state-agency prevailing wage (per-project WD parser) | `core/pricing/sources/tx_prevailing_wage.py` | State of Texas public record | None (PDF arrives with solicitation) | Per-solicitation | Trade × hourly rate parsed from the per-project WD PDF attached to each TX state-agency solicitation | **Shipped** (per-project parser; see "Structural Note — Texas Prevailing Wage" below) |
 | GSA Schedule price lists | `core/pricing/sources/gsa_schedule.py` | U.S. Public Domain — GSA | None | Quarterly | Construction materials catalogs (56V, 03FAC, 23V) | **Phase B — partial** (parser ships; auto-download TODO) |
-| TX SmartBuy / ESBD award postings | `core/pricing/sources/tx_smartbuy_awards.py` | State of Texas public record | None | Continuous | Historical award amounts for sub-pricing reference | **Phase C — stub** |
+| TX SmartBuy / ESBD historical awards | `core/pricing/sources/tx_smartbuy_awards.py` (`TXSmartBuyAwardsSource`) | State of Texas public record | None | Continuous (per-solicitation as they award) | Per-(solicitation, vendor) award amounts + NAICS + agency + period — REAL competitive intel for TX state contracts | **Shipped (Phase C)** — anchor-proximity regex parse over ESBD HTML; one snapshot per awarded vendor; 24h HTTP cache |
 | Home Depot Pro / Lowe's for Pros catalogs | `core/pricing/sources/hd_pro_catalog.py` | Retailer-proprietary (public prices only) | None for public pages | On-demand | ~50 high-volume building-material SKUs | **Phase C — stub** |
 | ENR Construction Cost Index | `core/pricing/sources/enr_cci.py` (`ENRCCISource`) | ENR — attribution required, no redistribution | None | Monthly | National 20-city composite cost index | **Shipped (Phase C)** — headline value only; full history requires ENR subscription |
 | AGC PPI-based Construction Cost Index | `core/pricing/sources/agc_cci.py` (`AGCCCISource`) | AGC — attribution required, no redistribution | None | Monthly (underlying PPI) / Quarterly (Inflation Alert) | National PPI-based inflation roll-up | **Shipped (Phase C)** — landing-page headline only; Inflation Alert PDF parser is future work |
@@ -238,7 +238,7 @@ A skeleton placeholder for this work lives at `core/pricing/sources/tx_agency_wd
 | ~~Phase B-full: TWC PDF auto-download~~ | **DEPRECATED** — based on faulty premise; no centralized TWC per-county WD source exists. See "Structural Note — Texas Prevailing Wage" above. | n/a (closed) |
 | Per-agency TX WD harvester (TxDOT, TFC, TWDB, university systems, large municipalities) | Pull per-project WD PDFs from major TX procuring agencies' active-solicitation pages | Future — placeholder at `core/pricing/sources/tx_agency_wd.py`; pursue when > 3 active TX state-agency bids/quarter warrant it |
 | Phase B-full: GSA Advantage CSV auto-download | Pulls catalog without manual step | Highest-value next step |
-| Phase C: TX SmartBuy / ESBD scraper | Historical sub-pricing reference | After GSA Advantage |
+| ~~Phase C: TX SmartBuy / ESBD scraper~~ | **Shipped** — see "TX SmartBuy Historical Awards" section below | n/a (closed; shipped 2026-05-28) |
 | Phase C: HD Pro / Lowe's pro catalog | Spot-check single-SKU pricing | After GSA Advantage; **only if ToS posture clear** |
 | ~~Phase C: ENR / AGC / Turner PDF parsers~~ | **Shipped** — see Construction Cost Index section below | n/a (closed; CCI adapters shipped 2026-05-28) |
 | Phase C-full: NAHB Cost of Constructing a Home annual PDF | Residential cost breakdown cross-check | Deferred — annual cadence + low marginal vs BLS PPI |
@@ -416,6 +416,117 @@ apply_macro_cci_multiplier(
 - `core/pricing/escalation.py` — both `escalate_cost_database(...)` (Step 1) and `apply_macro_cci_multiplier(...)` (Step 2). `EscalationMissingBaseline` exception is defined here.
 - `tests/test_pricing_escalation.py` — Step 1 tests.
 - `tests/test_pricing_escalation_cci.py` — Step 2 tests (multiplier, fallback chain, idempotency, full-chain integration smoke).
+
+---
+
+## TX SmartBuy Historical Awards — competitive intel (Phase C — shipped 2026-05-28)
+
+The macro CCI/PPI escalators above tell you **trend** (how much commercial construction inputs have inflated). The TX SmartBuy adapter tells you **level** — what actually got paid on a real, named TX state-agency contract.
+
+### What this source provides
+
+For each awarded solicitation posted on the Comptroller's Electronic State Business Daily (ESBD), one `PricingSnapshot` per (solicitation, awarded-vendor) pair carrying:
+
+- **Vendor name** — the winning contractor (e.g. "Carr EFA Joint Venture").
+- **Award amount** — lump-sum award value in USD.
+- **NAICS code** — when the agency populates it on the detail page (TAMU System / university construction is typically 236220 Commercial & Institutional Building).
+- **Agency** — issuing entity (e.g. Angelo State University, TAMU System, TxDOT).
+- **Award date / period** — published as `YYYY-MM` (or `YYYY` if month not parseable).
+- **Performance period** — start/end dates of the contract term, stored in `raw["performance_period"]`.
+- **Source URL** — direct link to the public ESBD detail page for audit / re-verification.
+
+### How it complements CCI/PPI
+
+| Question the bid-team is asking | Where the answer comes from |
+|---|---|
+| "How much have construction inputs escalated since baseline?" | BLS PPI (per-CSI) + ENR/AGC/Turner CCI (macro) |
+| "What did a *similar* TX state agency contract just pay for *similar* scope?" | **TX SmartBuy historical awards** |
+| "Is BPC's intended price-point in line with the recent NAICS-236220 median for this agency?" | **TX SmartBuy** (filter `naics="236220"`, compute median of `value`) |
+| "Did this incumbent vendor bid this contract type before, and at what level?" | **TX SmartBuy** (group by `raw["vendor"]`, look at history) |
+
+Macro escalators alone tell you that costs went up ~5% YoY. Award history tells you that the actual winning bids on UT-System / TAMU-System Commercial & Institutional Building work in 2025 ran $4–12M for renovation scopes and $20–60M for ground-up — orders of magnitude more useful when calibrating a BPC bid.
+
+### Access posture (verified 2026-05-28)
+
+- Public, no auth required. The brief verified `https://www.txsmartbuy.gov/esbd/26-007RFCSP` was accessible without credentials earlier in this project.
+- Polite User-Agent (inherited from `core/pricing/sources/base.py::build_client`).
+- 24h disk cache via `core/pricing/sources/_cci_common.http_get_text`. Cache lives under `config/pricing_snapshots/_http_cache/tx_smartbuy_awards/` (gitignored).
+- No bulk-download attempt. `fetch_recent_awards()` walks **one** listing page by default; the `limit` argument caps the per-call work (default 50 via `scripts/refresh_pricing.py`).
+- No new third-party dependencies — `bs4` was explicitly NOT added. Parsing uses regex over a tag-stripped text view of the page, same family as the `_cci_common.find_index_value` anchor-proximity approach used by ENR/AGC/Turner.
+
+### Snapshot shape
+
+```
+source:        tx_smartbuy_awards
+series_id:     "<sol>"               # single-vendor
+               "<sol>--<index>"      # multi-vendor (double-hyphen separator)
+label:         "ESBD <sol> awarded to <vendor>"
+unit:          "USD"                 # absolute dollars — NOT an index
+value:         <awarded amount>      # lump-sum total
+region:        "TX"
+csi_division:  null                  # not derived (optional per brief)
+naics:         "236220"              # when present on the page; else null
+period:        "2025-12"             # YYYY-MM; "YYYY" fallback
+license:       State of Texas public record — TX SmartBuy / ESBD
+source_url:    https://www.txsmartbuy.gov/esbd/<sol>
+raw:           {vendor, award_amount_usd, award_amount_raw, award_date_raw,
+                agency, naics, performance_period, vendor_index,
+                vendor_count, solicitation_number}
+```
+
+### Limitations
+
+- **TX-only.** No federal, no other state. For federal-funded work cross-reference with `davis_bacon.py`.
+- **Awards typically appear 30–90 days after the response date.** ESBD updates the detail page when the award notice is issued — there is a lag between bid-due date and the snapshot becoming available.
+- **Some agencies redact award amounts** (especially negotiated contracts under Tex. Gov't Code 2156.121, the state equivalent of FAR Part 13.5 sole-source / competitive-negotiation cover). When the dollar figure is redacted or marked "Confidential", the adapter logs and skips that vendor rather than emitting a misleading snapshot.
+- **Multi-vendor awards may not split amounts cleanly.** Some solicitations publish a single aggregate dollar figure across all awardees and leave the per-vendor split to the contract negotiation phase. In that case the adapter emits one snapshot per vendor with the aggregate amount duplicated — operators should manually review `raw["vendor_count"]` and split if a per-vendor figure is later disclosed.
+- **HTML structure is not a stable API.** The Comptroller has changed the ESBD layout in the past. The parser uses multiple label spellings per field ("Awarded Vendor:" / "Vendor:" / "Awardee:"; "Award Amount:" / "Awarded Amount:" / "Contract Amount:") and falls back gracefully (returns `[]` for that page, refresh runner is never crashed). If a structural change moves the labels entirely, operators look up the award manually on ESBD and extend the anchor lists in `tx_smartbuy_awards.py::VENDOR_LABELS` / `AMOUNT_LABELS` / `AWARD_DATE_LABELS`.
+- **NAICS field is not always populated.** When the agency omits it, the snapshot's `naics` is `null` — downstream filtering must tolerate that.
+- **Single-page listing only.** `fetch_recent_awards()` walks the first listing page; multi-page pagination is a future enhancement (see "Future work" below).
+
+### How to use the data in bid prep
+
+1. **Calibrate against same-NAICS history.** Pull the last 25–50 awarded snapshots filtered by the bid's NAICS code:
+
+   ```python
+   from core.pricing.sources.tx_smartbuy_awards import TXSmartBuyAwardsSource
+   from statistics import median
+
+   with TXSmartBuyAwardsSource() as src:
+       comparables = src.fetch_recent_awards(limit=50, naics="236220")
+   amounts = sorted(s.value for s in comparables)
+   print(f"n={len(amounts)} median=${median(amounts):,.0f} "
+         f"p25=${amounts[len(amounts)//4]:,.0f} "
+         f"p75=${amounts[3*len(amounts)//4]:,.0f}")
+   ```
+
+2. **Compare BPC's intended price-point.** A bid that lands wildly above the recent p75 or wildly below the p25 of the same-NAICS award distribution deserves a second look before submission — there is usually a scope-misread or a missed allowance behind that gap.
+
+3. **Track incumbent behavior.** Filter by `raw["vendor"]` to see what a given incumbent has bid (and won) for the issuing agency in the last 12–24 months. Useful for go/no-go: if an incumbent has won three of the last three at this agency on similar scope, the GP-margin call for a new entrant becomes part of the bid strategy.
+
+4. **Cross-check the macro escalation.** Multiply a baseline-period award through `apply_macro_cci_multiplier(...)` (Step 2 above) and compare against the latest award on similar scope. A large divergence flags either an agency-specific market move or a parser-stale macro snapshot — both worth verifying before bid lock.
+
+### CLI
+
+```powershell
+# Refresh the most-recent 50 awarded solicitations (default).
+.venv\Scripts\python.exe scripts\refresh_pricing.py --sources tx_smartbuy_awards
+
+# Or via the Phase C shortcut (includes the CCI adapters + NAHB).
+.venv\Scripts\python.exe scripts\refresh_pricing.py --phase c
+```
+
+### Source-of-truth references
+
+- `core/pricing/sources/tx_smartbuy_awards.py` — adapter, HTML helpers, anchor lists.
+- `core/pricing/sources/_cci_common.py::http_get_text` — shared 24h HTTP-text cache.
+- `tests/test_pricing_sources_tx_smartbuy_awards.py` — offline tests via `httpx.MockTransport` (single-vendor, multi-vendor, missing-amount, cancelled, 4xx/5xx, NAICS filter, limit, dollar-format variants, period-format variants, round-trip serialization, listing-page parsing).
+
+### Future work (parked)
+
+- **Multi-page pagination.** Walk past the first listing page to backfill > 25 awards per refresh. Today `fetch_recent_awards(limit=50)` honors the limit at the parsing layer but only sees one page; raising the listing throughput is a follow-up slice.
+- **CSI-section mapping from solicitation title.** Today `csi_division` is left null. A future enhancement could keyword-map common scopes (e.g. "Office Renovation" → CSI Division 09 finishes; "Roof Replacement" → CSI 07 thermal & moisture protection) so the awards become directly comparable to BPC's per-CSI cost database. Out of scope for the initial shipping slice because the mapping is judgment-heavy and easier reviewed manually at bid prep time.
+- **Per-agency harvester integration.** The future TX agency WD harvester (`tx_agency_wd.py` placeholder) overlaps with the TX SmartBuy data shape; if both ship, deduplicate at the snapshot layer rather than the source layer.
 
 ---
 

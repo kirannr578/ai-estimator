@@ -48,6 +48,9 @@ from core.pricing.sources.nahb_construction_cost import (  # noqa: E402
     NAHBCostOfConstructingAHomeSource,
 )
 from core.pricing.sources.turner_cci import TurnerCCISource  # noqa: E402
+from core.pricing.sources.tx_smartbuy_awards import (  # noqa: E402
+    TXSmartBuyAwardsSource,
+)
 
 LOG = logging.getLogger("refresh_pricing")
 
@@ -66,14 +69,29 @@ ALL_SOURCES = {
     "agc_cci": AGCCCISource,
     "turner_cci": TurnerCCISource,
     "nahb_construction_cost": NAHBCostOfConstructingAHomeSource,
+    # Phase C — TX SmartBuy / ESBD historical-awards scraper.
+    # Competitive intel (vendor + amount + NAICS + period per award),
+    # complementing the macro CCI/PPI escalators above. Same fragility
+    # posture as the CCI adapters (HTML scrape, not JSON API) — opt in
+    # explicitly via `--sources tx_smartbuy_awards` or `--phase c`.
+    "tx_smartbuy_awards": TXSmartBuyAwardsSource,
 }
 
 # Source bundles by phase, used by the `--phase` shortcut flag.
 PHASE_SOURCES: dict[str, list[str]] = {
     "a": ["bls_ppi", "bls_oews", "fred", "eia"],
     "b": ["davis_bacon"],
-    "c": ["enr_cci", "agc_cci", "turner_cci", "nahb_construction_cost"],
+    "c": [
+        "enr_cci", "agc_cci", "turner_cci", "nahb_construction_cost",
+        "tx_smartbuy_awards",
+    ],
 }
+
+# Default recent-awards batch size for the TX SmartBuy scraper when
+# invoked via the refresh script (no explicit --series ids). Mirrors
+# ``TXSmartBuyAwardsSource.DEFAULT_RECENT_LIMIT`` per the brief; kept
+# here as a module constant so it is greppable from the CLI side.
+TX_SMARTBUY_REFRESH_LIMIT = 50
 
 
 def _parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
@@ -96,7 +114,8 @@ def _parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
         choices=sorted(PHASE_SOURCES.keys()),
         help="Shortcut for refreshing every source in a given phase "
              "bundle (a = BLS PPI/OEWS + FRED + EIA; b = Davis-Bacon; "
-             "c = ENR/AGC/Turner CCI + NAHB cost-of-constructing-a-home). "
+             "c = ENR/AGC/Turner CCI + NAHB cost-of-constructing-a-home "
+             "+ TX SmartBuy historical-awards). "
              "Overrides --sources when given.",
     )
     p.add_argument(
@@ -165,6 +184,11 @@ def _run_source(
                 county=davis_bacon_county,
                 project_type=davis_bacon_project_type,
             )
+        elif name == "tx_smartbuy_awards":
+            # ESBD is awards-driven, not series-driven: the listing-page
+            # scan finds the most-recent N awarded solicitations and
+            # emits one snapshot per (solicitation, vendor) pair.
+            snaps = src.fetch([], limit=TX_SMARTBUY_REFRESH_LIMIT)
         else:
             series = src.default_series()
             filters: dict[str, str] = {}
