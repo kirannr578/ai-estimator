@@ -28,6 +28,7 @@ from rapidfuzz import fuzz
 
 from .extraction.door_dedupe import dedupe_doors_against_synthesis
 from .extraction.finish_dedupe import dedupe_finishes_against_synthesis
+from .extraction.hvac_dedupe import dedupe_hvac_against_synthesis
 from .extraction.lighting_dedupe import dedupe_lighting_against_synthesis
 from .extraction.panel_dedupe import dedupe_panels_against_synthesis
 from .extraction.room_schedule import merge_room_schedules
@@ -35,6 +36,7 @@ from .extraction.takeoff_backfill import backfill_finish_quantities
 from .extraction.takeoff_synthesis import (
     synthesize_door_takeoff_items,
     synthesize_finish_takeoff_items,
+    synthesize_hvac_takeoff_items,
     synthesize_lighting_takeoff_items,
     synthesize_panel_takeoff_items,
     synthesize_window_takeoff_items,
@@ -708,6 +710,13 @@ def reconcile(
     # integrated technologies). Same survives-through-merge pattern
     # as panels; T2.7 dedupe runs after the merge.
     synthesized_lighting_items: list[TakeoffItem] = []
+    # Phase T2.8: per-sheet HVAC-equipment-schedule pre-pass → typed
+    # TakeoffItem rows. Each HVACEquipmentRecord fans out into 1 EA
+    # equipment row + 1 LS MEP rough-in row + optionally 1 EA
+    # disconnect + flex row (motorized equipment with voltage feed).
+    # Same survives-through-merge pattern as panels + lighting;
+    # T2.8 dedupe runs after the merge.
+    synthesized_hvac_items: list[TakeoffItem] = []
     # Phase T5: per-sheet room-schedule pre-pass. Unlike doors / windows
     # / finishes there's no synthesis step — the room schedule supplies
     # GEOMETRY (area / perimeter / ceiling height) that the T5 back-fill
@@ -780,6 +789,13 @@ def reconcile(
                     sheet_id=ex.sheet_id,
                 )
             )
+        if ex.prepass is not None and getattr(ex.prepass, "hvac_schedule", None) is not None:
+            synthesized_hvac_items.extend(
+                synthesize_hvac_takeoff_items(
+                    ex.prepass.hvac_schedule,
+                    sheet_id=ex.sheet_id,
+                )
+            )
 
     # --- dedupe domain entities ---
     rooms = _dedupe_rooms(rooms)
@@ -835,6 +851,13 @@ def reconcile(
     # ``source=lighting_schedule_prepass`` for the downstream
     # dedupe pass.
     all_takeoffs.extend(synthesized_lighting_items)
+    # T2.8: append synthesised HVAC-equipment-schedule rows. Each
+    # HVACEquipmentRecord already fanned out into 1 EA equipment +
+    # 1 LS rough-in + optional 1 EA disconnect inside
+    # ``synthesize_hvac_takeoff_items``; every row is tagged
+    # ``source=hvac_schedule_prepass`` for the downstream dedupe
+    # pass.
+    all_takeoffs.extend(synthesized_hvac_items)
     # T3: drop legacy LLM door aggregates ("Hollow metal doors", "Solid-core
     # wood doors", "Doors (type unspecified)") and same-mark LLM door rows
     # when a deterministic synthesised row already covers them. Pure on
@@ -870,6 +893,16 @@ def reconcile(
     # synthesised lighting fixture exists on the project (safety
     # rule, mirrors T3 / T2.5 / T4 / T2.6).
     all_takeoffs = dedupe_lighting_against_synthesis(all_takeoffs)
+    # T2.8 dedupe: retire legacy LLM HVAC aggregates ("AHU-1
+    # installation", "Mechanical Equipment", "Rooftop Units") and
+    # same-tag LLM HVAC rows when a deterministic synthesised row
+    # already covers them. CSI prefix ``23`` keeps this pass mutually
+    # exclusive with the door / window / finish / panel / lighting
+    # passes above (Divisions 08 / 09 / 03 / 26 don't overlap with
+    # 23). Plumbing rows (``22 ...``) are also untouched. No-op
+    # when no synthesised HVAC equipment exists on the project
+    # (safety rule, mirrors T3 / T2.5 / T4 / T2.6 / T2.7).
+    all_takeoffs = dedupe_hvac_against_synthesis(all_takeoffs)
     # T5 back-fill: replace ``quantity=0.0`` on every finish-synthesis
     # row with the right SF (floor / ceiling = area; base = perimeter
     # in LF; wall = perimeter × height × share). Joins finish rows to

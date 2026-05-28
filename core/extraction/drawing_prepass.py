@@ -139,6 +139,16 @@ class DrawingPrepassResult:
     # ``core.extraction.lighting_schedule.LightingScheduleResult``
     # or ``None``.
     lighting_schedule: Any = None
+    # T2.8 — typed HVAC equipment-schedule pre-pass. Populated whenever
+    # an HVAC equipment schedule was detected on the page. Runs
+    # INDEPENDENTLY of door / window / finish / room precedence —
+    # mechanical schedules live on M-series / H-series / MH-series
+    # sheets that those upstream detectors never claim, same posture
+    # as panels + lighting. Runs ALONGSIDE the panel + lighting
+    # detectors (different table shapes, different sheets). Concretely
+    # a ``core.extraction.hvac_schedule.HVACScheduleResult`` or
+    # ``None``.
+    hvac_schedule: Any = None
 
 
 # ---------------------------------------------------------------------------
@@ -763,6 +773,51 @@ def _maybe_extract_lighting_schedule(page: "fitz.Page", page_index: int,
     return result if result.fixtures else None
 
 
+def _maybe_extract_hvac_schedule(page: "fitz.Page", page_index: int,
+                                    schedules: list[Schedule]) -> Any:
+    """T2.8 hook: run the HVAC-equipment-schedule extractor when present.
+
+    Imported lazily so the hvac_schedule module stays optional at
+    load time. **Runs independently of door / window / finish /
+    room precedence** — mechanical schedules live on M-series /
+    H-series / MH-series sheets those upstream detectors never
+    claim, same posture as the panel + lighting hooks.  Runs
+    ALONGSIDE the panel + lighting hooks (different table shapes,
+    different sheets → no scheduling conflict).  Returns an
+    ``HVACScheduleResult`` dataclass or ``None``.
+    """
+    text_upper = (page.get_text("text") or "").upper()
+    text_has_phrase = any(
+        kw in text_upper
+        for kw in (
+            "AHU SCHEDULE", "RTU SCHEDULE", "VAV SCHEDULE",
+            "PUMP SCHEDULE", "BOILER SCHEDULE", "CHILLER SCHEDULE",
+            "FAN SCHEDULE", "MECHANICAL EQUIPMENT SCHEDULE",
+            "MECHANICAL SCHEDULE", "HVAC SCHEDULE",
+            "MECHANICAL EQUIPMENT",
+        )
+    )
+    if not text_has_phrase:
+        try:
+            from .hvac_schedule import _looks_like_hvac_header  # type: ignore
+        except Exception:  # pragma: no cover - defensive
+            return None
+        if not any(_looks_like_hvac_header(s.headers) for s in schedules):
+            return None
+    try:
+        from .hvac_schedule import extract_hvac_schedule_from_page
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.debug("hvac_schedule import failed: %s", exc)
+        return None
+    try:
+        result = extract_hvac_schedule_from_page(page, page_index)
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.warning("hvac_schedule extraction failed on page %d: %s",
+                       page_index, exc)
+        return None
+    return result if result.equipment else None
+
+
 def prepass_drawing_page(pdf_path: Path, page_index: int) -> DrawingPrepassResult:
     """Run the deterministic pre-pass on a single page of a drawing PDF."""
     pdf_path = Path(pdf_path)
@@ -793,6 +848,9 @@ def prepass_drawing_page(pdf_path: Path, page_index: int) -> DrawingPrepassResul
         lighting_schedule = _maybe_extract_lighting_schedule(
             page, page_index, schedules,
         )
+        hvac_schedule = _maybe_extract_hvac_schedule(
+            page, page_index, schedules,
+        )
 
     if not text.strip():
         quality_issues.append("page has no embedded text (likely scanned)")
@@ -809,6 +867,7 @@ def prepass_drawing_page(pdf_path: Path, page_index: int) -> DrawingPrepassResul
         room_schedule=room_schedule,
         panel_schedule=panel_schedule,
         lighting_schedule=lighting_schedule,
+        hvac_schedule=hvac_schedule,
     )
     result.confidence = round(_score(result), 4)
     return result
@@ -841,6 +900,9 @@ def prepass_drawing_pdf(pdf_path: Path) -> list[DrawingPrepassResult]:
             lighting_schedule = _maybe_extract_lighting_schedule(
                 page, i, schedules,
             )
+            hvac_schedule = _maybe_extract_hvac_schedule(
+                page, i, schedules,
+            )
             if not text.strip():
                 quality_issues.append("page has no embedded text (likely scanned)")
 
@@ -856,6 +918,7 @@ def prepass_drawing_pdf(pdf_path: Path) -> list[DrawingPrepassResult]:
                 room_schedule=room_schedule,
                 panel_schedule=panel_schedule,
                 lighting_schedule=lighting_schedule,
+                hvac_schedule=hvac_schedule,
             )
             r.confidence = round(_score(r), 4)
             results.append(r)
@@ -910,6 +973,10 @@ def to_schema(result: DrawingPrepassResult):
     if result.lighting_schedule is not None:
         from .lighting_schedule import to_schema as lighting_to_schema
         lighting_schedule = lighting_to_schema(result.lighting_schedule)
+    hvac_schedule = None
+    if result.hvac_schedule is not None:
+        from .hvac_schedule import to_schema as hvac_to_schema
+        hvac_schedule = hvac_to_schema(result.hvac_schedule)
     return S.DrawingPrepassResult(
         title_block=S.TitleBlockData(
             project_name=tb.project_name,
@@ -937,6 +1004,7 @@ def to_schema(result: DrawingPrepassResult):
         room_schedule=room_schedule,
         panel_schedule=panel_schedule,
         lighting_schedule=lighting_schedule,
+        hvac_schedule=hvac_schedule,
     )
 
 

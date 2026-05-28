@@ -49,6 +49,8 @@ from core.schemas import (
     DoorScheduleResult,
     FinishRecord,
     FinishScheduleResult,
+    HVACEquipmentRecord,
+    HVACScheduleResult,
     LightingFixtureRecord,
     LightingScheduleResult,
     PanelRecord,
@@ -64,11 +66,13 @@ __all__ = [
     "SYNTHESIS_SOURCE_TAG_FINISH",
     "SYNTHESIS_SOURCE_TAG_PANEL",
     "SYNTHESIS_SOURCE_TAG_LIGHTING",
+    "SYNTHESIS_SOURCE_TAG_HVAC",
     "synthesize_door_takeoff_items",
     "synthesize_window_takeoff_items",
     "synthesize_finish_takeoff_items",
     "synthesize_panel_takeoff_items",
     "synthesize_lighting_takeoff_items",
+    "synthesize_hvac_takeoff_items",
 ]
 
 
@@ -77,6 +81,7 @@ SYNTHESIS_SOURCE_TAG_WINDOW: Final[str] = "window_schedule_prepass"
 SYNTHESIS_SOURCE_TAG_FINISH: Final[str] = "finish_schedule_prepass"
 SYNTHESIS_SOURCE_TAG_PANEL: Final[str] = "panel_schedule_prepass"
 SYNTHESIS_SOURCE_TAG_LIGHTING: Final[str] = "lighting_schedule_prepass"
+SYNTHESIS_SOURCE_TAG_HVAC: Final[str] = "hvac_schedule_prepass"
 
 
 # ---------------------------------------------------------------------------
@@ -1338,6 +1343,324 @@ def synthesize_lighting_takeoff_items(
                 confidence=fixture.confidence,
                 source_sheet_ids=list(sheets),
                 notes=_lighting_notes_for(fixture, role="lamp"),
+            ))
+
+    return items
+
+
+# ---------------------------------------------------------------------------
+# HVAC helpers (Phase T2.8)
+# ---------------------------------------------------------------------------
+#
+# Mechanical / HVAC equipment schedules fan each ``HVACEquipmentRecord``
+# out into 2-3 families of ``TakeoffItem``:
+#
+# 1. **N EA equipment** — CSI per equipment family (AHU → 23 73 13,
+#    RTU → 23 74 13, VAV → 23 36 00, PUMP → 23 22 23, BOILER → 23 52
+#    00, CHILLER → 23 64 23, FAN → 23 34 00, OTHER → 23 00 00). Quantity
+#    = ``record.quantity`` when the schedule published a QTY column
+#    (confidence ``0.90``); otherwise quantity ``1.0`` (confidence
+#    ``0.55`` → routes to HAND_TAKEOFF queue).
+# 2. **1 LS MEP rough-in** — CSI 23 05 00 (Common Work Results for
+#    HVAC). Parametric default; confidence ``0.45`` (PARAMETRIC tier
+#    on T7 banding, HAND_TAKEOFF on T6 banding) because the actual
+#    rough-in scope depends on a plan walk.
+# 3. **1 EA disconnect + flex** — CSI 26 28 16 (Enclosed Switches and
+#    Circuit Breakers, on the electrical side because the disconnect
+#    + flex live in Division 26 even when serving Division 23
+#    equipment). Confidence ``0.70``. ONLY for motorized equipment
+#    with a voltage feed: AHU / RTU / PUMP / CHILLER / FAN. VAV
+#    (duct-fed, no motor) and BOILER (integrated disconnect on the
+#    equipment itself) skip the disconnect row.
+#
+# Quantity routing mirrors the lighting synthesis (T2.7): QTY-present
+# lands at 0.90 confidence; absent lands at 0.55 → HAND_TAKEOFF so
+# the estimator supplies a real count. The 0.55 vs 0.90 gap is the
+# same width as lighting — equipment counts are explicit on the
+# schedule when published, and absent when not.
+
+
+# CSI families used by HVAC synthesis. Tuples are (division, section,
+# family-label-for-description), mirroring the shape used by the door
+# / window / finish / panel / lighting synthesisers.
+_CSI_HVAC_AHU:     Final[tuple[str, str, str]] = (
+    "23", "23 73 13", "Indoor Air-Handling Unit",
+)
+_CSI_HVAC_RTU:     Final[tuple[str, str, str]] = (
+    "23", "23 74 13", "Packaged Rooftop Unit",
+)
+_CSI_HVAC_VAV:     Final[tuple[str, str, str]] = (
+    "23", "23 36 00", "Variable Air Volume Terminal",
+)
+_CSI_HVAC_PUMP:    Final[tuple[str, str, str]] = (
+    "23", "23 22 23", "Steam / Hot-Water Circulation Pump",
+)
+_CSI_HVAC_BOILER:  Final[tuple[str, str, str]] = (
+    "23", "23 52 00", "Heating Boiler",
+)
+_CSI_HVAC_CHILLER: Final[tuple[str, str, str]] = (
+    "23", "23 64 23", "Scroll Water Chiller",
+)
+_CSI_HVAC_FAN:     Final[tuple[str, str, str]] = (
+    "23", "23 34 00", "HVAC Fan",
+)
+_CSI_HVAC_OTHER:   Final[tuple[str, str, str]] = (
+    "23", "23 00 00", "HVAC Equipment",
+)
+_CSI_HVAC_ROUGHIN: Final[tuple[str, str, str]] = (
+    "23", "23 05 00", "HVAC Rough-In (Common Work Results)",
+)
+_CSI_HVAC_DISCONNECT: Final[tuple[str, str, str]] = (
+    "26", "26 28 16", "Equipment Disconnect + Flex Connection",
+)
+
+# Equipment-type → (CSI division, CSI section, family-label) lookup.
+# OTHER catches anything the type detector falls through on, plus any
+# future equipment family without a dedicated CSI section.
+_HVAC_CSI_BY_TYPE: Final[dict[str, tuple[str, str, str]]] = {
+    "AHU":     _CSI_HVAC_AHU,
+    "RTU":     _CSI_HVAC_RTU,
+    "VAV":     _CSI_HVAC_VAV,
+    "PUMP":    _CSI_HVAC_PUMP,
+    "BOILER":  _CSI_HVAC_BOILER,
+    "CHILLER": _CSI_HVAC_CHILLER,
+    "FAN":     _CSI_HVAC_FAN,
+    "OTHER":   _CSI_HVAC_OTHER,
+}
+
+# Equipment types that get a disconnect + flex row when motorized with
+# voltage. VAV (typically duct-fed, no separate motor disconnect) and
+# BOILER (integrated disconnect on the cabinet) are intentionally
+# excluded — matches the T2.8 brief and BPC's calibration field notes.
+_HVAC_DISCONNECT_TYPES: Final[frozenset[str]] = frozenset({
+    "AHU", "RTU", "PUMP", "CHILLER", "FAN",
+})
+
+# Confidence assigned when the schedule DOES publish a QTY column.
+# Mirrors ``_LIGHTING_QTY_CONFIDENCE`` from the T2.7 synthesis.
+_HVAC_QTY_CONFIDENCE: Final[float] = 0.90
+
+# Confidence assigned when the schedule omits a QTY column and the
+# synthesiser emits the default quantity=1.0. Mirrors
+# ``_LIGHTING_HAND_TAKEOFF_CONFIDENCE`` from T2.7.
+_HVAC_HAND_TAKEOFF_CONFIDENCE: Final[float] = 0.55
+
+# Confidence assigned to the parametric MEP rough-in row. 0.45 lands
+# in the PARAMETRIC tier on T7 banding (< 0.50) and HAND_TAKEOFF on
+# T6 banding (< 0.65) so the row appears in the hand-takeoff queue
+# AND is flagged as parametric on the tier rollups.
+_HVAC_ROUGHIN_CONFIDENCE: Final[float] = 0.45
+
+# Confidence assigned to the disconnect + flex EA row. 0.70 lands in
+# OPERATOR_REVIEW on T6 banding — disconnect is reliably-counted
+# (1 per motorized equipment) but the operator should eyeball the
+# spec (NEMA rating, fusible vs non-fusible) before pricing.
+_HVAC_DISCONNECT_CONFIDENCE: Final[float] = 0.70
+
+
+def _classify_hvac_equipment(
+    equipment: HVACEquipmentRecord,
+) -> tuple[str, str, str]:
+    """Return ``(csi_division, csi_section, family_label)`` for one record.
+
+    Routes via ``equipment.equipment_type`` (set by the extractor's
+    tag-prefix detector); unknown types land on the generic
+    ``23 00 00`` HVAC section.
+    """
+    etype = (equipment.equipment_type or "OTHER").upper()
+    return _HVAC_CSI_BY_TYPE.get(etype, _CSI_HVAC_OTHER)
+
+
+def _hvac_label(equipment: HVACEquipmentRecord) -> str:
+    """Render a ``Equipment <TAG>`` label, fallback to ``Equipment (unmarked)``."""
+    tag = (equipment.equipment_tag or "").strip()
+    if not tag:
+        return "Equipment (unmarked)"
+    return f"Equipment {tag}"
+
+
+def _describe_hvac_equipment(equipment: HVACEquipmentRecord,
+                               family: str) -> str:
+    """Build a human-readable description for the equipment row.
+
+    Examples::
+
+        "Equipment AHU-1 — Indoor Air-Handling Unit 2000 CFM 5 HP 480V/3φ"
+        "Equipment B-1 — Heating Boiler 500 MBH (Aerco Benchmark 5.0LN) GAS"
+        "Equipment VAV-3-1 — Variable Air Volume Terminal 400 CFM"
+    """
+    head = _hvac_label(equipment)
+    parts: list[str] = []
+    desc = (equipment.description or "").strip()
+    if desc:
+        parts.append(desc)
+    else:
+        parts.append(family)
+    mfr_bits: list[str] = []
+    if equipment.manufacturer:
+        mfr_bits.append(equipment.manufacturer.strip())
+    if equipment.model_number:
+        mfr_bits.append(equipment.model_number.strip())
+    if mfr_bits:
+        parts.append(f"({' '.join(mfr_bits)})")
+    if equipment.capacity_value is not None and equipment.capacity_unit:
+        parts.append(f"{equipment.capacity_value:g} {equipment.capacity_unit}")
+    if equipment.motor_hp is not None:
+        parts.append(f"{equipment.motor_hp:g} HP")
+    if equipment.voltage:
+        parts.append(equipment.voltage)
+    if equipment.fuel_type:
+        parts.append(equipment.fuel_type)
+    return f"{head} — {' '.join(parts)}".rstrip()
+
+
+def _describe_hvac_roughin(equipment: HVACEquipmentRecord) -> str:
+    """Build a description for the per-equipment MEP rough-in LS row."""
+    return f"{_hvac_label(equipment)} — MEP rough-in (duct / pipe / power feed)"
+
+
+def _describe_hvac_disconnect(equipment: HVACEquipmentRecord) -> str:
+    """Build a description for the per-equipment disconnect + flex EA row."""
+    extra = ""
+    if equipment.voltage:
+        extra = f" ({equipment.voltage})"
+    return f"{_hvac_label(equipment)} — Disconnect + flexible connection{extra}"
+
+
+def _hvac_notes_for(equipment: HVACEquipmentRecord, *, role: str) -> str:
+    """Stable, source-tagged notes string for HVAC dedupe to grep.
+
+    Format mirrors door + window + finish + panel + lighting:
+    ``key=value`` pairs joined by ``"; "``. The first pair is always
+    ``source=hvac_schedule_prepass`` so a prefix-match is cheap. The
+    ``role`` token disambiguates which family the row belongs to
+    (``equipment`` / ``roughin`` / ``disconnect``).
+    """
+    bits: list[str] = [f"source={SYNTHESIS_SOURCE_TAG_HVAC}"]
+    if equipment.equipment_tag:
+        bits.append(f"mark={equipment.equipment_tag}")
+    bits.append(f"role={role}")
+    if equipment.equipment_type:
+        bits.append(f"equipment_type={equipment.equipment_type}")
+    if equipment.manufacturer:
+        bits.append(f"manufacturer={equipment.manufacturer}")
+    if equipment.model_number:
+        bits.append(f"model={equipment.model_number}")
+    if equipment.capacity_value is not None:
+        bits.append(f"capacity={equipment.capacity_value:g}")
+    if equipment.capacity_unit:
+        bits.append(f"capacity_unit={equipment.capacity_unit}")
+    if equipment.motor_hp is not None:
+        bits.append(f"motor_hp={equipment.motor_hp:g}")
+    if equipment.voltage:
+        bits.append(f"voltage={equipment.voltage}")
+    if equipment.phase_count is not None:
+        bits.append(f"phase_count={equipment.phase_count}")
+    if equipment.refrigerant:
+        bits.append(f"refrigerant={equipment.refrigerant}")
+    if equipment.fuel_type:
+        bits.append(f"fuel_type={equipment.fuel_type}")
+    if equipment.quantity is not None:
+        bits.append(f"qty_from_schedule={equipment.quantity}")
+    return "; ".join(bits)
+
+
+def synthesize_hvac_takeoff_items(
+    equipment: list[HVACEquipmentRecord] | HVACScheduleResult | None,
+    *,
+    sheet_id: str | None = None,
+) -> list[TakeoffItem]:
+    """Convert each ``HVACEquipmentRecord`` into 2-3 ``TakeoffItem`` rows.
+
+    Per-equipment fan-out (the structural shape of T2.8 vs. T2.7):
+
+    * One **equipment** row at the per-family CSI section
+      (``23 73 13`` AHU / ``23 74 13`` RTU / ``23 36 00`` VAV /
+      ``23 22 23`` PUMP / ``23 52 00`` BOILER / ``23 64 23`` CHILLER
+      / ``23 34 00`` FAN / ``23 00 00`` OTHER), unit ``EA``.
+      Quantity = ``record.quantity`` when the schedule published a
+      QTY column (confidence ``0.90``); otherwise quantity ``1.0``
+      (confidence ``0.55`` → HAND_TAKEOFF queue).
+    * One **MEP rough-in** row at ``23 05 00``, unit ``LS``, quantity
+      ``1.0``, confidence ``0.45``. ALWAYS emitted for every record.
+      The parametric scope (duct / pipe / power feed) depends on a
+      plan walk that the synthesiser can't perform.
+    * One **disconnect + flex** row at ``26 28 16``, unit ``EA``,
+      quantity ``1.0``, confidence ``0.70``. ONLY emitted for
+      motorized equipment with a voltage feed (AHU / RTU / PUMP /
+      CHILLER / FAN). VAV (duct-fed) and BOILER (integrated
+      disconnect) skip this row.
+
+    A record with no usable ``equipment_tag`` is skipped entirely
+    (defensive — the extractor already filters these). ``sheet_id``
+    (when provided) is stored on ``source_sheet_ids`` so downstream
+    consumers can trace each row back to its sheet.
+    """
+    if equipment is None:
+        return []
+    if hasattr(equipment, "equipment"):
+        equipment_list: list[HVACEquipmentRecord] = list(equipment.equipment)
+    else:
+        equipment_list = list(equipment)
+    if not equipment_list:
+        return []
+
+    items: list[TakeoffItem] = []
+    for record in equipment_list:
+        if not (record.equipment_tag and record.equipment_tag.strip()):
+            continue
+        sheets: list[str] = []
+        if sheet_id:
+            sheets.append(sheet_id)
+        elif record.source_sheet:
+            sheets.append(record.source_sheet)
+
+        # 1. Equipment row.
+        division, section, family = _classify_hvac_equipment(record)
+        if record.quantity is not None and record.quantity > 0:
+            qty = float(record.quantity)
+            equipment_confidence = _HVAC_QTY_CONFIDENCE
+        else:
+            qty = 1.0
+            equipment_confidence = _HVAC_HAND_TAKEOFF_CONFIDENCE
+        items.append(TakeoffItem(
+            csi_division=division,
+            csi_section=section,
+            description=_describe_hvac_equipment(record, family),
+            quantity=qty,
+            unit="EA",
+            confidence=equipment_confidence,
+            source_sheet_ids=list(sheets),
+            notes=_hvac_notes_for(record, role="equipment"),
+        ))
+
+        # 2. MEP rough-in (parametric, ALWAYS emitted).
+        items.append(TakeoffItem(
+            csi_division=_CSI_HVAC_ROUGHIN[0],
+            csi_section=_CSI_HVAC_ROUGHIN[1],
+            description=_describe_hvac_roughin(record),
+            quantity=1.0,
+            unit="LS",
+            confidence=_HVAC_ROUGHIN_CONFIDENCE,
+            source_sheet_ids=list(sheets),
+            notes=_hvac_notes_for(record, role="roughin"),
+        ))
+
+        # 3. Disconnect + flex — motorized equipment with voltage only.
+        etype = (record.equipment_type or "OTHER").upper()
+        has_motor_or_voltage = (
+            record.motor_hp is not None or bool(record.voltage)
+        )
+        if has_motor_or_voltage and etype in _HVAC_DISCONNECT_TYPES:
+            items.append(TakeoffItem(
+                csi_division=_CSI_HVAC_DISCONNECT[0],
+                csi_section=_CSI_HVAC_DISCONNECT[1],
+                description=_describe_hvac_disconnect(record),
+                quantity=1.0,
+                unit="EA",
+                confidence=_HVAC_DISCONNECT_CONFIDENCE,
+                source_sheet_ids=list(sheets),
+                notes=_hvac_notes_for(record, role="disconnect"),
             ))
 
     return items

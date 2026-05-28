@@ -826,6 +826,67 @@ class LightingScheduleResult(BaseModel):
     raw_table_text: str = ""                   # joined-headers debug string
 
 
+class HVACEquipmentRecord(BaseModel):
+    """One HVAC equipment record pulled off a mechanical schedule (Phase T2.8).
+
+    Mechanical / HVAC equipment schedules live on M-series / H-series /
+    MH-series sheets and are the highest-dollar single Division 23
+    artefact (and the third-highest single MEP artefact after panels and
+    lighting in BPC's calibration cost distribution). Each equipment
+    record fans out into 2-3 ``TakeoffItem`` families: the equipment
+    itself (CSI per type — AHU → ``23 73 13``, RTU → ``23 74 13``, etc.),
+    a parametric MEP rough-in line (CSI ``23 05 00``, LS), and optionally
+    a disconnect + flex line (CSI ``26 28 16``, EA) for motorized
+    equipment with a voltage feed. Phase T2.8 is the SIXTH dispatcher
+    on the door/window/finish/panel/lighting scaffold.
+
+    Equipment type is detected from the tag prefix (``AHU-``, ``RTU-``,
+    ``VAV-``, ``P-`` / ``PUMP``, ``B-`` / ``BLR``, ``CH-`` / ``CHR`` /
+    ``CHL``, ``F-`` / ``FAN`` / ``SF-`` / ``EF-``). The capacity unit
+    is type-dependent (CFM for air-handlers, tons for chillers, MBH or
+    BTUH for boilers, GPM for pumps) and is detected from the column
+    header rather than from the value.
+    """
+
+    equipment_tag: str                         # "AHU-1", "RTU-A", "VAV-3-1", ...
+    equipment_type: str                        # "AHU" | "RTU" | "VAV" | "PUMP" |
+                                                # "BOILER" | "CHILLER" | "FAN" | "OTHER"
+    description: Optional[str] = None
+    manufacturer: Optional[str] = None
+    model_number: Optional[str] = None
+    capacity_value: Optional[float] = None
+    capacity_unit: Optional[str] = None        # "TONS" | "CFM" | "MBH" | "GPM" |
+                                                # "BTUH" | None
+    motor_hp: Optional[float] = None
+    voltage: Optional[str] = None              # "208V/3φ", "208/3", "120V/1φ", ...
+    phase_count: Optional[int] = None          # 1 or 3
+    weight_lbs: Optional[float] = None
+    dimensions: Optional[str] = None
+    refrigerant: Optional[str] = None          # "R-410A", "R-454B", None
+    fuel_type: Optional[str] = None            # "GAS" | "ELECTRIC" | "HW" | None
+    location: Optional[str] = None
+    quantity: Optional[int] = None             # from QTY column when present
+    notes: Optional[str] = None
+    confidence: float = 0.85
+    source_sheet: Optional[str] = None
+    source_page: int = 0
+
+
+class HVACScheduleResult(BaseModel):
+    """Aggregate HVAC equipment schedule pre-pass result for one page (Phase T2.8).
+
+    Attached alongside (not replacing) the generic :class:`Schedule`
+    rows on :class:`DrawingPrepassResult` so the existing prepass
+    surface keeps working while downstream takeoff (Phase T2.8
+    synthesis) consumes the richer typed records.
+    """
+
+    pages: list[int] = Field(default_factory=list)
+    equipment: list[HVACEquipmentRecord] = Field(default_factory=list)
+    confidence: float = 0.0                    # 0..1
+    raw_table_text: str = ""                   # joined-headers debug string
+
+
 class DrawingPrepassResult(BaseModel):
     """Snapshot of everything the deterministic pre-pass could pull off
     a single drawing page without invoking the vision LLM."""
@@ -841,6 +902,7 @@ class DrawingPrepassResult(BaseModel):
     room_schedule: Optional[RoomScheduleResult] = None  # T5 typed room geometry
     panel_schedule: Optional[PanelScheduleResult] = None  # T2.6 typed electrical panels
     lighting_schedule: Optional[LightingScheduleResult] = None  # T2.7 typed lighting fixtures
+    hvac_schedule: Optional[HVACScheduleResult] = None  # T2.8 typed HVAC equipment
 
 
 class SheetExtraction(BaseModel):
