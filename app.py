@@ -57,10 +57,12 @@ from core.pricing.batch_override import (
     parse_vendor_csv,
 )
 from core.pricing.subquote_parser import (
+    SubquoteLLMError,
     SubquoteMetadata,
     SubquoteParseError,
     SubquoteParseResult,
     parse_subquote_pdf,
+    parse_subquote_pdf_with_llm,
 )
 from core.schemas import (
     ClientInfo,
@@ -477,6 +479,99 @@ def _subquote_to_csv_preview(result: SubquoteParseResult) -> str:
             "notes": row.notes or "",
         })
     return buf.getvalue()
+
+
+# ---------------------------------------------------------------------------
+# Phase T8.2 — LLM-vision fallback UI helpers
+# ---------------------------------------------------------------------------
+#
+# Two pure helpers wrap the T8.2 LLM-vision fallback path for the
+# Streamlit Sub-quote PDF expander. The first builds the cost-estimate
+# disclosure shown above the "Try LLM extraction" button — it's the
+# only LLM-spending button in the override flow, so operator awareness
+# matters and the text needs to be reproducible. The second renders a
+# short banner identifying the LLM-extracted result so an operator
+# reviewing the preview-table can tell it came from the vision model
+# rather than the deterministic table parse.
+#
+# Cost figures derive from the actual 2026-Q2 pricing of the two
+# vision providers ``core.llm_client.LLMClient`` supports:
+#
+#   * Anthropic Claude Sonnet vision: input $3/MTok, output $15/MTok.
+#     A 200-DPI US Letter page renders to ~1.7 megapixels which the
+#     Anthropic tokenizer charges as ~5,000 input tokens. Output is
+#     ~500 tokens of JSON. Per-page: ~$0.018 in + $0.008 out = ~$0.03.
+#   * OpenAI GPT-4o vision: input $2.5/MTok, output $10/MTok. A
+#     200-DPI page at "high" detail tokenises to ~1,200 input tokens;
+#     output is ~500 tokens. Per-page: ~$0.003 in + $0.005 out = ~$0.01.
+#
+# The displayed range $0.02-$0.10 / page covers both providers AND
+# bounds the worst-case (a dense numerical schedule that pushes the
+# output-token count high). The 10-page cap means the operator's
+# absolute worst case is ~$1.00 per click.
+
+
+def _render_subquote_llm_cost_estimate(
+    *,
+    max_pages: int = 10,
+    per_page_low_usd: float = 0.02,
+    per_page_high_usd: float = 0.10,
+) -> str:
+    """Render the cost-estimate caption for the "Try LLM extraction" button.
+
+    Returns a one-line string ready to drop into ``st.caption(...)``.
+    Pure — no Streamlit dependency, no LLM call, fully unit-testable.
+
+    The string spells out per-page cost AND the absolute worst-case
+    upper bound (``per_page_high_usd * max_pages``) so the operator
+    sees both numbers before clicking. The button is the only LLM-
+    spending affordance in the override flow, so this disclosure is
+    a hard UX requirement, not a "nice-to-have".
+
+    Args:
+        max_pages: The page cap honoured by
+            :func:`core.pricing.subquote_parser.parse_subquote_pdf_with_llm`
+            (defaults to 10 — same as the parser default).
+        per_page_low_usd: Lower bound of the per-page cost estimate.
+            Defaults to $0.02 (calibrated against GPT-4o input pricing).
+        per_page_high_usd: Upper bound of the per-page cost estimate.
+            Defaults to $0.10 (calibrated against Claude Sonnet output
+            pricing on dense numerical pages).
+    """
+    low_total = per_page_low_usd * max_pages
+    high_total = per_page_high_usd * max_pages
+    return (
+        f"Estimated cost: ~${per_page_low_usd:.2f}\u2013${per_page_high_usd:.2f} "
+        f"per page, capped at {max_pages} pages "
+        f"(worst case ~${low_total:.2f}\u2013${high_total:.2f} per click)."
+    )
+
+
+def _render_subquote_llm_source_banner(
+    metadata: SubquoteMetadata | None = None,
+) -> str:
+    """Render a one-line banner identifying an LLM-extracted result.
+
+    Returns a short Markdown string the UI prepends to the standard
+    metadata block when the active :class:`SubquoteParseResult` came
+    from :func:`parse_subquote_pdf_with_llm` rather than the
+    deterministic table parse. Distinguishing the two in the UI
+    matters because (a) the LLM result has a different confidence
+    profile (page-share vs. metadata-share) and (b) the operator
+    should know the audit trail will tag rows as ``[sub-quote-llm]``
+    rather than ``[sub-quote]``.
+
+    Pure — no Streamlit, no LLM, no I/O. ``metadata`` is accepted but
+    optional; the banner does not currently format any metadata fields
+    into the line, but the parameter is wired so future calibration
+    can surface page count / confidence next to the source label
+    without changing the UI call site.
+    """
+    return (
+        "**LLM-extracted (page-by-page vision).** The deterministic "
+        "table parser failed; rows below were extracted by the vision "
+        "LLM. Audit-trail rows will be tagged `[sub-quote-llm]`."
+    )
 
 
 from core.sheet_classifier import classify_sheet
@@ -2551,6 +2646,21 @@ if "estimate" in st.session_state:
                         st.session_state.pop("subquote_parse_result", None)
                         st.session_state.pop("subquote_plan", None)
                         st.session_state.pop("subquote_resolved", None)
+                        st.session_state.pop("subquote_source", None)
+                        # T8.2 — keep the original PDF bytes so the
+                        # "Try LLM extraction" button rendered below
+                        # can route the same payload through the
+                        # vision-LLM fallback without making the
+                        # operator re-upload.
+                        st.session_state["subquote_failed_pdf_bytes"] = (
+                            pdf_bytes
+                        )
+                        st.session_state["subquote_failed_pdf_name"] = (
+                            uploaded_pdf.name
+                            if uploaded_pdf is not None
+                            else "uploaded.pdf"
+                        )
+                        st.session_state["subquote_failed_error"] = str(exc)
                     else:
                         # Reuse the same T6.3 thresholds the operator
                         # tuned in the CSV expander above — single
@@ -2575,6 +2685,99 @@ if "estimate" in st.session_state:
                         st.session_state["subquote_parse_result"] = sq_result
                         st.session_state["subquote_plan"] = sq_plan
                         st.session_state["subquote_resolved"] = {}
+                        st.session_state["subquote_source"] = "table"
+                        # Successful tabular parse clears any stashed
+                        # failure-state from a prior PDF.
+                        st.session_state.pop(
+                            "subquote_failed_pdf_bytes", None
+                        )
+                        st.session_state.pop(
+                            "subquote_failed_pdf_name", None
+                        )
+                        st.session_state.pop(
+                            "subquote_failed_error", None
+                        )
+
+            # ----------------------------------------------------------
+            # T8.2 — "Try LLM extraction" button (vision-LLM fallback)
+            # ----------------------------------------------------------
+            #
+            # Rendered only when the most recent T8.1 parse attempt
+            # raised SubquoteParseError (the original error message
+            # is already on screen via the st.error above). This is
+            # the only LLM-spending button in the override flow, so
+            # the cost estimate is shown verbatim BEFORE the click.
+            sq_failed_pdf_bytes: bytes | None = st.session_state.get(
+                "subquote_failed_pdf_bytes"
+            )
+            if sq_failed_pdf_bytes:
+                st.caption(_render_subquote_llm_cost_estimate())
+                llm_clicked = st.button(
+                    "Try LLM extraction",
+                    use_container_width=True,
+                    key="subquote_llm_extract_btn",
+                    help=(
+                        "Render each PDF page to a PNG and send it "
+                        "through the vision LLM (T8.2 fallback). Use "
+                        "this when the deterministic table parser "
+                        "above failed on a scanned or free-form quote. "
+                        "Costs are real LLM-provider charges; review "
+                        "the cost estimate above before clicking."
+                    ),
+                )
+                if llm_clicked:
+                    with st.spinner(
+                        "Rendering pages and calling vision LLM..."
+                    ):
+                        try:
+                            sq_result = parse_subquote_pdf_with_llm(
+                                sq_failed_pdf_bytes
+                            )
+                        except SubquoteLLMError as exc:
+                            st.error(
+                                f"LLM extraction failed: {exc}"
+                            )
+                        except Exception as exc:
+                            # Unexpected exception type — surface
+                            # generically so operator can report it.
+                            st.error(
+                                f"Unexpected LLM extraction error "
+                                f"({type(exc).__name__}): {exc}"
+                            )
+                        else:
+                            sq_threshold = float(
+                                st.session_state.get(
+                                    "batch_override_threshold", 0.65
+                                )
+                            )
+                            sq_margin = float(
+                                st.session_state.get(
+                                    "batch_override_margin", 0.10
+                                )
+                            )
+                            sq_plan = match_cost_lines(
+                                sq_result.rows,
+                                list(estimate.line_items),
+                                similarity_threshold=sq_threshold,
+                                ambiguity_margin=sq_margin,
+                            )
+                            st.session_state[
+                                "subquote_parse_result"
+                            ] = sq_result
+                            st.session_state["subquote_plan"] = sq_plan
+                            st.session_state["subquote_resolved"] = {}
+                            st.session_state["subquote_source"] = "llm"
+                            # Successful LLM parse clears the
+                            # failure-state stash.
+                            st.session_state.pop(
+                                "subquote_failed_pdf_bytes", None
+                            )
+                            st.session_state.pop(
+                                "subquote_failed_pdf_name", None
+                            )
+                            st.session_state.pop(
+                                "subquote_failed_error", None
+                            )
 
             sq_result: SubquoteParseResult | None = st.session_state.get(
                 "subquote_parse_result"
@@ -2583,6 +2786,11 @@ if "estimate" in st.session_state:
                 "subquote_plan"
             )
             if sq_result is not None and sq_plan is not None:
+                sq_source = st.session_state.get("subquote_source", "table")
+                if sq_source == "llm":
+                    st.markdown(
+                        _render_subquote_llm_source_banner(sq_result.metadata)
+                    )
                 st.markdown(_render_subquote_metadata(sq_result.metadata))
                 st.caption(
                     f"Extracted **{len(sq_result.rows)}** line item"
@@ -2798,6 +3006,19 @@ if "estimate" in st.session_state:
                                     candidate_lines=result.candidate_lines,
                                 ))
 
+                        # T8.2 wires a second source tag — the
+                        # operator-history audit trail distinguishes
+                        # deterministic table-parse rows ([sub-quote])
+                        # from vision-LLM rows ([sub-quote-llm]) so a
+                        # post-mortem can attribute downstream pricing
+                        # discrepancies to the right ingestion path.
+                        sq_source_tag = (
+                            "[sub-quote-llm]"
+                            if st.session_state.get("subquote_source")
+                            == "llm"
+                            else "[sub-quote]"
+                        )
+
                         now_ts = datetime.utcnow().isoformat(timespec="seconds")
                         for result in sq_applied_results:
                             if result.best_match_index is None:
@@ -2814,7 +3035,7 @@ if "estimate" in st.session_state:
                             ]
                             note = format_batch_operator_note(
                                 result.row,
-                                source_tag="[sub-quote]",
+                                source_tag=sq_source_tag,
                             )
                             override_history.append({
                                 "timestamp": now_ts,
@@ -2836,6 +3057,7 @@ if "estimate" in st.session_state:
                         st.session_state.pop("subquote_parse_result", None)
                         st.session_state.pop("subquote_plan", None)
                         st.session_state.pop("subquote_resolved", None)
+                        st.session_state.pop("subquote_source", None)
 
                         sq_applied_count = sum(
                             1 for line in sq_apply_summary
