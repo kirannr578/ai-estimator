@@ -185,7 +185,7 @@ Six phases. Phases T1–T5 follow the suggested ordering from the brief, with on
 
 **Known limitations of this slice:**
 - Multi-column door schedules (e.g. one office's layout that wraps the schedule into two side-by-side blocks on a single sheet) collapse into one row each; `find_tables()` doesn't reconstruct the second block separately.
-- Scanned PDFs still no-op here (no vector text → `find_tables()` returns nothing → fallback yields no spans). Real fix lives in Phase T7 (OCR).
+- Scanned PDFs still no-op here (no vector text → `find_tables()` returns nothing → fallback yields no spans). Real fix lives in Phase T9 (OCR).
 - Door↔room association (the `room_from` / `room_to` columns called out in Phase T5's deliverables) is not yet extracted; only `mark`, type, dimensions, frame, hardware, rating, remarks are pulled. Adding it is a small follow-up.
 - `DoorRecord` does not yet flow into `TakeoffItem` — that's the explicit T2 work item.
 
@@ -741,6 +741,60 @@ The 53 pre-existing door + window tests (`tests/test_door_dedupe.py` + `tests/te
 
 ---
 
+### Phase T7 — Price confidence + cost-source tier (catalog completeness)
+
+**Status:** SHIPPED — landed across three commits: `98046ef` (schema-only / backward-compat), `1b179f7` (estimator + exporter + PDF + Streamlit wiring), and this commit (~63 new tests on top of the T6 confidence-band coverage). Suite: 1232 → 1313 passed (1 skipped unchanged). Suite was 975 at end of T6 and is now 1313 — every T6 test still passes unmodified, demonstrating the backward-compat property the schema layer was designed to preserve.
+
+**1-line goal:** Add a second confidence axis to every priced `CostLine` — the price-side confidence (how good was the cost lookup?) — multiplied with the existing qty-side confidence to produce a `combined_confidence` that drives band assignment, plus a six-tier `CostSourceTier` enum that surfaces catalog-completeness independently of the AUTO/REVIEW/HAND axis.
+
+**The 6-tier ladder (`CostSourceTier`):**
+
+| Tier | When | Price confidence |
+|---|---|---|
+| `EXACT_MATCH` | CWICR similarity ≥ 0.92, or any seed-DB hit | similarity (0.92–1.0); seed-DB hits get the fixed `COST_TIER_SEED_DB_PRICE_CONFIDENCE = 0.95` |
+| `CATEGORY_MATCH` | CWICR similarity in [0.75, 0.92) | similarity × 0.85 |
+| `INTERPOLATED` | CWICR similarity in [0.50, 0.75) | 0.65 |
+| `PARAMETRIC` | CWICR similarity < 0.50 | 0.45 |
+| `MANUAL_OVERRIDE` | Operator hand-set the unit cost via Streamlit | 1.0 (operator vouches) |
+| `MISSING` | No CWICR hit, no seed-DB hit, OR unit-mismatch suppressed | 0.0 |
+
+Boundaries are inclusive on the upper-tier side (`0.92 → EXACT_MATCH`, `0.75 → CATEGORY_MATCH`, `0.50 → INTERPOLATED`), exactly mirroring the T6 band-threshold convention. Out-of-range similarities are clamped into `[0, 1]` before bucketing so a malformed input can't produce a stray tier.
+
+**Implementation notes (across the three commits):**
+- **Schema layer (`98046ef`).** `core/schemas.py` adds `CostSourceTier` (six-value enum), `price_confidence_from_similarity()` helper (single source of truth for the similarity → tier mapping), the `COST_TIER_*` boundary + per-tier-confidence module constants, two new `CostLine` fields (`price_confidence: float = 1.0`, `cost_source_tier: CostSourceTier = EXACT_MATCH`) plus a derived `CostLine.combined_confidence` property (`qty × price`, both clamped into `[0, 1]`, `confidence is None` defensively treated as 0.7), and two new `Estimate` aggregates (`total_by_tier`, `count_by_tier`). Every new field defaults to a value that collapses to T6 semantics (`price_confidence=1.0` makes `combined == qty`; `cost_source_tier=EXACT_MATCH` is the most-positive tier), so every pre-T7 fixture, persisted JSON, and hand-constructed `CostLine` in the test suite produces identical band aggregates as before T7.
+- **Wiring layer (`1b179f7`).** `core/estimator.py` adds `_combined_band(qty, price, *, suppressed)` — the band picker that `price_takeoff` now calls with `(qty_confidence, price_confidence)` instead of `(qty_confidence,)`. `_build_cwicr_line` bridges the CWICR similarity into a `(tier, price_confidence)` pair via `price_confidence_from_similarity` for every priced CWICR hit; suppressed unit-mismatch lines are stamped `tier=MISSING + price_confidence=0` on both the CWICR and seed-DB paths. The seed-DB exact-section / keyword-match branch lands in `EXACT_MATCH @ 0.95`. The no-match branch lands in `MISSING @ 0`. `core/exporter.py` adds three new Cost Estimate columns (`Price Confidence`, `Cost Source Tier`, `Combined Confidence`) immediately after the legacy `Confidence` column, a `Cost Source Tier Breakdown` block on the Project Summary sheet (one row per tier with count + $ + % of subtotal), and a `_tier_label()` helper that resolves either the enum form or the post-JSON-roundtrip string form to Title Case (`"Exact Match"`, `"Category Match"`, etc.). `core/exporter_pdf.py` adds `_tier_subscript_text(estimate)` — a second subscript line under the headline grand-total tile reading `"of which X% from exact catalog matches, Y% interpolated, Z% parametric defaults"`, suppressed entirely when there are zero INTERPOLATED + zero PARAMETRIC lines (clean output for high-coverage runs) and gracefully suppressed on the all-MISSING / zero-subtotal edge case to avoid a divide-by-zero placeholder. The EXACT bucket absorbs both `EXACT_MATCH` and `MANUAL_OVERRIDE` dollars (both represent "the operator vouches for the line") and rounds to absorb the percentage residual so the three figures always sum to 100. `app.py` adds a "Cost Source Mix" expander with the per-tier breakdown table + a tier filter on the Line Items table.
+- **Tests layer (this commit).** `tests/test_phase_t7_price_confidence.py` (new file, 44 tests) covers the boundary semantics of `price_confidence_from_similarity` at every transition (0.92 / 0.75 / 0.50) and at the `[0, 1]` clamping edges; `CostLine.combined_confidence` invariants including the `qty=None` defensive branch via `_combined_band`; band reassignment via combined confidence (the central T7 contract — high qty + low price now demotes); `total_by_tier` / `count_by_tier` aggregates including the all-MISSING $0 dollar / non-zero count edge case; backward-compat pre-T7 round-trip through `model_dump` / `model_validate`; and `price_takeoff` integration for CWICR-similarity-into-tier, seed-DB-hit, suppressed-unit-mismatch, and full round-trip. `tests/test_estimator_cwicr_integration.py` extension (+7 tests) pins the CWICR similarity → tier mapping at 0.95 / 0.80 / 0.60 + seed-DB + unit-mismatch + the both-axes-populated invariant + the combined-not-qty-alone band assertion. `tests/test_exporter.py` extension (+7 tests) pins the three new column ordering, Title-Case tier strings, the Project Summary breakdown block presence + per-tier count/dollar/percent values, the all-EXACT and all-MISSING edge cases, and the JSON export tier round-trip. `tests/test_exporter_pdf.py` extension (+5 tests) pins `_tier_subscript_text` — surfaces on mixed estimates with the brief's exact phrasing, suppressed on all-EXACT, percentages sum to 100 (±1 rounding), and the all-MISSING / zero-subtotal graceful suppression.
+
+**Boundary edge cases observed during testing:**
+- `0.92 / 0.75 / 0.50` boundaries are all inclusive on the upper-tier side, matching the T6 band convention. No surprises.
+- The all-MISSING case (every line suppressed → `subtotal == 0`) correctly suppresses the PDF tier subscript via the `denom <= 0` guard in `_tier_subscript_text`. The Excel breakdown block still emits with the MISSING row showing `count=N, total=$0, %=0` so downstream parsers don't trip.
+- The pure all-EXACT case correctly suppresses the PDF subscript (clean output) — the `INTERPOLATED + PARAMETRIC == 0` guard fires before the divide.
+- The CWICR similarity 0.55 (the default `CWICR_MIN_SIMILARITY`) lands in `INTERPOLATED @ price_conf=0.65`, which combined with the schema-default qty 0.7 produces 0.455 → `HAND_TAKEOFF`. So a barely-above-threshold CWICR hit on a default-confidence takeoff bands into HAND post-T7 — this is the intended behaviour (the brief calls out the 0.55–0.65 CWICR-similarity gap as a future T6.1 sub-queue candidate).
+
+**Backward-compat guarantee preserved.** The full T6 test file (`tests/test_phase_t6_confidence_bands.py`, 44 tests) passes unmodified post-T7 because every new field defaults so the existing band math is unchanged when the price-side axis isn't explicitly set. Pre-T7 persisted JSON validates cleanly into a T7 `CostLine` because both new fields have sensible defaults. The `grand_total` / `subtotal` / `priced_line_items` / `headline_line_items` semantics are all unchanged.
+
+**Tests:**
+- 44 new tests in `tests/test_phase_t7_price_confidence.py` (new file).
+- 7 new tests appended to `tests/test_estimator_cwicr_integration.py`.
+- 7 new tests appended to `tests/test_exporter.py`.
+- 5 new tests appended to `tests/test_exporter_pdf.py`.
+- All 1232 pre-existing tests remain green; full suite is now `1313 passed, 1 skipped`.
+
+**Scope:** Cross-cutting. Doesn't improve extraction accuracy directly; it surfaces "how much of this estimate came from a real catalog match vs. a parametric default" so the estimator can prioritise where to invest cost-database curation time. Pairs naturally with the T6 HAND queue which already tells us which CSI divisions need cost-DB work.
+
+**Effort estimate:** L (5–7 days). Came in inside that envelope across three sequential commits — the schema-only commit took the most thought (preserving backward compat), the wiring commit was the most code (estimator + 3 export surfaces + Streamlit), and the tests commit was the biggest reach for boundary coverage (~63 tests).
+
+**Known gaps / deferred (intentional cut for this slice):**
+- **No persisted operator override of `cost_source_tier`.** The `MANUAL_OVERRIDE` enum value exists in the schema but isn't yet emitted by `app.py` when the operator hand-edits a unit cost via the Streamlit "Recalculate totals" affordance. Wiring that round-trip + persisting the override across reruns is a small Phase T6.1 follow-up.
+- **CWICR-similarity threshold misalignment.** `CWICR_MIN_SIMILARITY` defaults to 0.55, which sits in the `INTERPOLATED` (0.50–0.75) tier. Any CWICR hit at the threshold lands in `HAND_TAKEOFF` once combined with a default-0.7 qty confidence. Two clean follow-ups: raise the threshold to 0.65 (aligns with the T6 band boundary), or route 0.55–0.65 CWICR matches into a `category_review` micro-queue under HAND. Same gap the T6 SHIPPED block called out — now the data is there to actually measure which option is right.
+
+**Recommended next slice:**
+- **Phase T6.1 — Confidence-propagation cleanup** (per Worker W's prior report). The CWICR-similarity-to-band-threshold misalignment above is the highest-leverage T6/T7 follow-up. Would also wire `MANUAL_OVERRIDE` end-to-end so the Streamlit "Recalculate totals" round-trip preserves operator-vouched price confidence.
+- **Phase T8 — Sub-quote integration.** Pull bid-package alternates / unit prices into `CostLine`s as `cost_source_tier=MANUAL_OVERRIDE` rows so the proposal builder reflects sub-quoted dollars at full price-confidence. Builds on the `MANUAL_OVERRIDE` enum value shipped here.
+- **Phase T9 — Alternates / unit-prices first-class.** Currently `BidPackage.alternates` and `BidPackage.unit_prices` only surface in the Excel + PDF exports as supplementary tables. Promoting them into `Estimate.alternates` + `Estimate.unit_prices` with their own confidence axis would close the loop on the bid-package side.
+
+---
+
 ### Pricing data pipeline (Tier 1 shipped)
 
 Separate from the takeoff phases above, the **pricing-data layer** is what produces the unit costs each `TakeoffItem` gets multiplied by. BPC has no internal cost / sub / supplier data, so the pipeline is built around free external public sources.
@@ -783,7 +837,7 @@ Plus:
 
 ---
 
-### Phase T7 — (Backlog) OCR for scanned-drawing recovery
+### Phase T9 — (Backlog) OCR for scanned-drawing recovery
 
 **1-line goal:** Restore deterministic extraction on PDFs where the vector text layer has been flattened, by adding a `paddleocr` or `tesseract` OCR pass to `drawing_prepass`.
 
@@ -796,7 +850,7 @@ Plus:
 
 **Effort estimate:** L (1–2 weeks), driven by deployment / packaging — paddleocr pulls a large model bundle and adds 200+ MB to the install.
 
-**Note:** Phase T7 is explicitly behind T1–T6 because the existing real bid sets we get from Texas state procurement portals are vector PDFs, not scans, and the marginal value of OCR on a small minority of inputs doesn't justify the install-weight cost until the rest of the deterministic stack is solid.
+**Note:** OCR is explicitly behind T1–T7 (now all shipped) because the existing real bid sets we get from Texas state procurement portals are vector PDFs, not scans, and the marginal value of OCR on a small minority of inputs doesn't justify the install-weight cost until the rest of the deterministic stack is solid. Renumbered from "Phase T7" → "Phase T9" because the original numbering predated the T7 (price-confidence + cost-source tier) slice that has since shipped; T8 is reserved for the sub-quote integration follow-up called out in the T7 SHIPPED block.
 
 ---
 
@@ -832,7 +886,7 @@ The decision rule: **buy** only if a vendor moves a specific accuracy band by �
 
 ### Partner (open-source ecosystem)
 
-- **PaddleOCR** (Apache-2.0). Best-in-class for English + rotated text. Path-forward for T7.
+- **PaddleOCR** (Apache-2.0). Best-in-class for English + rotated text. Path-forward for T9.
 - **layoutlmv3 / docling** (MIT / Apache). Document layout analysis. Useful for schedule-table detection on PDFs where PyMuPDF `find_tables()` misses (T1 fallback).
 - **opencv-python** (Apache-2.0). Symbol detection on rendered plan pages — template-matching for fixture / receptacle / sprinkler-head symbols. Plausible path forward for the symbol-detection gap noted in Section 1.3, but out of scope until T6 ships.
 - **GroundingDINO + SAM** (Apache-2.0). Vision-language object detection — could segment doors / fixtures from a rendered plan PNG with no fine-tuning. Compute-heavy (GPU desirable); revisit once T1–T5 establish the deterministic baseline they would augment.
@@ -876,7 +930,7 @@ These are the questions whose answers materially shift the roadmap. Five-to-eigh
    - scanned PDFs ("scan of a scan", no text layer),
    - native CAD (`.dwg`, `.dxf`),
    - native BIM (`.ifc`, `.rvt`)?
-   This sets the priority of Phase T7 (OCR), and whether an `ezdxf` ingest is worth adding earlier than backlog.
+   This sets the priority of Phase T9 (OCR), and whether an `ezdxf` ingest is worth adding earlier than backlog.
 
 2. **Drawing-set quality.** When you do receive CAD-quality PDFs, how often are they "rasterized vector" (line art is vector but flattened to independent segments) vs "true vector" (clean polylines, layers)? This is the central risk on Phase T4 — `get_drawings()` only helps on the latter.
 

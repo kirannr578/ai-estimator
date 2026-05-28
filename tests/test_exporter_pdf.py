@@ -292,3 +292,151 @@ def test_build_quote_pdf_renders_with_mixed_bands(tmp_path: Path) -> None:
     )
     assert out.is_file()
     assert out.read_bytes().startswith(b"%PDF-")
+
+
+# ---------------------------------------------------------------------------
+# Phase T7 — tier-subscript suppression + percentage rounding invariants
+# ---------------------------------------------------------------------------
+
+
+from core.exporter_pdf import _tier_subscript_text  # noqa: E402
+from core.schemas import CostSourceTier  # noqa: E402
+
+
+def _t7_line(
+    *,
+    description: str,
+    confidence: float,
+    price_confidence: float,
+    tier: CostSourceTier,
+    total: float,
+    suppressed: bool = False,
+) -> CostLine:
+    return CostLine(
+        csi_division="09",
+        csi_section="09 91 23",
+        description=description,
+        quantity=100.0,
+        unit="SF",
+        unit_cost=round(total / 100.0, 4) if total > 0 else 0.0,
+        total_cost=total,
+        cost_category=CostCategory.SUBCONTRACTOR,
+        confidence=confidence,
+        price_confidence=price_confidence,
+        cost_source_tier=tier,
+        suppressed=suppressed,
+        cost_band=band_for_confidence(
+            round(confidence * price_confidence, 4),
+            suppressed=suppressed,
+        ),
+    )
+
+
+def _t7_all_exact_estimate() -> Estimate:
+    return Estimate(
+        project_name="all-exact",
+        line_items=[
+            _t7_line(
+                description="A",
+                confidence=0.95, price_confidence=0.95,
+                tier=CostSourceTier.EXACT_MATCH, total=10_000.0,
+            ),
+            _t7_line(
+                description="B",
+                confidence=0.92, price_confidence=0.95,
+                tier=CostSourceTier.EXACT_MATCH, total=5_000.0,
+            ),
+        ],
+    )
+
+
+def _t7_mixed_tier_estimate() -> Estimate:
+    """One line per tier — exercises the full subscript phrasing."""
+    return Estimate(
+        project_name="mixed-tier",
+        line_items=[
+            _t7_line(
+                description="exact",
+                confidence=0.95, price_confidence=0.95,
+                tier=CostSourceTier.EXACT_MATCH, total=600.0,
+            ),
+            _t7_line(
+                description="interpolated",
+                confidence=0.95, price_confidence=0.65,
+                tier=CostSourceTier.INTERPOLATED, total=300.0,
+            ),
+            _t7_line(
+                description="parametric",
+                confidence=0.95, price_confidence=0.45,
+                tier=CostSourceTier.PARAMETRIC, total=100.0,
+            ),
+        ],
+    )
+
+
+def _t7_all_missing_estimate() -> Estimate:
+    return Estimate(
+        project_name="all-missing",
+        line_items=[
+            _t7_line(
+                description="m1",
+                confidence=0.95, price_confidence=0.0,
+                tier=CostSourceTier.MISSING, total=0.0, suppressed=True,
+            ),
+            _t7_line(
+                description="m2",
+                confidence=0.95, price_confidence=0.0,
+                tier=CostSourceTier.MISSING, total=0.0, suppressed=True,
+            ),
+        ],
+    )
+
+
+def test_t7_subscript_appears_when_at_least_one_interpolated_line() -> None:
+    """Mixed-tier estimate (≥ 1 INTERPOLATED line) → subscript must
+    surface and carry the brief's three-bucket phrasing."""
+    text = _tier_subscript_text(_t7_mixed_tier_estimate())
+    assert text is not None
+    assert "from exact catalog matches" in text
+    assert "interpolated" in text
+    assert "parametric defaults" in text
+
+
+def test_t7_subscript_format_matches_brief_phrasing() -> None:
+    """Phrase shape: 'of which X% from exact catalog matches, Y% interpolated,
+    Z% parametric defaults' — fixed by the Phase T7 brief."""
+    text = _tier_subscript_text(_t7_mixed_tier_estimate())
+    assert text is not None
+    assert text.startswith("of which ")
+    assert "% from exact catalog matches" in text
+    assert "% interpolated" in text
+    assert "% parametric defaults" in text
+
+
+def test_t7_subscript_hidden_when_all_lines_are_exact() -> None:
+    """Clean output for a fully-exact run — no INTERPOLATED, no
+    PARAMETRIC → suppress the subscript entirely."""
+    assert _tier_subscript_text(_t7_all_exact_estimate()) is None
+
+
+def test_t7_subscript_percentages_sum_to_100_within_rounding() -> None:
+    """The three figures must sum to 100 (± rounding tolerance) per the
+    Phase T7 brief — exact/interpolated/parametric are the full picture
+    of the headline subtotal."""
+    import re
+    text = _tier_subscript_text(_t7_mixed_tier_estimate())
+    assert text is not None
+    pcts = [int(m) for m in re.findall(r"(\d+)%", text)]
+    assert len(pcts) == 3, f"expected 3 percentages, found {pcts}"
+    assert abs(sum(pcts) - 100) <= 1, (
+        f"percentages must sum to 100 (±1); got {pcts} → {sum(pcts)}"
+    )
+
+
+def test_t7_subscript_suppressed_when_all_lines_missing_zero_subtotal() -> None:
+    """Edge case: every line is MISSING / suppressed → subtotal = 0 →
+    denominator is 0 → suppress the subscript gracefully (no
+    divide-by-zero placeholder, no NaN%)."""
+    est = _t7_all_missing_estimate()
+    assert est.subtotal == 0.0
+    assert _tier_subscript_text(est) is None

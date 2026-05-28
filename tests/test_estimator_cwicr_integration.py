@@ -311,3 +311,221 @@ def test_cwicr_disabled_env_var_overrides_default(
 
     matcher.match.assert_not_called()
     assert est.line_items[0].cost_source == "09 91 23"
+
+
+# ---------------------------------------------------------------------------
+# Phase T7 — price-confidence + cost-source-tier integration
+# ---------------------------------------------------------------------------
+#
+# These tests verify that ``price_takeoff`` populates BOTH the T6
+# ``cost_band`` axis AND the new T7 ``cost_source_tier`` /
+# ``price_confidence`` axes on every emitted line, and that the band
+# assignment now uses ``combined_confidence = qty × price`` instead of
+# qty alone.
+
+
+def test_t7_cwicr_similarity_095_lands_in_exact_match_tier(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """CWICR similarity ≥ 0.92 → EXACT_MATCH; price_confidence == similarity."""
+    from core.schemas import CostBand, CostSourceTier
+    monkeypatch.delenv("CWICR_DISABLED", raising=False)
+    cand = CwicrCandidate(
+        code="X", description="Concrete slab", unit="SF",
+        unit_price=8.0, labor_cost=2.0, material_cost=5.0, equipment_cost=1.0,
+        region="usa_usd", year=2025, similarity=0.95, source_row_id=11,
+    )
+    matcher = _stub_matcher_with(cand)
+    takeoffs = [
+        TakeoffItem(
+            csi_division="03", csi_section="03 30 00",
+            description="Slab on grade", quantity=100.0, unit="SF",
+        ),
+    ]
+    est = price_takeoff(
+        _make_project(takeoffs),
+        project_name="t",
+        cost_db=_seed_db(tmp_path),
+        cwicr_matcher=matcher,
+    )
+    line = est.line_items[0]
+    assert line.cost_source_tier == CostSourceTier.EXACT_MATCH
+    assert line.price_confidence == pytest.approx(0.95)
+    # combined = 0.95 × 0.95 = 0.9025 → AUTO_APPROVE
+    assert line.cost_band == CostBand.AUTO_APPROVE
+
+
+def test_t7_cwicr_similarity_080_lands_in_category_match_tier(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """CWICR similarity in [0.75, 0.92) → CATEGORY_MATCH;
+    price_confidence = similarity × 0.85."""
+    from core.schemas import CostSourceTier
+    monkeypatch.delenv("CWICR_DISABLED", raising=False)
+    cand = CwicrCandidate(
+        code="Y", description="Concrete", unit="SF",
+        unit_price=8.0, labor_cost=2.0, material_cost=5.0, equipment_cost=1.0,
+        region="usa_usd", year=2025, similarity=0.80, source_row_id=12,
+    )
+    matcher = _stub_matcher_with(cand)
+    takeoffs = [
+        TakeoffItem(
+            csi_division="03", csi_section="03 30 00",
+            description="Slab on grade", quantity=100.0, unit="SF",
+        ),
+    ]
+    est = price_takeoff(
+        _make_project(takeoffs),
+        project_name="t",
+        cost_db=_seed_db(tmp_path),
+        cwicr_matcher=matcher,
+    )
+    line = est.line_items[0]
+    assert line.cost_source_tier == CostSourceTier.CATEGORY_MATCH
+    assert line.price_confidence == pytest.approx(round(0.80 * 0.85, 4))
+    assert line.price_confidence == pytest.approx(0.68)
+
+
+def test_t7_cwicr_similarity_060_lands_in_interpolated_tier(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """CWICR similarity in [0.50, 0.75) → INTERPOLATED;
+    price_confidence = 0.65 (the per-tier constant)."""
+    from core.schemas import CostSourceTier
+    monkeypatch.delenv("CWICR_DISABLED", raising=False)
+    monkeypatch.setenv("CWICR_MIN_SIMILARITY", "0.55")
+    cand = CwicrCandidate(
+        code="Z", description="Concrete (loose match)", unit="SF",
+        unit_price=8.0, labor_cost=2.0, material_cost=5.0, equipment_cost=1.0,
+        region="usa_usd", year=2025, similarity=0.60, source_row_id=13,
+    )
+    matcher = _stub_matcher_with(cand)
+    takeoffs = [
+        TakeoffItem(
+            csi_division="03", csi_section="03 30 00",
+            description="Slab on grade", quantity=100.0, unit="SF",
+        ),
+    ]
+    est = price_takeoff(
+        _make_project(takeoffs),
+        project_name="t",
+        cost_db=_seed_db(tmp_path),
+        cwicr_matcher=matcher,
+    )
+    line = est.line_items[0]
+    assert line.cost_source_tier == CostSourceTier.INTERPOLATED
+    assert line.price_confidence == pytest.approx(0.65)
+
+
+def test_t7_seed_db_hit_lands_in_exact_match_with_seed_constant(
+    tmp_path: Path,
+) -> None:
+    """Seed-DB-only hit → tier=EXACT_MATCH @ price_confidence=0.95
+    (the ``COST_TIER_SEED_DB_PRICE_CONFIDENCE`` discount)."""
+    from core.schemas import COST_TIER_SEED_DB_PRICE_CONFIDENCE, CostSourceTier
+    db = _seed_db(tmp_path)
+    takeoffs = [
+        TakeoffItem(
+            csi_division="03", csi_section="03 30 00",
+            description="Slab on grade", quantity=100.0, unit="SF",
+            confidence=0.92,
+        ),
+    ]
+    est = price_takeoff(
+        _make_project(takeoffs),
+        project_name="t",
+        cost_db=db,
+        use_cwicr=False,
+    )
+    line = est.line_items[0]
+    assert line.cost_source_tier == CostSourceTier.EXACT_MATCH
+    assert line.price_confidence == pytest.approx(COST_TIER_SEED_DB_PRICE_CONFIDENCE)
+    assert line.price_confidence == pytest.approx(0.95)
+
+
+def test_t7_unit_mismatch_suppressed_lands_in_missing_tier(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Suppressed unit-mismatch line → tier=MISSING + price_conf=0,
+    even when the upstream CWICR / seed candidate had a usable
+    similarity. Mirrors the T6 HAND_TAKEOFF suppression rule on the
+    T7 axis."""
+    from core.schemas import CostSourceTier
+    monkeypatch.delenv("CWICR_DISABLED", raising=False)
+    cand = CwicrCandidate(
+        code="MISMATCH", description="Concrete footings",
+        unit="m3",  # metric — does not match CY
+        unit_price=220.0, labor_cost=60.0, material_cost=140.0,
+        equipment_cost=20.0, region="usa_usd", year=2025,
+        similarity=0.95, source_row_id=99,
+    )
+    matcher = _stub_matcher_with(cand)
+    takeoffs = [
+        TakeoffItem(
+            csi_division="03", csi_section="03 30 53",
+            description="Concrete footings", quantity=12.0, unit="CY",
+        ),
+    ]
+    est = price_takeoff(
+        _make_project(takeoffs),
+        project_name="t",
+        cost_db=_seed_db(tmp_path),
+        cwicr_matcher=matcher,
+    )
+    line = est.line_items[0]
+    assert line.suppressed is True
+    assert line.cost_source_tier == CostSourceTier.MISSING
+    assert line.price_confidence == 0.0
+
+
+def test_t7_price_takeoff_populates_both_cost_band_and_tier_on_every_line(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Every emitted line carries BOTH ``cost_band`` (T6) AND
+    ``cost_source_tier`` + ``price_confidence`` (T7). Sanity guard
+    against future regressions where one axis silently stops being
+    populated."""
+    from core.schemas import CostBand, CostSourceTier
+    monkeypatch.delenv("CWICR_DISABLED", raising=False)
+    cand = CwicrCandidate(
+        code="X", description="Concrete", unit="SF",
+        unit_price=8.0, labor_cost=2.0, material_cost=5.0, equipment_cost=1.0,
+        region="usa_usd", year=2025, similarity=0.95, source_row_id=1,
+    )
+    matcher = _stub_matcher_with(cand)
+    takeoffs = [
+        TakeoffItem(
+            csi_division="03", csi_section="03 30 00",
+            description="Slab on grade", quantity=100.0, unit="SF",
+        ),
+        # No-match → MISSING.
+        TakeoffItem(
+            csi_division="42", csi_section="42 12 34",
+            description="something exotic", quantity=1.0, unit="LS",
+        ),
+    ]
+    seq = [[cand], []]
+    matcher.match.side_effect = lambda *a, **kw: seq.pop(0) if seq else []
+
+    est = price_takeoff(
+        _make_project(takeoffs),
+        project_name="t",
+        cost_db=_seed_db(tmp_path),
+        cwicr_matcher=matcher,
+    )
+    for line in est.line_items:
+        assert isinstance(line.cost_band, CostBand)
+        assert isinstance(line.cost_source_tier, CostSourceTier)
+        assert 0.0 <= line.price_confidence <= 1.0
+
+
+def test_t7_band_uses_combined_confidence_not_qty_alone() -> None:
+    """High qty (0.95) × low price_conf (0.5) → combined=0.475 → HAND.
+    Demonstrates that the band-assignment input is the COMBINED value,
+    not qty alone (would have been AUTO under T6 with qty=0.95)."""
+    from core.estimator import _combined_band
+    from core.schemas import CostBand
+    band = _combined_band(0.95, 0.5, suppressed=False)
+    assert band == CostBand.HAND_TAKEOFF
+    # Sanity: under T6 (price=1.0), 0.95 was AUTO_APPROVE.
+    assert _combined_band(0.95, 1.0, suppressed=False) == CostBand.AUTO_APPROVE
