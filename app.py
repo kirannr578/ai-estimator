@@ -56,6 +56,12 @@ from core.pricing.batch_override import (
     match_cost_lines,
     parse_vendor_csv,
 )
+from core.pricing.subquote_parser import (
+    SubquoteMetadata,
+    SubquoteParseError,
+    SubquoteParseResult,
+    parse_subquote_pdf,
+)
 from core.schemas import (
     ClientInfo,
     CompanyInfo,
@@ -389,6 +395,86 @@ def _format_batch_csv_for_history(
             "original_unit_cost": "",
             "new_unit_cost": round(float(result.row.unit_cost), 2),
             "operator_note": note,
+        })
+    return buf.getvalue()
+
+
+# ---------------------------------------------------------------------------
+# Phase T8.1 — Sub-quote PDF ingestion helpers
+# ---------------------------------------------------------------------------
+#
+# Two pure helpers wrap the ``core.pricing.subquote_parser`` module for
+# the Streamlit Sub-quote PDF expander. The first renders the parsed
+# metadata banner; the second produces a CSV-string preview of the
+# extracted rows so the operator can save → re-import as CSV via the
+# T6.3 uploader if they want to. Pure / Streamlit-free / unit-testable.
+
+
+def _render_subquote_metadata(metadata: SubquoteMetadata) -> str:
+    """Render a sub-quote metadata block as Markdown.
+
+    Returns a Markdown string ready to drop into ``st.markdown(...)``.
+    Pure — no Streamlit dependency, fully unit-testable.
+
+    The block always starts with a "**Sub-quote metadata**" heading so
+    the UI can render the same block in two places (preview pane,
+    history download) without duplicating the layout. Empty / unknown
+    fields are omitted entirely rather than rendered as "Unknown" — a
+    too-noisy fallback would obscure the fields that ARE present.
+    """
+    lines: list[str] = ["**Sub-quote metadata**"]
+    if metadata.vendor_name:
+        lines.append(f"- Vendor: `{metadata.vendor_name}`")
+    if metadata.quote_number:
+        lines.append(f"- Quote #: `{metadata.quote_number}`")
+    if metadata.quote_date:
+        lines.append(f"- Date: `{metadata.quote_date}`")
+    if metadata.project_reference:
+        lines.append(f"- Project: `{metadata.project_reference}`")
+    if metadata.total_quoted is not None:
+        lines.append(f"- Quote total: `${metadata.total_quoted:,.2f}`")
+    if metadata.detected_pages:
+        page_list = ", ".join(str(p) for p in metadata.detected_pages)
+        lines.append(f"- Table pages: `{page_list}`")
+    lines.append(
+        f"- Metadata confidence: `{metadata.confidence:.0%}`"
+    )
+    return "\n".join(lines)
+
+
+def _subquote_to_csv_preview(result: SubquoteParseResult) -> str:
+    """Render the parsed sub-quote rows as a CSV string.
+
+    Column order is the canonical T6.3 vendor-CSV layout
+    (``description, unit_cost, quantity, vendor, quote_ref, notes``)
+    so an operator who wants to save the PDF parse to disk can
+    re-import via the existing T6.3 CSV uploader without column
+    fiddling. Round-tripping the CSV string through
+    :func:`core.pricing.batch_override.parse_vendor_csv` reproduces
+    the same :class:`BatchOverrideRow` list this helper started with
+    (pinned by ``test_subquote_csv_roundtrip_through_csv_parser``).
+
+    Empty :class:`SubquoteParseResult` returns the header-only CSV.
+    """
+    buf = io.StringIO()
+    fieldnames = [
+        "description",
+        "unit_cost",
+        "quantity",
+        "vendor",
+        "quote_ref",
+        "notes",
+    ]
+    writer = csv.DictWriter(buf, fieldnames=fieldnames)
+    writer.writeheader()
+    for row in result.rows:
+        writer.writerow({
+            "description": row.description,
+            "unit_cost": f"{row.unit_cost:.4f}",
+            "quantity": "" if row.quantity is None else f"{row.quantity:g}",
+            "vendor": row.vendor or "",
+            "quote_ref": row.quote_ref or "",
+            "notes": row.notes or "",
         })
     return buf.getvalue()
 
@@ -2374,6 +2460,399 @@ if "estimate" in st.session_state:
                         )
                         with st.expander("Apply summary (full log)", expanded=False):
                             for line in apply_summary:
+                                st.text(line)
+                        st.rerun()
+
+        # ------------------------------------------------------------------
+        # Phase T8.1 — Sub-quote PDF ingestion (tabular)
+        # ------------------------------------------------------------------
+        #
+        # Wires ``core.pricing.subquote_parser.parse_subquote_pdf`` into
+        # the Streamlit Estimate tab as the PDF-quote analogue of the T6.3
+        # vendor-CSV uploader. The parser converts tabular sub-quote PDFs
+        # into the same ``list[BatchOverrideRow]`` shape T6.3 produces from
+        # CSV, so the downstream
+        # ``match_cost_lines`` + ``apply_batch_plan`` pipeline runs
+        # unchanged from this point on — the only sub-quote-specific
+        # delta is the ``source_tag="[sub-quote]"`` flag passed to
+        # ``format_batch_operator_note`` when populating the
+        # ``override_history`` audit trail.
+        #
+        # T8.2 (LLM-vision fallback for scanned / free-form quotes) is
+        # explicitly deferred. The parser raises ``SubquoteParseError``
+        # on non-tabular input; the UI surfaces the message verbatim
+        # and points the operator at the T6.3 CSV uploader above.
+        #
+        # New (transient) session-state keys:
+        #   - ``subquote_parse_result`` — most recent
+        #     :class:`SubquoteParseResult` (rows + metadata + warnings).
+        #   - ``subquote_plan`` — most recent
+        #     :class:`BatchOverridePlan` (same dataclass as T6.3) for
+        #     preview rendering.
+        #   - ``subquote_resolved`` — dict mapping CSV row index to
+        #     operator-chosen CostLine index for AMBIGUOUS rows
+        #     (mirrors the T6.3 ``batch_override_resolved`` key).
+        with st.expander(
+            "Sub-quote PDF ingestion (Phase T8.1)",
+            expanded=False,
+        ):
+            st.caption(
+                "Upload a TABULAR vendor sub-quote PDF (mechanical / "
+                "electrical / plumbing / glass / drywall). The parser "
+                "extracts line items from the embedded table(s) into the "
+                "same shape T6.3 ingests from CSV, then the matcher "
+                "fuzzy-aligns each row to a CostLine. Scanned / free-form "
+                "PDFs are NOT supported yet (T8.2) — convert those to CSV "
+                "and use the uploader above. Preview-before-apply is "
+                "mandatory: MATCHED rows auto-apply; AMBIGUOUS rows wait "
+                "for operator resolution; LOW_SIMILARITY and NO_MATCH "
+                "rows are flagged for manual review and never auto-applied."
+            )
+
+            uploaded_pdf = st.file_uploader(
+                "Vendor sub-quote PDF",
+                type=["pdf"],
+                key="subquote_pdf_uploader",
+                help=(
+                    "Tabular sub-quote PDFs only (T8.1). The parser "
+                    "looks for at least 'description' + one of "
+                    "'unit_cost' / 'unit_price' / 'extended' columns. "
+                    "Scanned or free-form quotes raise an error; convert "
+                    "to CSV (see Vendor CSV uploader above) or wait for "
+                    "T8.2 LLM-vision fallback."
+                ),
+            )
+
+            parse_clicked = st.button(
+                "Parse PDF + preview match plan",
+                use_container_width=True,
+                disabled=uploaded_pdf is None,
+                key="subquote_parse_btn",
+                help=(
+                    "Extract line items from the PDF, then run the same "
+                    "T6.3 matcher against the current estimate's "
+                    "CostLines. Does NOT apply any overrides — preview "
+                    "only. Required before Apply activates."
+                ),
+            )
+
+            if parse_clicked and uploaded_pdf is not None:
+                try:
+                    pdf_bytes = uploaded_pdf.getvalue()
+                except Exception as exc:
+                    st.error(f"Could not read uploaded PDF: {exc}")
+                    pdf_bytes = b""
+
+                if pdf_bytes:
+                    try:
+                        sq_result = parse_subquote_pdf(pdf_bytes)
+                    except SubquoteParseError as exc:
+                        st.error(str(exc))
+                        st.session_state.pop("subquote_parse_result", None)
+                        st.session_state.pop("subquote_plan", None)
+                        st.session_state.pop("subquote_resolved", None)
+                    else:
+                        # Reuse the same T6.3 thresholds the operator
+                        # tuned in the CSV expander above — single
+                        # source of truth for "good-enough match" across
+                        # both ingestion paths.
+                        sq_threshold = float(
+                            st.session_state.get(
+                                "batch_override_threshold", 0.65
+                            )
+                        )
+                        sq_margin = float(
+                            st.session_state.get(
+                                "batch_override_margin", 0.10
+                            )
+                        )
+                        sq_plan = match_cost_lines(
+                            sq_result.rows,
+                            list(estimate.line_items),
+                            similarity_threshold=sq_threshold,
+                            ambiguity_margin=sq_margin,
+                        )
+                        st.session_state["subquote_parse_result"] = sq_result
+                        st.session_state["subquote_plan"] = sq_plan
+                        st.session_state["subquote_resolved"] = {}
+
+            sq_result: SubquoteParseResult | None = st.session_state.get(
+                "subquote_parse_result"
+            )
+            sq_plan: BatchOverridePlan | None = st.session_state.get(
+                "subquote_plan"
+            )
+            if sq_result is not None and sq_plan is not None:
+                st.markdown(_render_subquote_metadata(sq_result.metadata))
+                st.caption(
+                    f"Extracted **{len(sq_result.rows)}** line item"
+                    f"{'s' if len(sq_result.rows) != 1 else ''} from the PDF."
+                )
+                if sq_result.warnings:
+                    with st.expander(
+                        f"Parser warnings ({len(sq_result.warnings)})",
+                        expanded=False,
+                    ):
+                        for w in sq_result.warnings:
+                            st.text(w)
+
+                sq_summary = _summarize_batch_plan(sq_plan, estimate)
+                s1, s2, s3, s4, s5 = st.columns(5)
+                s1.metric("Total rows", sq_summary["total_rows"])
+                s2.metric("Matched", sq_summary["matched_count"])
+                s3.metric("Ambiguous", sq_summary["ambiguous_count"])
+                s4.metric("Low similarity", sq_summary["low_similarity_count"])
+                s5.metric("No match", sq_summary["no_match_count"])
+                sq_adj = sq_summary["estimated_total_adjustment"]
+                sq_sign = "+" if sq_adj >= 0 else "\u2212"
+                st.caption(
+                    f"Estimated subtotal adjustment if all MATCHED rows "
+                    f"are applied: {sq_sign}${abs(sq_adj):,.2f}."
+                )
+
+                if sq_plan.matched:
+                    st.markdown("##### Matched rows (auto-apply)")
+                    sq_matched_rows = []
+                    for result in sq_plan.matched:
+                        if result.best_match_index is None:
+                            continue
+                        line = estimate.line_items[result.best_match_index]
+                        sq_matched_rows.append({
+                            "PDF row": result.row.row_index,
+                            "PDF description": result.row.description,
+                            "Cost line #": result.best_match_index,
+                            "Cost line description": line.description,
+                            "Sim": round(result.best_match_similarity, 3),
+                            "Old $/unit": round(float(line.unit_cost), 2),
+                            "New $/unit": round(
+                                float(result.row.unit_cost), 2
+                            ),
+                        })
+                    if sq_matched_rows:
+                        st.dataframe(
+                            pd.DataFrame(sq_matched_rows),
+                            hide_index=True,
+                            use_container_width=True,
+                            column_config={
+                                "Old $/unit": st.column_config.NumberColumn(
+                                    format="$%.2f"
+                                ),
+                                "New $/unit": st.column_config.NumberColumn(
+                                    format="$%.2f"
+                                ),
+                            },
+                        )
+
+                if sq_plan.ambiguous:
+                    st.markdown(
+                        "##### Ambiguous rows (operator resolution required)"
+                    )
+                    sq_resolved: dict[int, int] = st.session_state.get(
+                        "subquote_resolved", {}
+                    )
+                    for result in sq_plan.ambiguous:
+                        candidates: list[tuple[str, int | None]] = [
+                            ("Skip this row", None),
+                        ]
+                        for idx, sim in result.candidate_lines:
+                            if 0 <= idx < len(estimate.line_items):
+                                desc = estimate.line_items[idx].description[:60]
+                                candidates.append(
+                                    (f"#{idx} | {desc} | sim={sim:.2f}", idx)
+                                )
+                        labels = [label for label, _ in candidates]
+                        current_choice = sq_resolved.get(result.row.row_index)
+                        default_index = 0
+                        for i, (_, idx) in enumerate(candidates):
+                            if idx == current_choice:
+                                default_index = i
+                                break
+                        chosen_label = st.selectbox(
+                            f"PDF row {result.row.row_index}: "
+                            f"{result.row.description[:80]}",
+                            options=labels,
+                            index=default_index,
+                            key=f"subquote_amb_resolve_{result.row.row_index}",
+                        )
+                        chosen_idx = dict(candidates)[chosen_label]
+                        if chosen_idx is None:
+                            sq_resolved.pop(result.row.row_index, None)
+                        else:
+                            sq_resolved[result.row.row_index] = chosen_idx
+                    st.session_state["subquote_resolved"] = sq_resolved
+
+                sq_unmatched = (
+                    list(sq_plan.low_similarity) + list(sq_plan.no_match)
+                )
+                if sq_unmatched:
+                    st.markdown("##### Unmatched rows (read-only audit)")
+                    sq_unmatched_rows = []
+                    for result in sq_unmatched:
+                        sq_unmatched_rows.append({
+                            "PDF row": result.row.row_index,
+                            "PDF description": result.row.description,
+                            "Best sim": round(
+                                result.best_match_similarity, 3
+                            ),
+                            "Status": result.status.value,
+                            "Notes": result.row.notes or "",
+                        })
+                    st.dataframe(
+                        pd.DataFrame(sq_unmatched_rows),
+                        hide_index=True,
+                        use_container_width=True,
+                    )
+
+                sq_preview_csv = _subquote_to_csv_preview(sq_result)
+                st.download_button(
+                    "Download extracted rows as CSV (for re-import)",
+                    data=sq_preview_csv,
+                    file_name=(
+                        f"{estimate.project_name.replace(' ', '_')}"
+                        f"_subquote_rows.csv"
+                    ),
+                    mime="text/csv",
+                    use_container_width=True,
+                    key="subquote_preview_csv_download",
+                    help=(
+                        "Save the parsed rows as a vendor-CSV-shaped file. "
+                        "Round-trips through the T6.3 CSV uploader above "
+                        "so the operator can hand-edit + re-import without "
+                        "re-parsing the PDF."
+                    ),
+                )
+
+                sq_plan_csv = export_match_plan_csv(
+                    sq_plan, list(estimate.line_items)
+                )
+                st.download_button(
+                    "Download match plan CSV",
+                    data=sq_plan_csv,
+                    file_name=(
+                        f"{estimate.project_name.replace(' ', '_')}"
+                        f"_subquote_match_plan.csv"
+                    ),
+                    mime="text/csv",
+                    use_container_width=True,
+                    key="subquote_plan_download",
+                    help=(
+                        "Audit-trail snapshot of the match plan — same "
+                        "shape as the T6.3 batch export."
+                    ),
+                )
+
+                sq_apply_clicked = st.button(
+                    "Apply sub-quote overrides",
+                    use_container_width=True,
+                    type="primary",
+                    key="subquote_apply_btn",
+                    disabled=(
+                        len(sq_plan.matched) == 0
+                        and not st.session_state.get(
+                            "subquote_resolved", {}
+                        )
+                    ),
+                    help=(
+                        "Applies every MATCHED row + every operator-"
+                        "resolved AMBIGUOUS row via the same T6.3 "
+                        "apply_batch_plan backend. LOW_SIMILARITY and "
+                        "NO_MATCH rows are always skipped. Override "
+                        "history rows are tagged [sub-quote] for "
+                        "audit-trail provenance."
+                    ),
+                )
+
+                if sq_apply_clicked:
+                    sq_resolved_map: dict[int, int] = st.session_state.get(
+                        "subquote_resolved", {}
+                    )
+                    pre_apply = estimate
+                    try:
+                        new_estimate, sq_apply_summary = apply_batch_plan(
+                            estimate,
+                            sq_plan,
+                            auto_apply_matched=True,
+                            resolved_ambiguous=sq_resolved_map,
+                        )
+                    except Exception as exc:
+                        st.error(f"Sub-quote apply failed: {exc}")
+                    else:
+                        sq_applied_results: list[BatchMatchResult] = list(
+                            sq_plan.matched
+                        )
+                        for result in sq_plan.ambiguous:
+                            if result.row.row_index in sq_resolved_map:
+                                sq_applied_results.append(BatchMatchResult(
+                                    row=result.row,
+                                    status=BatchMatchStatus.MATCHED,
+                                    best_match_index=sq_resolved_map[
+                                        result.row.row_index
+                                    ],
+                                    best_match_similarity=(
+                                        result.best_match_similarity
+                                    ),
+                                    runner_up_index=result.runner_up_index,
+                                    runner_up_similarity=(
+                                        result.runner_up_similarity
+                                    ),
+                                    candidate_lines=result.candidate_lines,
+                                ))
+
+                        now_ts = datetime.utcnow().isoformat(timespec="seconds")
+                        for result in sq_applied_results:
+                            if result.best_match_index is None:
+                                continue
+                            if not 0 <= result.best_match_index < len(
+                                pre_apply.line_items
+                            ):
+                                continue
+                            old_line = pre_apply.line_items[
+                                result.best_match_index
+                            ]
+                            new_line = new_estimate.line_items[
+                                result.best_match_index
+                            ]
+                            note = format_batch_operator_note(
+                                result.row,
+                                source_tag="[sub-quote]",
+                            )
+                            override_history.append({
+                                "timestamp": now_ts,
+                                "line_index": result.best_match_index,
+                                "description": old_line.description,
+                                "csi_division": old_line.csi_division,
+                                "csi_section": old_line.csi_section or "",
+                                "original_unit_cost": round(
+                                    float(old_line.unit_cost), 2
+                                ),
+                                "new_unit_cost": round(
+                                    float(new_line.unit_cost), 2
+                                ),
+                                "operator_note": note,
+                            })
+
+                        st.session_state["override_history"] = override_history
+                        st.session_state["estimate"] = new_estimate
+                        st.session_state.pop("subquote_parse_result", None)
+                        st.session_state.pop("subquote_plan", None)
+                        st.session_state.pop("subquote_resolved", None)
+
+                        sq_applied_count = sum(
+                            1 for line in sq_apply_summary
+                            if line.startswith("Row") and "APPLIED" in line
+                        )
+                        st.success(
+                            f"Sub-quote override applied: "
+                            f"{sq_applied_count} line"
+                            f"{'s' if sq_applied_count != 1 else ''} "
+                            f"updated. Subtotal: "
+                            f"${pre_apply.subtotal:,.2f} "
+                            f"\u2192 ${new_estimate.subtotal:,.2f}."
+                        )
+                        with st.expander(
+                            "Apply summary (full log)", expanded=False
+                        ):
+                            for line in sq_apply_summary:
                                 st.text(line)
                         st.rerun()
 

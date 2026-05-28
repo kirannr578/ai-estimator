@@ -146,9 +146,22 @@ class BatchOverridePlan:
 # expected slot against this map's keys; the first matching header in the
 # CSV wins. ``description`` and ``unit_cost`` are required; the rest are
 # optional.
+#
+# Phase T8.1 extension: the ``extended`` slot was added so the shared
+# alias map can serve the sub-quote PDF parser (``core.pricing.
+# subquote_parser``) which often sees vendor PDFs that publish
+# ``Description / Qty / Extended`` without a unit-price column — the
+# parser derives ``unit_cost = extended / qty`` in that case. The CSV
+# parser (``parse_vendor_csv``) ignores the ``extended`` slot today
+# (its required column is still ``unit_cost``); adding the entry is
+# purely additive — no CSV behaviour changes.
 _COLUMN_ALIASES: dict[str, tuple[str, ...]] = {
     "description": ("description", "desc", "item", "item_description", "line_item"),
     "unit_cost": ("unit_cost", "price", "unit_price", "cost", "$/unit", "rate"),
+    "extended": (
+        "extended", "extended_price", "extended_cost", "extension",
+        "line_total", "total", "amount",
+    ),
     "vendor": ("vendor", "supplier", "sub", "subcontractor"),
     "quote_ref": (
         "quote_ref", "quote", "quote_id", "ref", "reference", "po", "po_number",
@@ -579,18 +592,28 @@ def match_cost_lines(
 # ---------------------------------------------------------------------------
 
 
-def format_batch_operator_note(row: BatchOverrideRow) -> str:
+def format_batch_operator_note(
+    row: BatchOverrideRow,
+    source_tag: str = "[batch]",
+) -> str:
     """Format the operator note for a batch-applied override.
 
     Format::
 
-        [batch] [vendor: <vendor>] [quote-ref: <quote_ref>] [csv-row: N] <notes>
+        <source_tag> [vendor: <vendor>] [quote-ref: <quote_ref>] [csv-row: N] <notes>
 
-    ``[batch]`` always leads (signals the override came from a CSV
-    upload, not a single-line UI edit). ``[csv-row: N]`` is always
-    present (every row has a known CSV index). The other fields appear
-    only when populated; empty ones are skipped without leaving
-    double-space gaps.
+    The leading tag (``[batch]`` by default) signals the override came
+    from a bulk-ingest path. Phase T8.1 wires the sub-quote PDF parser
+    through the same function with ``source_tag="[sub-quote]"`` so an
+    auditor can grep the override note and tell at a glance whether a
+    given line was hand-priced (no tag), bulk-CSV-applied (``[batch]``),
+    or sub-quote-PDF-applied (``[sub-quote]``). The parameter is
+    optional with a ``[batch]`` default so every pre-existing T6.3
+    caller stays byte-identical.
+
+    ``[csv-row: N]`` is always present (every row has a known source
+    index). The other fields appear only when populated; empty ones are
+    skipped without leaving double-space gaps.
 
     The returned string is the operator-note payload — :func:`core.estimator.
     apply_manual_override` will prefix it with the
@@ -598,7 +621,7 @@ def format_batch_operator_note(row: BatchOverrideRow) -> str:
     (``"operator override"``) before stamping onto the CostLine's
     ``notes`` field.
     """
-    parts: list[str] = ["[batch]"]
+    parts: list[str] = [source_tag]
     if row.vendor:
         v = row.vendor.strip()
         if v:
