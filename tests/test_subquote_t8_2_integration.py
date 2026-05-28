@@ -343,7 +343,7 @@ class TestT81VsT82SourceTags:
 
 class TestT82BackendIntegrity:
     def test_t63_backend_invoked_unchanged_from_t82(self) -> None:
-        """The T8.2 path reaches the T6.3 backend across T6.3 → T8.2 → T6.4.c.
+        """The T8.2 path reaches the T6.3 backend across T6.3 → T8.2 → T6.4.c → T6.4.b.
 
         Mirrors the T8.1 integrity test — pinning the contract that the
         LLM-vision path emits the same ``BatchOverrideRow`` shape and
@@ -351,23 +351,29 @@ class TestT82BackendIntegrity:
         documented signatures.
 
         Phase T6.4.c added a keyword-only ``source_tag`` parameter to
-        :func:`apply_batch_plan` (default :data:`SOURCE_TAG_BATCH`
-        preserves byte-identical behaviour for every pre-T6.4.c
-        caller). This test pins the contract: the original five
-        parameters appear in the original order with the original
-        defaults, and ``source_tag`` is the trailing keyword-only
-        addition.
+        :func:`apply_batch_plan` (default :data:`SOURCE_TAG_BATCH`).
+        Phase T6.4.b added a keyword-only ``enforce_uom_compatibility``
+        parameter to :func:`match_cost_lines` (default ``True``).
+        Both defaults preserve byte-identical behaviour for every
+        pre-T6.4.b / pre-T6.4.c caller whose rows had no UoM info or
+        whose UoMs were already compatible with the chosen lines.
         """
         import inspect
         from core.pricing.batch_override import SOURCE_TAG_BATCH
 
         match_sig = inspect.signature(match_cost_lines)
+        # Original four params unchanged + trailing keyword-only
+        # enforce_uom_compatibility (T6.4.b).
         assert list(match_sig.parameters.keys()) == [
             "rows",
             "cost_lines",
             "similarity_threshold",
             "ambiguity_margin",
+            "enforce_uom_compatibility",
         ]
+        uom_param = match_sig.parameters["enforce_uom_compatibility"]
+        assert uom_param.kind == inspect.Parameter.KEYWORD_ONLY
+        assert uom_param.default is True
         apply_sig = inspect.signature(apply_batch_plan)
         # Original five params unchanged + trailing keyword-only source_tag (T6.4.c).
         assert list(apply_sig.parameters.keys()) == [

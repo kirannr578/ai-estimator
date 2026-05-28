@@ -80,6 +80,18 @@ class BatchOverrideRow:
     match tiebreaker (rows whose quantity matches a candidate's
     quantity get a small similarity nudge). Not applied to the unit
     cost or override math.
+
+    Phase T6.4.b: ``unit_of_measure`` carries the row's unit of measure
+    (``"LF"`` / ``"SF"`` / ``"EA"`` / …) when the source spreadsheet
+    or sub-quote PDF published one. Used by :func:`match_cost_lines`
+    (default ``enforce_uom_compatibility=True``) to reject candidate
+    matches whose ``CostLine.unit`` is incompatible with the row's UoM
+    — i.e. a ``$45/LF`` row is no longer matched against a ``$95/SF``
+    cost line. Stored in raw form (``"linear ft"`` / ``"sq. ft."``);
+    the matcher canonicalises via :func:`normalize_uom` at compare
+    time. Defaults to ``None`` so every pre-T6.4.b caller (which never
+    supplied a UoM) keeps working — and the matcher falls through to
+    description-only matching when the row has no UoM.
     """
 
     row_index: int
@@ -89,6 +101,7 @@ class BatchOverrideRow:
     quote_ref: str | None = None
     notes: str | None = None
     quantity: float | None = None
+    unit_of_measure: str | None = None
 
 
 @dataclass
@@ -111,6 +124,16 @@ class BatchMatchResult:
     runner_up_index: int | None
     runner_up_similarity: float
     candidate_lines: list[tuple[int, float]] = field(default_factory=list)
+    # Phase T6.4.b: human-readable warning surfaced when the matcher
+    # detects a UoM mismatch between the row and the chosen / candidate
+    # cost line. Always ``None`` on the safety-on
+    # (``enforce_uom_compatibility=True``) path — those mismatches are
+    # rejected outright and the row drops to NO_MATCH instead. Populated
+    # on the safety-off (``enforce_uom_compatibility=False``) path so an
+    # operator who explicitly bypasses the gate still gets a heads-up
+    # about which lines are likely cross-applied. Format:
+    # ``"unit mismatch: row=LF vs line=SF"``.
+    uom_mismatch_warning: str | None = None
 
 
 @dataclass
@@ -168,6 +191,15 @@ _COLUMN_ALIASES: dict[str, tuple[str, ...]] = {
     ),
     "notes": ("notes", "comments", "remarks"),
     "quantity": ("quantity", "qty", "q"),
+    # Phase T6.4.b: unit-of-measure column alias group. Picked up by
+    # :func:`parse_vendor_csv` (CSV slot) and the sub-quote PDF tabular
+    # parser (which uses the same shared ``_COLUMN_ALIASES`` map). Empty
+    # / unrecognised values fall through to ``unit_of_measure=None`` on
+    # the row, which the matcher treats as "no UoM available" and falls
+    # back to description-only matching.
+    "unit_of_measure": (
+        "unit_of_measure", "unit", "uom", "units", "u_o_m", "uomeasure",
+    ),
 }
 
 
@@ -258,6 +290,307 @@ SOURCE_TAGS_CANONICAL: frozenset[str] = frozenset({
 # start of a notes string. Used by tests to assert tag-first placement
 # without naming a specific tag.
 SOURCE_TAG_PATTERN: str = r"^\[[a-z][a-z\-]*\] "
+
+
+# ---------------------------------------------------------------------------
+# Phase T6.4.b — unit-of-measure canonicalisation + compatibility
+# ---------------------------------------------------------------------------
+#
+# Background: prior to T6.4.b, :func:`match_cost_lines` matched purely
+# on description text. A vendor CSV / sub-quote PDF row that said
+# ``"$45/LF"`` happily matched a cost line priced ``"$95/SF"`` whenever
+# the descriptions were lexically close, silently producing a per-LF
+# price applied against a per-SF takeoff — the LF×SF cross-application
+# bug. T6.4.b introduces a UoM-aware filter that rejects such
+# cross-applications by default.
+#
+# Canonical forms — uppercase, no whitespace, no punctuation. The map
+# below is intentionally a superset of the actual UoMs in
+# :file:`config/cost_database.json` (which today uses
+# ``CF / CY / EA / HR / LF / LS / MO / SF / TON``) plus the variants
+# the project's :class:`~core.schemas.MEPItem` / :class:`StructuralElement`
+# / :class:`UnitPrice` schemas reference (``SY``, ``GAL``, ``LB``,
+# ``DAY``, ``LOT``, ``PR``, ``SET``, …) so a vendor PDF's free-form
+# "linear feet" or "lump sum" maps cleanly. Adding a variant is a
+# pure-additive change — :func:`normalize_uom` falls through to
+# ``None`` for unknown inputs, which the matcher treats as
+# "no UoM available".
+
+
+UOM_CANONICAL: dict[str, str] = {
+    # ---- Length ----------------------------------------------------------
+    "lf": "LF",
+    "linft": "LF",
+    "linearft": "LF",
+    "lin ft": "LF",
+    "linear ft": "LF",
+    "linear feet": "LF",
+    "linear foot": "LF",
+    "ft": "LF",
+    "foot": "LF",
+    "feet": "LF",
+    # Inches map to LF — most vendor inputs treating LF and inches
+    # interchangeably are actually LF (the "$/inch" cost-class is rare
+    # and not represented in cost_database.json today). Prefer to map
+    # rather than reject.
+    "in": "LF",
+    "inch": "LF",
+    "inches": "LF",
+    # Metric length — kept as their own canonical forms so a metric
+    # vendor doesn't silently match against an imperial cost line.
+    "m": "M",
+    "meter": "M",
+    "meters": "M",
+    "metre": "M",
+    "metres": "M",
+    "mm": "MM",
+    "millimeter": "MM",
+    "millimeters": "MM",
+    "cm": "CM",
+    "centimeter": "CM",
+    "centimeters": "CM",
+    # ---- Area ------------------------------------------------------------
+    "sf": "SF",
+    "sqft": "SF",
+    "sq ft": "SF",
+    "sq. ft.": "SF",
+    "sq. ft": "SF",
+    "square feet": "SF",
+    "square foot": "SF",
+    "ft2": "SF",
+    "ft^2": "SF",
+    "ft²": "SF",
+    "sy": "SY",
+    "sqyd": "SY",
+    "sq yd": "SY",
+    "sq. yd.": "SY",
+    "square yard": "SY",
+    "square yards": "SY",
+    "sm": "SM",
+    "sqm": "SM",
+    "m2": "SM",
+    "m^2": "SM",
+    "m²": "SM",
+    "square meter": "SM",
+    "square meters": "SM",
+    "square metre": "SM",
+    "square metres": "SM",
+    # ---- Volume ----------------------------------------------------------
+    "cy": "CY",
+    "cuyd": "CY",
+    "cu yd": "CY",
+    "cu. yd.": "CY",
+    "cubic yard": "CY",
+    "cubic yards": "CY",
+    "yd3": "CY",
+    "cf": "CF",
+    "cuft": "CF",
+    "cu ft": "CF",
+    "cu. ft.": "CF",
+    "cubic foot": "CF",
+    "cubic feet": "CF",
+    "ft3": "CF",
+    "cm_vol": "CM3",  # disambiguator for cubic meter vs centimeter is via
+    "m3": "CM3",        # the "m3" entry; "cm3" stays out of here because
+    "cubic meter": "CM3",   # 'cm' (centimeter, length) already owns it.
+    "cubic meters": "CM3",
+    "gal": "GAL",
+    "gallon": "GAL",
+    "gallons": "GAL",
+    "l": "L",
+    "liter": "L",
+    "liters": "L",
+    "litre": "L",
+    "litres": "L",
+    # ---- Weight / mass ---------------------------------------------------
+    "lb": "LB",
+    "lbs": "LB",
+    "pound": "LB",
+    "pounds": "LB",
+    "ton": "TON",
+    "tons": "TON",
+    "tn": "TON",
+    "kg": "KG",
+    "kilogram": "KG",
+    "kilograms": "KG",
+    # ---- Count -----------------------------------------------------------
+    "ea": "EA",
+    "each": "EA",
+    "lot": "LOT",
+    "pr": "PR",
+    "pair": "PR",
+    "pairs": "PR",
+    "set": "SET",
+    "sets": "SET",
+    "pc": "EA",
+    "pcs": "EA",
+    "piece": "EA",
+    "pieces": "EA",
+    # ---- Time ------------------------------------------------------------
+    "hr": "HR",
+    "hrs": "HR",
+    "hour": "HR",
+    "hours": "HR",
+    "day": "DAY",
+    "days": "DAY",
+    "wk": "WK",
+    "week": "WK",
+    "weeks": "WK",
+    "mo": "MO",
+    "month": "MO",
+    "months": "MO",
+    "yr": "YR",
+    "year": "YR",
+    "years": "YR",
+    # ---- Generic / lump --------------------------------------------------
+    "ls": "LS",
+    "lump sum": "LS",
+    "lumpsum": "LS",
+    "lump": "LS",
+    # ---- Roofing / framing specialties (canonical to themselves) --------
+    "sq": "SQ",                 # roofing square = 100 SF; not interchangeable
+    "square": "SQ",             # with SF for matching purposes (different unit math)
+    "mbf": "MBF",               # 1000 board feet (lumber)
+    "bf": "BF",                 # board feet (lumber)
+    "sack": "SACK",
+    "sacks": "SACK",
+    "bag": "SACK",
+    "bags": "SACK",
+}
+
+
+# Whitespace + punctuation strip used by :func:`normalize_uom`. We do
+# NOT reuse the description-side ``_PUNCT_RE`` (defined further down)
+# because UoM tokens like ``"sq. ft."`` carry a meaningful period —
+# we strip the period at the canonical-map lookup level rather than
+# pre-emptively at the regex level so ``"sq. ft."`` and ``"sq ft"``
+# both land at the same key. Multiple internal spaces collapse to
+# one before lookup so ``"  square   feet  "`` works.
+_UOM_WS_RE = re.compile(r"\s+")
+
+
+def normalize_uom(raw: str | None) -> str | None:
+    """Map a free-form UoM string to its canonical form, or ``None``.
+
+    Case-insensitive, whitespace-tolerant, period-tolerant. Returns
+    ``None`` for ``None``, empty / whitespace-only inputs, and any
+    string not in :data:`UOM_CANONICAL` (so the caller can fall
+    through to "no UoM info" semantics rather than guessing).
+
+    Examples::
+
+        normalize_uom("LF")          == "LF"
+        normalize_uom("lf")          == "LF"
+        normalize_uom(" lf ")        == "LF"
+        normalize_uom("linear ft")   == "LF"
+        normalize_uom("Square Feet") == "SF"
+        normalize_uom("sq. ft.")     == "SF"
+        normalize_uom("")            is None
+        normalize_uom(None)          is None
+        normalize_uom("xyz")         is None
+    """
+    if raw is None:
+        return None
+    s = str(raw).strip().lower()
+    if not s:
+        return None
+    # Try the original (lowercased + stripped) form first so
+    # punctuation-bearing keys like ``"sq. ft."`` land directly.
+    if s in UOM_CANONICAL:
+        return UOM_CANONICAL[s]
+    # Collapse internal whitespace and try again.
+    collapsed = _UOM_WS_RE.sub(" ", s).strip()
+    if collapsed in UOM_CANONICAL:
+        return UOM_CANONICAL[collapsed]
+    # Strip trailing periods (``"sq ft."`` → ``"sq ft"``) and
+    # internal periods (``"sq. ft."`` → ``"sq ft"``) and try again.
+    no_dots = collapsed.replace(".", "").strip()
+    no_dots = _UOM_WS_RE.sub(" ", no_dots).strip()
+    if no_dots in UOM_CANONICAL:
+        return UOM_CANONICAL[no_dots]
+    # Final attempt: also strip internal whitespace so ``"linear  ft"``
+    # without spaces lands at ``"linearft"`` keyword.
+    no_ws = no_dots.replace(" ", "")
+    if no_ws in UOM_CANONICAL:
+        return UOM_CANONICAL[no_ws]
+    return None
+
+
+# Compatibility groups: UoMs in the same group are considered
+# interchangeable for matching purposes. Strict by default — a UoM
+# not appearing in any group is only compatible with itself.
+#
+# Rationale per group:
+#
+# * ``{"LS", "LOT"}`` — both represent a single lump-sum line. Vendor
+#   PDFs commonly say "LOT" where the cost catalog says "LS" (or vice
+#   versa). Numerically interchangeable: cost is per-occurrence.
+# * ``{"EA", "SET"}`` — looser: a "set" of door hardware vs. an "each"
+#   item is a real shape difference, but vendors routinely write
+#   "SET" where the catalog has "EA" for assembly-priced hardware.
+#   Allowed because the alternative (rejecting the match outright)
+#   tends to be worse than the small over-application risk.
+# * ``{"PR", "EA"}`` — "pair" is sometimes priced as 2x EA, sometimes
+#   as a unit. We allow the match — operator can adjust the unit
+#   cost manually if the convention differs.
+#
+# Notes deliberately NOT in any group (strict by intent):
+#
+# * LF, SF, SY, SM, CY, CF, GAL, LB, TON, HR, DAY, MO, SQ — all
+#   stay strict. Matching ``LF→SF`` is exactly the bug the slice
+#   exists to prevent; matching ``SY→SF`` would silently triple
+#   the unit cost; matching ``CY→CF`` would silently 27x it.
+# * Metric-vs-imperial pairs (``M ↔ LF``, ``SM ↔ SF``, ``CM3 ↔ CY``)
+#   are NOT compatible. The conversion factor is real (1 SM ≈
+#   10.76 SF) but applying a per-SM price to a per-SF line would
+#   silently undercount by 10x. The price-conversion concern is a
+#   separate slice if it ever materialises in the calibration set.
+
+UOM_COMPATIBILITY_GROUPS: list[set[str]] = [
+    {"LS", "LOT"},
+    {"EA", "SET"},
+    {"EA", "PR"},
+]
+
+
+def uoms_compatible(a: str | None, b: str | None) -> bool:
+    """Return ``True`` if two UoMs may be matched together.
+
+    Convention (matches the brief exactly):
+
+    * Both ``None`` → ``True``  (no UoM info; defer to description-only
+      match — caller decides whether to flag the result).
+    * One ``None``, one specific → ``True``  (defensive: only one side
+      knows the UoM; the matcher should not penalise the row when the
+      cost line lacks a unit, and vice versa).
+    * Both specific, same canonical → ``True``  (e.g. row=``"LF"`` and
+      line=``"linear ft"`` both canonicalise to ``"LF"``).
+    * Both specific, in same compatibility group → ``True``
+      (e.g. ``"LS"`` ↔ ``"LOT"``).
+    * Both specific, different groups → ``False`` (the safety check).
+
+    Both inputs are routed through :func:`normalize_uom` first so
+    free-form strings (``"linear ft"`` / ``"sq. ft."``) work unchanged.
+    A specific raw input that fails normalisation (e.g. ``"xyz"``) is
+    treated as ``None`` for compatibility purposes — i.e. the matcher
+    falls back to defensive "we don't know, let it through" semantics.
+    The brief's intent is "reject when we can prove a mismatch", not
+    "reject when in doubt".
+    """
+    canon_a = normalize_uom(a)
+    canon_b = normalize_uom(b)
+    # Both None / un-normalisable → defer to description-only match.
+    if canon_a is None and canon_b is None:
+        return True
+    # One side knows, the other doesn't → defensive True.
+    if canon_a is None or canon_b is None:
+        return True
+    if canon_a == canon_b:
+        return True
+    for group in UOM_COMPATIBILITY_GROUPS:
+        if canon_a in group and canon_b in group:
+            return True
+    return False
 
 
 # ---------------------------------------------------------------------------
@@ -445,6 +778,16 @@ def parse_vendor_csv(
             if qty is not None and qty < 0:
                 qty = None
 
+        # Phase T6.4.b: pick up the optional ``unit_of_measure`` column
+        # (alias group: unit / uom / units / …). Stored raw — the
+        # matcher canonicalises via :func:`normalize_uom` at compare
+        # time so the stored form preserves the operator's input for
+        # downstream display.
+        uom: str | None = None
+        if "unit_of_measure" in col_map:
+            u = (raw.get(col_map["unit_of_measure"], "") or "").strip()
+            uom = u or None
+
         rows.append(BatchOverrideRow(
             row_index=csv_row_idx,
             description=desc,
@@ -453,6 +796,7 @@ def parse_vendor_csv(
             quote_ref=quote_ref,
             notes=notes,
             quantity=qty,
+            unit_of_measure=uom,
         ))
 
     return rows, errors
@@ -526,11 +870,33 @@ def _classify_match(
     return BatchMatchStatus.MATCHED
 
 
+def _format_uom_mismatch(row_uom: str | None, line_uom: str | None) -> str:
+    """Format the canonical ``"unit mismatch: row=LF vs line=SF"`` string.
+
+    Used by :func:`match_cost_lines` (safety-off path) to populate
+    :pyattr:`BatchMatchResult.uom_mismatch_warning`. Falls back to the
+    raw / un-canonicalised form when one side is unrecognised so the
+    operator sees the verbatim source text rather than a silent
+    ``None``.
+    """
+    canon_row = normalize_uom(row_uom)
+    canon_line = normalize_uom(line_uom)
+    row_label = canon_row if canon_row is not None else (
+        (row_uom or "").strip() or "?"
+    )
+    line_label = canon_line if canon_line is not None else (
+        (line_uom or "").strip() or "?"
+    )
+    return f"unit mismatch: row={row_label} vs line={line_label}"
+
+
 def match_cost_lines(
     rows: list[BatchOverrideRow],
     cost_lines: list[CostLine],
     similarity_threshold: float = 0.65,
     ambiguity_margin: float = 0.10,
+    *,
+    enforce_uom_compatibility: bool = True,
 ) -> BatchOverridePlan:
     """Fuzzy-match each CSV row to a CostLine by description.
 
@@ -538,6 +904,9 @@ def match_cost_lines(
     (see :func:`_normalise_description`). For each row:
 
     * Computes similarity against every CostLine.
+    * Optionally filters out candidates whose ``unit`` is incompatible
+      with the row's ``unit_of_measure`` (T6.4.b safety check; default
+      on).
     * Sorts candidates by similarity descending; keeps the top-5.
     * Classifies via :func:`_classify_match`:
 
@@ -558,6 +927,42 @@ def match_cost_lines(
     ceiling" (typical sim delta ~0.07) is correctly flagged AMBIGUOUS,
     but narrow enough that "Door 101A" vs. "Door 201A" (typical sim
     delta ~0.20) auto-resolves.
+
+    Phase T6.4.b: ``enforce_uom_compatibility`` (keyword-only, default
+    ``True``) gates the unit-compatibility filter. When ``True`` the
+    matcher rejects candidate cost lines whose ``unit`` is incompatible
+    with the row's :pyattr:`BatchOverrideRow.unit_of_measure` per
+    :func:`uoms_compatible` — i.e. an ``LF`` vendor row can no longer
+    be applied to an ``SF`` cost line, eliminating the LF/SF
+    cross-application bug. When ``False`` the matcher reverts to the
+    pre-T6.4.b description-only behaviour but populates
+    :pyattr:`BatchMatchResult.uom_mismatch_warning` with a human-
+    readable string whenever the chosen line's UoM disagrees with the
+    row's UoM, so an operator who explicitly bypasses the gate still
+    gets a heads-up.
+
+    UoM filter semantics (when ``enforce_uom_compatibility=True``):
+
+    * Row has no UoM → no filter (description-only match; defensive).
+    * Cost line has no UoM → not filtered (defensive).
+    * Row UoM canonicalises to None (unrecognised) → not filtered
+      (treated as "we don't know"; matcher must not reject when
+      uncertain — only when it can prove a mismatch).
+    * Row + line UoMs both specific and incompatible → candidate
+      removed from the candidate set entirely. If filtering leaves
+      the row with no above-floor candidates, it lands in NO_MATCH.
+
+    Filter side-effects on bucket assignment:
+
+    * A previously-MATCHED row whose only candidate fails the filter
+      drops to NO_MATCH (with no warning — the safety-on path is the
+      correctness-first one).
+    * A previously-AMBIGUOUS row whose runner-up fails the filter but
+      whose best survives may resolve to MATCHED (filter narrowed the
+      candidate space; less ambiguity).
+    * The filter is applied on the candidate level, so candidate_lines
+      reported to the operator never contain UoM-incompatible lines
+      on the safety-on path.
     """
     plan = BatchOverridePlan(
         total_rows=len(rows),
@@ -586,8 +991,58 @@ def match_cost_lines(
             plan.no_match.append(result)
             continue
 
+        # Phase T6.4.b — split the cost-line index space into
+        # UoM-compatible and UoM-incompatible buckets up front. The
+        # safety-on path matches against the compatible bucket only;
+        # the safety-off path matches against the full set but uses
+        # the incompatible bucket to populate the warning string.
+        compatible_indices: list[int] = []
+        incompatible_indices: list[int] = []
+        for i, li in enumerate(cost_lines):
+            if uoms_compatible(row.unit_of_measure, li.unit):
+                compatible_indices.append(i)
+            else:
+                incompatible_indices.append(i)
+
+        if enforce_uom_compatibility:
+            search_indices = compatible_indices
+        else:
+            search_indices = list(range(len(cost_lines)))
+
+        if not search_indices:
+            # Safety-on with zero compatible candidates → land in
+            # NO_MATCH. The diagnostic best/runner against the FULL
+            # cost-line set is kept so an operator can see what the
+            # description match would have produced if they bypassed
+            # the filter (these surface in candidate_lines / sims for
+            # the operator UI). The status is unchanged from "would
+            # have been NO_MATCH" because every candidate failed the
+            # UoM gate.
+            full_sims: list[tuple[int, float]] = [
+                (i, _similarity(row, cost_lines[i]))
+                for i in range(len(cost_lines))
+            ]
+            full_sims.sort(key=lambda pair: (-pair[1], pair[0]))
+            best_idx_full, best_sim_full = full_sims[0]
+            warning = _format_uom_mismatch(
+                row.unit_of_measure,
+                cost_lines[best_idx_full].unit,
+            )
+            result = BatchMatchResult(
+                row=row,
+                status=BatchMatchStatus.NO_MATCH,
+                best_match_index=None,
+                best_match_similarity=round(best_sim_full, 4),
+                runner_up_index=None,
+                runner_up_similarity=0.0,
+                candidate_lines=[],
+                uom_mismatch_warning=warning,
+            )
+            plan.no_match.append(result)
+            continue
+
         sims: list[tuple[int, float]] = [
-            (i, _similarity(row, li)) for i, li in enumerate(cost_lines)
+            (i, _similarity(row, cost_lines[i])) for i in search_indices
         ]
         sims.sort(key=lambda pair: (-pair[1], pair[0]))
         top_k = sims[:_TOP_K_CANDIDATES]
@@ -609,6 +1064,25 @@ def match_cost_lines(
         else:
             best_match_index = None
 
+        # Phase T6.4.b: on the safety-off path, populate the warning
+        # string when the chosen best line's UoM is incompatible with
+        # the row's UoM. Only meaningful when a best line was actually
+        # chosen (MATCHED / AMBIGUOUS) — LOW_SIMILARITY / NO_MATCH
+        # rows aren't getting applied so the warning would be noise.
+        warning: str | None = None
+        if (
+            not enforce_uom_compatibility
+            and best_match_index is not None
+            and not uoms_compatible(
+                row.unit_of_measure,
+                cost_lines[best_match_index].unit,
+            )
+        ):
+            warning = _format_uom_mismatch(
+                row.unit_of_measure,
+                cost_lines[best_match_index].unit,
+            )
+
         result = BatchMatchResult(
             row=row,
             status=status,
@@ -617,6 +1091,7 @@ def match_cost_lines(
             runner_up_index=runner_idx,
             runner_up_similarity=round(runner_sim, 4),
             candidate_lines=top_k,
+            uom_mismatch_warning=warning,
         )
 
         bucket = {
@@ -822,6 +1297,13 @@ def apply_batch_plan(
             if result.best_match_index is None:
                 continue
             note = format_batch_operator_note(result.row, source_tag=source_tag)
+            # Phase T6.4.b: when the matcher ran with
+            # ``enforce_uom_compatibility=False`` and detected a
+            # UoM mismatch on this match, append the warning to the
+            # operator note so the audit trail records the bypass.
+            # The warning is always None on the safety-on path.
+            if result.uom_mismatch_warning:
+                note = f"{note} [{result.uom_mismatch_warning}]"
             idx = result.best_match_index
             prior_notes = current.line_items[idx].notes
             try:
@@ -885,6 +1367,10 @@ def apply_batch_plan(
             skipped_count += 1
             continue
         note = format_batch_operator_note(result.row, source_tag=source_tag)
+        # Phase T6.4.b: same UoM-mismatch warning propagation as the
+        # MATCHED branch above.
+        if result.uom_mismatch_warning:
+            note = f"{note} [{result.uom_mismatch_warning}]"
         prior_notes = current.line_items[chosen].notes
         try:
             current = apply_manual_override(
@@ -953,13 +1439,16 @@ _MATCH_PLAN_CSV_FIELDS: tuple[str, ...] = (
     "csv_row",
     "csv_description",
     "csv_unit_cost",
+    "csv_unit_of_measure",
     "status",
     "matched_line_index",
     "matched_description",
+    "matched_unit",
     "similarity",
     "runner_up_index",
     "runner_up_description",
     "runner_up_similarity",
+    "uom_mismatch_warning",
     "notes",
 )
 
@@ -996,6 +1485,7 @@ def export_match_plan_csv(
 
     for result in all_results:
         matched_desc = ""
+        matched_unit = ""
         runner_desc = ""
         if cost_lines:
             if (
@@ -1003,6 +1493,7 @@ def export_match_plan_csv(
                 and 0 <= result.best_match_index < len(cost_lines)
             ):
                 matched_desc = cost_lines[result.best_match_index].description
+                matched_unit = cost_lines[result.best_match_index].unit
             if (
                 result.runner_up_index is not None
                 and 0 <= result.runner_up_index < len(cost_lines)
@@ -1013,12 +1504,14 @@ def export_match_plan_csv(
             "csv_row": result.row.row_index,
             "csv_description": result.row.description,
             "csv_unit_cost": f"{result.row.unit_cost:.2f}",
+            "csv_unit_of_measure": result.row.unit_of_measure or "",
             "status": result.status.value,
             "matched_line_index": (
                 "" if result.best_match_index is None
                 else result.best_match_index
             ),
             "matched_description": matched_desc,
+            "matched_unit": matched_unit,
             "similarity": f"{result.best_match_similarity:.4f}",
             "runner_up_index": (
                 "" if result.runner_up_index is None
@@ -1026,6 +1519,7 @@ def export_match_plan_csv(
             ),
             "runner_up_description": runner_desc,
             "runner_up_similarity": f"{result.runner_up_similarity:.4f}",
+            "uom_mismatch_warning": result.uom_mismatch_warning or "",
             "notes": result.row.notes or "",
         })
 

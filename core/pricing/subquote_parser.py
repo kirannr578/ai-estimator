@@ -556,6 +556,9 @@ def _parse_table_rows(
     vendor_col = column_map.get("vendor")
     quote_col = column_map.get("quote_ref")
     notes_col = column_map.get("notes")
+    # Phase T6.4.b: optional unit-of-measure column. Picked up via the
+    # shared ``_COLUMN_ALIASES`` map (alias group "unit_of_measure").
+    uom_col = column_map.get("unit_of_measure")
 
     if desc_col is None:
         # No description column — the table is unparseable. The caller
@@ -633,6 +636,11 @@ def _parse_table_rows(
             n = _normalise_cell(data_row[notes_col])
             notes = n or None
 
+        uom: str | None = None
+        if uom_col is not None and uom_col < len(data_row):
+            u = _normalise_cell(data_row[uom_col])
+            uom = u or None
+
         out.append(BatchOverrideRow(
             row_index=row_index,
             description=desc,
@@ -641,6 +649,7 @@ def _parse_table_rows(
             quote_ref=quote_ref,
             notes=notes,
             quantity=qty,
+            unit_of_measure=uom,
         ))
 
     return out, warnings, row_index
@@ -1175,13 +1184,20 @@ def _validate_and_build_row(
         if n:
             notes = n[:_LLM_NOTES_MAX_CHARS]
 
+    unit_of_measure: str | None = None
     raw_unit = raw_item.get("unit")
     if isinstance(raw_unit, str):
         unit = _normalise_cell(raw_unit)
         if unit:
-            # Append the unit hint to notes (compact provenance) so
-            # the downstream matcher / UI can show it without growing
-            # the BatchOverrideRow schema.
+            # Phase T6.4.b: surface the unit on the BatchOverrideRow
+            # so the matcher's unit-aware filter can use it. Stored
+            # raw — :func:`core.pricing.batch_override.normalize_uom`
+            # canonicalises at compare time.
+            unit_of_measure = unit
+            # Backward-compat: also append the unit hint to notes
+            # (compact provenance) so the existing T8.2 surface that
+            # round-tripped the unit through the notes column keeps
+            # working byte-identically.
             unit_hint = f"unit: {unit}"
             if notes:
                 combined = f"{notes} ({unit_hint})"
@@ -1197,6 +1213,7 @@ def _validate_and_build_row(
         quote_ref=None,      # ditto for quote-ref
         notes=notes,
         quantity=quantity,
+        unit_of_measure=unit_of_measure,
     )
     return row, None
 

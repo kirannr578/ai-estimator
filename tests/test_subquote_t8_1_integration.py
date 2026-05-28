@@ -134,29 +134,40 @@ class TestSubquoteEndToEnd:
 
     def test_t63_backend_invoked_unchanged(self) -> None:
         """Confirm match_cost_lines + apply_batch_plan signatures stay
-        backward-compatible across the T6.3 → T8.1 → T6.4.c evolution.
+        backward-compatible across the T6.3 → T8.1 → T6.4.c → T6.4.b evolution.
 
         The integration here is intentional: the sub-quote pipeline
         reaches the T6.3 backend with NO breaking signature change.
 
         Phase T6.4.c added a keyword-only ``source_tag`` parameter to
-        :func:`apply_batch_plan` (default :data:`SOURCE_TAG_BATCH`
-        preserves byte-identical behaviour for every pre-T6.4.c
-        caller). This test pins the contract: the original five
-        parameters appear in the original order with the original
-        defaults, and ``source_tag`` is the trailing keyword-only
-        addition.
+        :func:`apply_batch_plan` (default :data:`SOURCE_TAG_BATCH`).
+        Phase T6.4.b added a keyword-only ``enforce_uom_compatibility``
+        parameter to :func:`match_cost_lines` (default ``True`` —
+        breaking-by-design correctness improvement; pre-T6.4.b callers
+        without the kwarg get the safer behaviour automatically).
+        Both defaults preserve byte-identical behaviour for any caller
+        whose row UoMs were ``None`` and whose cost-line units were
+        compatible with the previously-matched lines (which is the
+        case for every integration scenario tested here).
         """
         import inspect
         from core.pricing.batch_override import SOURCE_TAG_BATCH
         match_sig = inspect.signature(match_cost_lines)
-        # No new kwargs — must still be (rows, cost_lines, threshold, margin).
+        # Original four params unchanged + trailing keyword-only
+        # enforce_uom_compatibility (T6.4.b).
         assert list(match_sig.parameters.keys()) == [
             "rows",
             "cost_lines",
             "similarity_threshold",
             "ambiguity_margin",
+            "enforce_uom_compatibility",
         ]
+        # enforce_uom_compatibility is KEYWORD_ONLY with default True so
+        # every pre-T6.4.b call site keeps working — and silently gets
+        # the safer behaviour.
+        uom_param = match_sig.parameters["enforce_uom_compatibility"]
+        assert uom_param.kind == inspect.Parameter.KEYWORD_ONLY
+        assert uom_param.default is True
         apply_sig = inspect.signature(apply_batch_plan)
         # Original five params unchanged + trailing keyword-only source_tag (T6.4.c).
         assert list(apply_sig.parameters.keys()) == [

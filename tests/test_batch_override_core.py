@@ -567,11 +567,19 @@ def test_export_match_plan_csv_columns_present() -> None:
     plan = match_cost_lines(rows, lines)
     csv_text = export_match_plan_csv(plan, lines)
     reader = csv.DictReader(io.StringIO(csv_text))
+    # Phase T6.4.b added three columns: ``csv_unit_of_measure`` (the
+    # row's UoM), ``matched_unit`` (the chosen cost line's unit), and
+    # ``uom_mismatch_warning`` (populated only on the safety-off path).
+    # Previous columns retained in their original positions.
     assert reader.fieldnames == [
-        "csv_row", "csv_description", "csv_unit_cost", "status",
-        "matched_line_index", "matched_description", "similarity",
+        "csv_row", "csv_description", "csv_unit_cost", "csv_unit_of_measure",
+        "status",
+        "matched_line_index", "matched_description", "matched_unit",
+        "similarity",
         "runner_up_index", "runner_up_description",
-        "runner_up_similarity", "notes",
+        "runner_up_similarity",
+        "uom_mismatch_warning",
+        "notes",
     ]
 
 
