@@ -34,9 +34,9 @@ This playbook documents:
 | GSA Schedule price lists | `core/pricing/sources/gsa_schedule.py` | U.S. Public Domain — GSA | None | Quarterly | Construction materials catalogs (56V, 03FAC, 23V) | **Phase B — partial** (parser ships; auto-download TODO) |
 | TX SmartBuy / ESBD award postings | `core/pricing/sources/tx_smartbuy_awards.py` | State of Texas public record | None | Continuous | Historical award amounts for sub-pricing reference | **Phase C — stub** |
 | Home Depot Pro / Lowe's for Pros catalogs | `core/pricing/sources/hd_pro_catalog.py` | Retailer-proprietary (public prices only) | None for public pages | On-demand | ~50 high-volume building-material SKUs | **Phase C — stub** |
-| ENR Construction Cost Index | `core/pricing/sources/construction_indexes.py` (`ENRConstructionCostIndexSource`) | ENR — attribution required | None | Monthly | National + 20-city composite cost index | **Phase C — stub** |
-| AGC Construction Inflation Alert | `core/pricing/sources/construction_indexes.py` (`AGCInflationAlertSource`) | AGC — attribution required | None | Quarterly | AGC inflation / producer-price summary | **Phase C — stub** |
-| Turner Building Cost Index | `core/pricing/sources/construction_indexes.py` (`TurnerBuildingCostIndexSource`) | Turner — attribution required | None | Quarterly | TBI national index | **Phase C — stub** |
+| ENR Construction Cost Index | `core/pricing/sources/enr_cci.py` (`ENRCCISource`) | ENR — attribution required, no redistribution | None | Monthly | National 20-city composite cost index | **Shipped (Phase C)** — headline value only; full history requires ENR subscription |
+| AGC PPI-based Construction Cost Index | `core/pricing/sources/agc_cci.py` (`AGCCCISource`) | AGC — attribution required, no redistribution | None | Monthly (underlying PPI) / Quarterly (Inflation Alert) | National PPI-based inflation roll-up | **Shipped (Phase C)** — landing-page headline only; Inflation Alert PDF parser is future work |
+| Turner Building Cost Index | `core/pricing/sources/turner_cci.py` (`TurnerCCISource`) | Turner — attribution required, no redistribution | None | Quarterly | National TBCI composite | **Shipped (Phase C)** — latest quarter only; per-quarter article archive parser is future work |
 | NAHB Cost of Constructing a Home | `core/pricing/sources/construction_indexes.py` (`NAHBCostOfConstructingAHomeSource`) | NAHB — attribution required | None | Annual | NAHB residential cost breakdown report | **Phase C — stub** |
 
 **Tier 2 (RSMeans / Gordian) — deferred.** Paid license per seat. Decision deferred until Tier 1 calibration data demonstrates a measurable gap that the free sources can't close. See `docs/ROADMAP_TAKEOFF_AUTOMATION.md` Section 5 for the build / buy gate.
@@ -240,9 +240,67 @@ A skeleton placeholder for this work lives at `core/pricing/sources/tx_agency_wd
 | Phase B-full: GSA Advantage CSV auto-download | Pulls catalog without manual step | Highest-value next step |
 | Phase C: TX SmartBuy / ESBD scraper | Historical sub-pricing reference | After GSA Advantage |
 | Phase C: HD Pro / Lowe's pro catalog | Spot-check single-SKU pricing | After GSA Advantage; **only if ToS posture clear** |
-| Phase C: ENR / AGC / Turner / NAHB PDF parsers | Cross-check vs BLS PPI escalation | Lowest priority — overlaps with PPI |
+| ~~Phase C: ENR / AGC / Turner PDF parsers~~ | **Shipped** — see Construction Cost Index section below | n/a (closed; CCI adapters shipped 2026-05-28) |
+| Phase C-full: NAHB Cost of Constructing a Home annual PDF | Residential cost breakdown cross-check | Deferred — annual cadence + low marginal vs BLS PPI |
+| Phase C-full: ENR / AGC / Turner historical archive parsers | Backfill full historical series (currently only latest headline) | After more bid-pricing demand confirms the marginal value vs BLS PPI |
 | **Tier 2: RSMeans / Gordian** | Production-grade composite cost DB | Decision pending calibration data + commercial approval |
 | **Tier 3: BPC internal cost DB** | Eliminates external dependency | Started when BPC has > 12 months of internal cost capture; see `firm/compliance/material-suppliers.md` |
+
+---
+
+## Construction Cost Index macro escalators (Phase C — shipped 2026-05-28)
+
+The three CCI adapters (`enr_cci`, `agc_cci`, `turner_cci`) provide macro escalation signals **complementary to**, not replacing, the per-CSI BLS PPI integration:
+
+- **BLS PPI** (Phase A) tracks per-commodity producer prices. Use for entry-by-entry escalation in `core/pricing/escalation.py` — the keyword + CSI-section + division fallback chain already in production.
+- **ENR / AGC / Turner CCI** track a single macro index that aggregates labor + materials + market conditions. Use as a **cross-check** on a per-bid total escalation factor, or as a uniform multiplier when no per-CSI signal is available.
+
+| Adapter | Series id | Cadence | Free-tier coverage | Period format | Snapshot path |
+|---|---|---|---|---|---|
+| `enr_cci` | `national-20city` | Monthly | Headline 20-city composite only; per-city + history are subscription-gated | `YYYY-MM` | `config/pricing_snapshots/enr_cci/national-20city/` |
+| `agc_cci` | `national` | Monthly (underlying PPI) | Landing-page headline only; Inflation Alert PDFs are linked but not parsed | `YYYY-MM` | `config/pricing_snapshots/agc_cci/national/` |
+| `turner_cci` | `national` | Quarterly | Latest quarter only; historical archive on the page is not yet parsed | `YYYY-QN` | `config/pricing_snapshots/turner_cci/national/` |
+
+### How the CCIs differ from BLS PPI
+
+| Dimension | BLS PPI | ENR / AGC / Turner CCI |
+|---|---|---|
+| Scope | Per-commodity (lumber, steel, gypsum, ...) | National macro composite |
+| Granularity | 15 curated series, each mapped to specific CSI sections | One number per period, applies uniformly |
+| Free-tier history | Full ≥ 10-year history per series | Latest headline value only (Phase C) |
+| Use in escalation engine | Already integrated; per-entry factor | Not yet wired in to escalation engine (see "Optional escalation hook" below) |
+
+### Access-posture audit (verified 2026-05-28)
+
+- **ENR `/economics`** — landing page reachable; methodology + cost-report links public; full historical CSV requires a subscription. The headline 20-city CCI appears in the body text of the current cost-report article and is parsed by regex anchor against "20-City Average Construction Cost Index" / "Construction Cost Index" / "CCI". A year-range filter (1900–2100) skips date-like numbers so values such as 14021.34 are not confused with adjacent year strings.
+- **AGC `/learn/construction-data`** — landing page reachable; lists Data Digest + Construction Industry Outlook + Producer Prices & Employment Costs tables. AGC's headline framing varies (sometimes a PPI index value, sometimes a YoY percent change). When the page only exposes a percent-change figure the adapter returns an empty list with a logged warning rather than persist a misleading snapshot. The Construction Inflation Alert PDF is publicly downloadable but not yet parsed — that is a follow-up slice.
+- **Turner `/cost-index`** — landing page reachable; quarterly TBCI value appears in the current quarter's article body with a stable "NTH QUARTER YYYY" heading convention going back to 2006. Latest value is parsed by regex anchor against "Turner Building Cost Index" / "TBCI" / "Building Cost Index".
+- **Bureau of Reclamation aggregator** (`https://www.usbr.gov/tsc/techreferences/mands/cci.html`) — the brief flagged this as a potential fallback that publishes ENR / AGC / Turner side-by-side. Live fetch timed out during validation; the URL is documented in `core/pricing/sources/enr_cci.py` as a future-resilience hook but is not currently consulted.
+
+### Failure modes the adapters handle gracefully
+
+- HTTP 4xx / 5xx from any publisher → adapter logs a warning and `fetch()` returns `[]`. The refresh runner is not crashed.
+- Page layout changes that move the index value out of regex range → adapter logs "no index value found at <url> — page layout may have changed" and `fetch()` returns `[]`. Operators look up the latest value manually and document the gap.
+- Cache hit within 24 hours → no second HTTP call. Cache is keyed by URL alone (no auth headers, no per-account state).
+- Unknown `series_id` requested via `fetch(['regional-houston'])` → logged warning + skipped (only the curated series id per adapter is honored on the free tier).
+
+### Optional escalation hook (deferred)
+
+`core/pricing/escalation.py` today computes a per-entry factor from BLS PPI series only. Wiring a CCI signal in would require:
+
+1. Loading a CCI snapshot via `core.pricing.snapshots.load_latest("enr_cci", "national-20city")`.
+2. Computing a base→target ratio analogous to `compute_escalation_factor(...)`.
+3. Either replacing the per-entry factor (uniform escalation) or blending it with the per-entry factor (weighted hybrid).
+
+The engine does not yet have a clean seam for "use BLS PPI per entry AND multiply by a macro CCI delta" — adding one is more than 5 lines, so per the brief's constraint on `core/pricing/escalation.py` ("only if the change is genuinely 5 lines or less") this slice **defers the engine wiring**. The snapshots are persisted; downstream integration is a future ticket.
+
+### Source-of-truth references in the new code
+
+- `core/pricing/sources/_cci_common.py` — shared HTML fetch + caching + index-value / period parsing.
+- `core/pricing/sources/enr_cci.py` — ENR adapter.
+- `core/pricing/sources/agc_cci.py` — AGC adapter.
+- `core/pricing/sources/turner_cci.py` — Turner adapter.
+- `tests/test_pricing_sources_{enr,agc,turner}_cci.py` — offline tests via `httpx.MockTransport`.
 
 ---
 

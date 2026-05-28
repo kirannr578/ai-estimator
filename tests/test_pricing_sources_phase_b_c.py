@@ -14,10 +14,7 @@ from __future__ import annotations
 import pytest
 
 from core.pricing.sources.construction_indexes import (
-    AGCInflationAlertSource,
-    ENRConstructionCostIndexSource,
     NAHBCostOfConstructingAHomeSource,
-    TurnerBuildingCostIndexSource,
 )
 from core.pricing.sources.gsa_schedule import (
     GSAScheduleSource,
@@ -144,9 +141,10 @@ def test_gsa_schedule_source_fetch_is_noop_stub() -> None:
 @pytest.mark.parametrize("cls", [
     TXSmartBuyAwardsSource,
     HDProCatalogSource,
-    ENRConstructionCostIndexSource,
-    AGCInflationAlertSource,
-    TurnerBuildingCostIndexSource,
+    # ENR / AGC / Turner now ship as full implementations under their own
+    # modules (`enr_cci`, `agc_cci`, `turner_cci`); see Phase C ship note in
+    # `docs/ROADMAP_TAKEOFF_AUTOMATION.md`. NAHB remains a stub pending
+    # demand for the annual residential cost breakdown.
     NAHBCostOfConstructingAHomeSource,
 ])
 def test_phase_c_stub_is_importable_and_returns_empty(cls) -> None:

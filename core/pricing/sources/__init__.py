@@ -12,7 +12,10 @@ Each module exports a `PricingSource` subclass. Public adapters today:
 - ``gsa_schedule``  (Phase B, stub) — GSA Advantage construction schedules
 - ``tx_smartbuy_awards`` (Phase C, stub) — TX SmartBuy / ESBD award postings
 - ``hd_pro_catalog`` (Phase C, stub) — Pro-catalog scraper (public prices only)
-- ``construction_indexes`` (Phase C, stub) — ENR / AGC / Turner / NAHB indexes
+- ``enr_cci``       (Phase C) — ENR 20-City Construction Cost Index
+- ``agc_cci``       (Phase C) — AGC PPI-based Construction Cost Index
+- ``turner_cci``    (Phase C) — Turner Building Cost Index
+- ``construction_indexes`` (Phase C, stub) — NAHB Cost of Constructing a Home
 
 All adapters MUST:
 - Use TLS verification (no ``verify=False``).

@@ -37,11 +37,14 @@ except Exception:  # noqa: BLE001
     pass
 
 from core.pricing.snapshots import write_snapshots  # noqa: E402
+from core.pricing.sources.agc_cci import AGCCCISource  # noqa: E402
 from core.pricing.sources.bls_oews import BLSOEWSSource  # noqa: E402
 from core.pricing.sources.bls_ppi import BLSPPISource  # noqa: E402
 from core.pricing.sources.davis_bacon import DavisBaconSource  # noqa: E402
 from core.pricing.sources.eia import EIAFuelSource  # noqa: E402
+from core.pricing.sources.enr_cci import ENRCCISource  # noqa: E402
 from core.pricing.sources.fred import FREDSource  # noqa: E402
+from core.pricing.sources.turner_cci import TurnerCCISource  # noqa: E402
 
 LOG = logging.getLogger("refresh_pricing")
 
@@ -51,6 +54,20 @@ ALL_SOURCES = {
     "fred": FREDSource,
     "eia": EIAFuelSource,
     "davis_bacon": DavisBaconSource,
+    # Phase C — Construction Cost Index macro escalators. Not in the
+    # default --sources list because they scrape HTML and are more fragile
+    # than the Phase A / B JSON APIs; opt in explicitly with
+    # `--sources enr_cci,agc_cci,turner_cci` or via `--phase c`.
+    "enr_cci": ENRCCISource,
+    "agc_cci": AGCCCISource,
+    "turner_cci": TurnerCCISource,
+}
+
+# Source bundles by phase, used by the `--phase` shortcut flag.
+PHASE_SOURCES: dict[str, list[str]] = {
+    "a": ["bls_ppi", "bls_oews", "fred", "eia"],
+    "b": ["davis_bacon"],
+    "c": ["enr_cci", "agc_cci", "turner_cci"],
 }
 
 
@@ -62,7 +79,19 @@ def _parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
         "--sources",
         default="bls_ppi,fred,eia,bls_oews",
         help="Comma-separated list of sources to refresh. "
-             f"Available: {','.join(sorted(ALL_SOURCES))}.",
+             f"Available: {','.join(sorted(ALL_SOURCES))}. "
+             "Phase C CCI sources (enr_cci / agc_cci / turner_cci) are "
+             "excluded from the default because they scrape HTML and are "
+             "more fragile than the Phase A / B JSON APIs; opt in "
+             "explicitly via --sources or --phase c.",
+    )
+    p.add_argument(
+        "--phase",
+        default=None,
+        choices=sorted(PHASE_SOURCES.keys()),
+        help="Shortcut for refreshing every source in a given phase "
+             "bundle (a = BLS PPI/OEWS + FRED + EIA; b = Davis-Bacon; "
+             "c = ENR/AGC/Turner CCI). Overrides --sources when given.",
     )
     p.add_argument(
         "--period",
@@ -169,7 +198,10 @@ def main(argv: Optional[list[str]] = None) -> int:
     args = _parse_args(argv)
     _configure_logging(args.verbose)
 
-    requested = [s.strip() for s in args.sources.split(",") if s.strip()]
+    if args.phase:
+        requested = list(PHASE_SOURCES[args.phase])
+    else:
+        requested = [s.strip() for s in args.sources.split(",") if s.strip()]
     unknown = [s for s in requested if s not in ALL_SOURCES]
     if unknown:
         print(f"ERROR: unknown sources: {unknown}", file=sys.stderr)
