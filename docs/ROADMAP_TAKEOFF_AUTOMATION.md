@@ -954,7 +954,7 @@ Worker BB's intended outcome is captured: a barely-above-threshold CWICR hit on 
 - Notes-payload not starting with `source_tag + " "` (defensive — would never happen in practice from `format_batch_operator_note`) → helper falls back to using the payload as-is rather than crashing.
 
 **Edge cases NOT handled (recommended future work):**
-- **`app.py` wire-up.** The two existing `apply_batch_plan(estimate, sq_plan, auto_apply_matched=True, ...)` call sites in `app.py`'s sub-quote section don't yet pass `source_tag` — backend is ready but the user-visible behaviour will only flip once a follow-up `app.py` PR replaces those calls with `apply_subquote_plan(estimate, sq_plan, llm=(st.session_state.get("subquote_source") == "llm"))`. One-line change at each site; deferred to a follow-up PR.
+- ~~**`app.py` wire-up.** The two existing `apply_batch_plan(estimate, sq_plan, auto_apply_matched=True, ...)` call sites in `app.py`'s sub-quote section don't yet pass `source_tag` — backend is ready but the user-visible behaviour will only flip once a follow-up `app.py` PR replaces those calls with `apply_subquote_plan(estimate, sq_plan, llm=(st.session_state.get("subquote_source") == "llm"))`. One-line change at each site; deferred to a follow-up PR.~~ **SHIPPED as T6.4.c.1 — see block below.** T6.4.c is now operator-visible end-to-end: the canonical `[sub-quote]` / `[sub-quote-llm]` / `[vendor-csv]` tag reaches every overridden line's `CostLine.notes` field at position 0 across all three ingestion paths.
 - **Manual-override tag stamping.** `apply_manual_override` is the T6.1 single-line primitive; a manual override after a batch apply preserves the batch tag inside the prior-notes string but does not stamp `[manual-override]` at position 0. A future helper `format_manual_override_note` would close this if the calibration set demands it.
 - **Notes column width on very long descriptions.** `_autosize`'s `max_width=60` clamps the Notes column at 60 chars — adequate for the tag + sentinel + a couple of bracketed fields, but a 200-char note with a long vendor name + quote ref + verbose row notes will get clipped on read in Excel (the cell value still round-trips; only the visible width is clamped). A future enhancement could bump the Notes column to a per-column override of `max_width=100` specifically for the Line Items sheet.
 
@@ -964,6 +964,60 @@ Worker BB's intended outcome is captured: a barely-above-threshold CWICR hit on 
 - **Phase T6.4.d — Per-line undo.** Track the pre-override snapshot per line (not just globally as T6.2 does today) so an operator can revert a single line without losing every other override. Pure schema + UI; the backend already returns a new Estimate per override so the undo stack is essentially free.
 - **Phase T6.4.e — Markup knob.** Vendor sub-quotes typically need a +10-20% subcontractor markup. The current flow takes the vendor `unit_cost` verbatim. A `markup_pct` parameter on `apply_batch_plan` (and an optional `markup` CSV column) would handle this. Pairs naturally with T9.1's tally panel and T9.2's tally table since all three surfaces compute the same compounded grand total.
 - **Phase T10 — Calibration v4.** First real-bid-set run with T6.4.c surfacing source tags in the deliverable PDF + Excel; validates that operators can attribute every priced-line override to its provenance at a glance.
+
+---
+
+### Phase T6.4.c.1 — `app.py` activation of the T6.4.c source-tag wire-up
+
+**Status:** SHIPPED — this commit activates the `apply_subquote_plan` wrapper and the explicit `source_tag=SOURCE_TAG_VENDOR_CSV` kwarg at the three Streamlit "Apply" call sites in `app.py`. T6.4.c had already shipped the pure-backend plumbing (constants + keyword-only `source_tag` on `apply_batch_plan` + `_rewrite_notes_with_tag_first` helper + the `apply_subquote_plan(estimate, plan, *, llm=...)` wrapper); this slice is the operator-facing flip that closes the T6.4.c family loop. **`app.py`-only slice** — zero modifications to `core/pricing/batch_override.py` (Worker SS's T6.4.b territory), `core/pricing/subquote_parser.py` (backend frozen post-T6.4.c), `core/schemas.py`, `core/estimator.py`, `core/exporter.py`, or `core/exporter_pdf.py`. Suite: 2424 → 2442 passed, 1 skipped (+18 new tests in one new file).
+
+**Audit result — override_history double-stamping:** investigated and **NOT** a regression. Post-T6.4.c.1, the canonical source tag appears in two complementary fields, each carrying the tag exactly once (verified by `test_tag_appears_exactly_once_in_costline_notes` + `test_history_operator_note_and_costline_notes_carry_same_tag`):
+
+1. `CostLine.notes` — the persisted, exporter-visible audit trail on the line itself. Written by `apply_batch_plan` → `_rewrite_notes_with_tag_first` in the format `"[<tag>] operator override: <payload-without-leading-tag> [ | previous: <prior-notes> ]"`.
+2. `st.session_state["override_history"][i]["operator_note"]` — the in-session, UI-history-table audit trail. Written by the UI's separate `format_batch_operator_note(result.row, source_tag=...)` call in the format `"[<tag>] [vendor: ...] [csv-row: N] <notes-from-row>"`.
+
+The two strings are NOT byte-identical (the notes cell carries the `operator override:` sentinel + optional previous-notes suffix that the history-row operator_note doesn't have), but they both start with the same canonical tag and share it once each. The pre-T6.4.c.1 history-log code already emitted the right tag for the sub-quote section; the T6.4.c.1 change there is a no-op style refinement (the inline ternary `"[sub-quote-llm]" if subquote_source == "llm" else "[sub-quote]"` is replaced by `SOURCE_TAG_SUBQUOTE_LLM if sq_is_llm else SOURCE_TAG_SUBQUOTE_TABULAR` so the constants are the single source of truth across both the backend `apply` argument and the UI history-row format). The vendor-CSV path's history-log note is updated symmetrically — previously it called `format_batch_operator_note(result.row)` (defaulting to `[batch]`) which would have left the operator-history log on `[batch]` even after the backend tag flipped to `[vendor-csv]`; now both surfaces agree on `[vendor-csv]`. No deduplication needed; the two fields serve distinct audit purposes and complementary tagging is the intended design.
+
+**The three call-site changes (one-line before/after each):**
+
+| Call site | Before (T6.4.c) | After (T6.4.c.1) |
+|---|---|---|
+| T6.3 Vendor CSV apply | `apply_batch_plan(estimate, plan, auto_apply_matched=True, resolved_ambiguous=resolved_map)` | `apply_batch_plan(estimate, plan, auto_apply_matched=True, resolved_ambiguous=resolved_map, source_tag=SOURCE_TAG_VENDOR_CSV)` |
+| T6.3 Vendor CSV history note | `format_batch_operator_note(result.row)` | `format_batch_operator_note(result.row, source_tag=SOURCE_TAG_VENDOR_CSV)` |
+| Sub-quote apply (T8.1 + T8.2 shared, branches on `subquote_source` session-state) | `apply_batch_plan(estimate, sq_plan, auto_apply_matched=True, resolved_ambiguous=sq_resolved_map)` | `apply_subquote_plan(estimate, sq_plan, llm=sq_is_llm, auto_apply_matched=True, resolved_ambiguous=sq_resolved_map)` (where `sq_is_llm = st.session_state.get("subquote_source") == "llm"`) |
+
+Plus a 6-line refactor in the sub-quote section that pulls `sq_is_llm` out of the inline ternary so it's computed once and reused for both the `apply_subquote_plan(llm=...)` argument AND the `sq_source_tag` constant selection used by the history-row `format_batch_operator_note(...)` call — single source of truth across the two surfaces.
+
+**Implementation notes (this commit):**
+- **Imports widened.** `app.py` adds `apply_subquote_plan` to the `core.pricing.subquote_parser` import list and `SOURCE_TAG_VENDOR_CSV`, `SOURCE_TAG_SUBQUOTE_TABULAR`, `SOURCE_TAG_SUBQUOTE_LLM` to the `core.pricing.batch_override` import list. No other module-level changes.
+- **Sub-quote section uses the wrapper, not the raw applier.** `apply_subquote_plan(estimate, sq_plan, llm=sq_is_llm, ...)` replaces the prior `apply_batch_plan(estimate, sq_plan, ...)` call. The wrapper internally picks the right tag (`SOURCE_TAG_SUBQUOTE_LLM` when `llm=True`, `SOURCE_TAG_SUBQUOTE_TABULAR` when `llm=False`) and forwards every other kwarg unchanged.
+- **Vendor-CSV section uses the explicit constant.** `apply_batch_plan(estimate, plan, ..., source_tag=SOURCE_TAG_VENDOR_CSV)` replaces the prior implicit `apply_batch_plan(estimate, plan, ...)` call. The default of `SOURCE_TAG_BATCH` is preserved by `apply_batch_plan`'s signature for byte-compat with any pre-T6.4.c.1 direct caller, but the UI no longer relies on the default — the canonical vendor-csv tag is passed explicitly.
+- **History-row tag derived from the same flag.** The `sq_source_tag` used by the `format_batch_operator_note(result.row, source_tag=...)` call (which lands in `override_history[i]["operator_note"]`) now reads `SOURCE_TAG_SUBQUOTE_LLM if sq_is_llm else SOURCE_TAG_SUBQUOTE_TABULAR` — the same `sq_is_llm` boolean that drove the `apply_subquote_plan(llm=...)` argument. Single source of truth; a future rename of either constant touches one location.
+- **No `core/*` changes.** Pure UI activation slice; the backend was already complete after T6.4.c.
+
+**Files modified:** 2.
+- `app.py` — imports widened (+4 names); three apply call-site updates (T6.3 vendor CSV applier + its history-row formatter, T8.1 + T8.2 shared sub-quote applier); inline string-literal ternary for the sub-quote source tag replaced with a constants-based ternary that reuses the `sq_is_llm` boolean.
+- `docs/ROADMAP_TAKEOFF_AUTOMATION.md` — strike-through on T6.4.c's "Edge cases NOT handled" `app.py` wire-up bullet; this section.
+
+**Files created:** 1.
+- `tests/test_streamlit_subquote_apply_wireup.py` — 18 tests across import-surface pins (3) + source-level call-site shape pins (4) + backend round-trip across all three apply paths (4) + override-history-vs-CostLine-notes tag-consistency (3) + edge cases (empty plan, mixed-source guard) (2) + import / source-readability smoke (2).
+
+**Test deltas:** 0 pre-existing tests modified. All 2424 pre-T6.4.c.1 tests remain byte-identically green. Suite: 2424 → 2442 passed, 1 skipped.
+
+**Edge cases handled:**
+- Empty sub-quote plan → no `CostLine.notes` mutation on any line. Pinned by `test_empty_plan_does_not_mutate_notes`.
+- Re-apply same plan → idempotent; tag still appears exactly once. Pinned by `test_reapply_same_plan_preserves_single_tag`.
+- Mixed-source-within-single-apply (defensive) → every applied row carries the SAME tag (the wrapper's contract). Pinned by `test_mixed_source_within_single_apply_uses_caller_tag`.
+- Override_history operator_note and `CostLine.notes` agree on the leading tag but carry their distinct formats (sentinel + previous-suffix on notes; bracketed-fields-only on history). Pinned by `test_history_operator_note_and_costline_notes_carry_same_tag`.
+
+**Edge cases NOT handled (recommended future work):**
+- **Multi-batch UNDO across all three paths.** The T6.2 global "Undo last batch" affordance still works (it pops the most recent `override_history` entry and restores the prior estimate snapshot) but per-line undo across mixed `[vendor-csv]` / `[sub-quote]` / `[sub-quote-llm]` history rows is out of scope; T6.4.d covers that.
+- **Manual override after batch apply.** Still preserves the batch tag inside the prior-notes string (inherited from T6.4.c). A future `format_manual_override_note` helper plus a UI affordance would stamp `[manual-override]` at position 0 if the calibration set demands it.
+
+**Suggested next slices:**
+- **Phase T6.4.b — Unit-aware matching.** Worker SS's in-flight slice. Multiplies `match_cost_lines` similarity by a unit-compatibility factor (1.0 matching, 0.5 compatible, 0.0 incompatible) so LF×TON-style failure modes the seed DB suppression already handles for cost lookups also catch in the override matcher.
+- **Phase T6.4.e — Markup knob.** Vendor sub-quotes typically need a +10-20% subcontractor markup. Add a `markup_pct` parameter on `apply_batch_plan` (and an optional `markup` CSV column) so the vendor `unit_cost` isn't taken verbatim. Pairs naturally with T9.1's tally panel and T9.2's tally table since all three surfaces compute the same compounded grand total.
+- **Phase T10 — Calibration v4.** First real-bid-set run with T6.4.c family fully operator-visible end-to-end; validates that operators can attribute every priced-line override to its provenance at a glance in the Excel "Line Items" Notes column + the client-PDF cost-breakdown table.
 
 ---
 

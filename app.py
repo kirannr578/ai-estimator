@@ -49,6 +49,9 @@ from core.extractors import extract_bundle, extract_sheet
 from core.llm_client import LLMClient
 from core.pdf_processor import DocumentBundle, process_pdfs
 from core.pricing.batch_override import (
+    SOURCE_TAG_SUBQUOTE_LLM,
+    SOURCE_TAG_SUBQUOTE_TABULAR,
+    SOURCE_TAG_VENDOR_CSV,
     BatchMatchResult,
     BatchMatchStatus,
     BatchOverridePlan,
@@ -63,6 +66,7 @@ from core.pricing.subquote_parser import (
     SubquoteMetadata,
     SubquoteParseError,
     SubquoteParseResult,
+    apply_subquote_plan,
     parse_subquote_pdf,
     parse_subquote_pdf_with_llm,
 )
@@ -3056,6 +3060,7 @@ if "estimate" in st.session_state:
                             plan,
                             auto_apply_matched=True,
                             resolved_ambiguous=resolved_map,
+                            source_tag=SOURCE_TAG_VENDOR_CSV,
                         )
                     except Exception as exc:
                         st.error(f"Batch apply failed: {exc}")
@@ -3097,7 +3102,10 @@ if "estimate" in st.session_state:
                             new_line = new_estimate.line_items[
                                 result.best_match_index
                             ]
-                            note = format_batch_operator_note(result.row)
+                            note = format_batch_operator_note(
+                                result.row,
+                                source_tag=SOURCE_TAG_VENDOR_CSV,
+                            )
                             override_history.append({
                                 "timestamp": now_ts,
                                 "line_index": result.best_match_index,
@@ -3551,10 +3559,21 @@ if "estimate" in st.session_state:
                         "subquote_resolved", {}
                     )
                     pre_apply = estimate
+                    # T6.4.c.1 — route through ``apply_subquote_plan`` so the
+                    # canonical ``[sub-quote]`` / ``[sub-quote-llm]`` tag
+                    # lands at position 0 of every overridden line's
+                    # ``CostLine.notes`` (not just in the Streamlit
+                    # session-state ``override_history``). The boolean
+                    # ``llm`` flag picks the right tag for the active
+                    # ingestion path (table parser vs vision LLM).
+                    sq_is_llm = (
+                        st.session_state.get("subquote_source") == "llm"
+                    )
                     try:
-                        new_estimate, sq_apply_summary = apply_batch_plan(
+                        new_estimate, sq_apply_summary = apply_subquote_plan(
                             estimate,
                             sq_plan,
+                            llm=sq_is_llm,
                             auto_apply_matched=True,
                             resolved_ambiguous=sq_resolved_map,
                         )
@@ -3588,11 +3607,15 @@ if "estimate" in st.session_state:
                         # from vision-LLM rows ([sub-quote-llm]) so a
                         # post-mortem can attribute downstream pricing
                         # discrepancies to the right ingestion path.
+                        # T6.4.c.1 — derive from the same ``sq_is_llm``
+                        # flag we passed to ``apply_subquote_plan`` above
+                        # so the session-state log and the canonical
+                        # ``CostLine.notes`` tag stay in lockstep (single
+                        # source of truth for the active path).
                         sq_source_tag = (
-                            "[sub-quote-llm]"
-                            if st.session_state.get("subquote_source")
-                            == "llm"
-                            else "[sub-quote]"
+                            SOURCE_TAG_SUBQUOTE_LLM
+                            if sq_is_llm
+                            else SOURCE_TAG_SUBQUOTE_TABULAR
                         )
 
                         now_ts = datetime.utcnow().isoformat(timespec="seconds")
