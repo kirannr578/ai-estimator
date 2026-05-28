@@ -773,6 +773,59 @@ class PanelScheduleResult(BaseModel):
     raw_table_text: str = ""                   # joined-headers debug string
 
 
+class LightingFixtureRecord(BaseModel):
+    """One lighting fixture pulled off a lighting-fixture schedule (Phase T2.7).
+
+    Lighting-fixture schedules live on electrical sheets (E1.0 / E2.0 /
+    EL.0) and are the second-highest single Division 26 artefact after
+    panel hardware. Each fixture type fans out into 1 EA TakeoffItem
+    (the fixture itself) plus optionally 1 LS lamp/driver line for
+    non-LED-integrated technologies (fluorescent / HID). Phase T2.7 is
+    the EA-unit dispatcher analogue of T2.6 (panels), simpler because
+    there is no parametric feeder fan-out — just per-fixture-type rows.
+
+    Schedule rarely publishes a per-type quantity (the count comes
+    from a floor-plan walk by the estimator). When the schedule DOES
+    include a ``QTY`` column the value flows through ``quantity`` and
+    the synthesiser bumps confidence; when absent, the synthesiser
+    emits a single EA with low confidence so the row lands in the
+    HAND_TAKEOFF queue for the estimator to back-fill.
+    """
+
+    fixture_tag: str                           # "A1", "B", "C2", "F1"
+    description: str
+    manufacturer: Optional[str] = None
+    catalog_number: Optional[str] = None
+    wattage: Optional[float] = None            # watts (per fixture)
+    lumens: Optional[int] = None
+    color_temp_k: Optional[int] = None         # 3000, 4000, 5000
+    voltage: Optional[str] = None              # "120V", "277V", "120/277V"
+    lamp_type: Optional[str] = None            # "LED", "FLUORESCENT", "HID", "INCAN"
+    mounting: Optional[str] = None             # "RECESSED", "SURFACE", "PENDANT", ...
+    dimmable: Optional[bool] = None
+    emergency: Optional[bool] = None
+    quantity: Optional[int] = None             # from QTY column when present
+    notes: Optional[str] = None
+    confidence: float = 0.85
+    source_sheet: Optional[str] = None
+    source_page: int = 0
+
+
+class LightingScheduleResult(BaseModel):
+    """Aggregate lighting-fixture-schedule pre-pass result for one page (Phase T2.7).
+
+    Attached alongside (not replacing) the generic :class:`Schedule`
+    rows on :class:`DrawingPrepassResult` so the existing prepass
+    surface keeps working while downstream takeoff (Phase T2.7
+    synthesis) consumes the richer typed records.
+    """
+
+    pages: list[int] = Field(default_factory=list)
+    fixtures: list[LightingFixtureRecord] = Field(default_factory=list)
+    confidence: float = 0.0                    # 0..1
+    raw_table_text: str = ""                   # joined-headers debug string
+
+
 class DrawingPrepassResult(BaseModel):
     """Snapshot of everything the deterministic pre-pass could pull off
     a single drawing page without invoking the vision LLM."""
@@ -787,6 +840,7 @@ class DrawingPrepassResult(BaseModel):
     finish_schedule: Optional[FinishScheduleResult] = None  # T4 typed finish records
     room_schedule: Optional[RoomScheduleResult] = None  # T5 typed room geometry
     panel_schedule: Optional[PanelScheduleResult] = None  # T2.6 typed electrical panels
+    lighting_schedule: Optional[LightingScheduleResult] = None  # T2.7 typed lighting fixtures
 
 
 class SheetExtraction(BaseModel):

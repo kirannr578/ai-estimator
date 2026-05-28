@@ -28,12 +28,14 @@ from rapidfuzz import fuzz
 
 from .extraction.door_dedupe import dedupe_doors_against_synthesis
 from .extraction.finish_dedupe import dedupe_finishes_against_synthesis
+from .extraction.lighting_dedupe import dedupe_lighting_against_synthesis
 from .extraction.panel_dedupe import dedupe_panels_against_synthesis
 from .extraction.room_schedule import merge_room_schedules
 from .extraction.takeoff_backfill import backfill_finish_quantities
 from .extraction.takeoff_synthesis import (
     synthesize_door_takeoff_items,
     synthesize_finish_takeoff_items,
+    synthesize_lighting_takeoff_items,
     synthesize_panel_takeoff_items,
     synthesize_window_takeoff_items,
 )
@@ -700,6 +702,12 @@ def reconcile(
     # for the same reason as doors / windows / finishes; T2.6 dedupe runs
     # after the merge.
     synthesized_panel_items: list[TakeoffItem] = []
+    # Phase T2.7: per-sheet lighting-fixture-schedule pre-pass → typed
+    # TakeoffItem rows. Each LightingFixtureRecord fans out into 1 EA
+    # fixture row + optionally 1 LS lamp/driver row (for non-LED-
+    # integrated technologies). Same survives-through-merge pattern
+    # as panels; T2.7 dedupe runs after the merge.
+    synthesized_lighting_items: list[TakeoffItem] = []
     # Phase T5: per-sheet room-schedule pre-pass. Unlike doors / windows
     # / finishes there's no synthesis step — the room schedule supplies
     # GEOMETRY (area / perimeter / ceiling height) that the T5 back-fill
@@ -765,6 +773,13 @@ def reconcile(
                     sheet_id=ex.sheet_id,
                 )
             )
+        if ex.prepass is not None and getattr(ex.prepass, "lighting_schedule", None) is not None:
+            synthesized_lighting_items.extend(
+                synthesize_lighting_takeoff_items(
+                    ex.prepass.lighting_schedule,
+                    sheet_id=ex.sheet_id,
+                )
+            )
 
     # --- dedupe domain entities ---
     rooms = _dedupe_rooms(rooms)
@@ -813,6 +828,13 @@ def reconcile(
     # every row is tagged ``source=panel_schedule_prepass`` for the
     # downstream dedupe pass.
     all_takeoffs.extend(synthesized_panel_items)
+    # T2.7: append synthesised lighting-fixture-schedule rows. Each
+    # LightingFixtureRecord already fanned out into 1 EA fixture row
+    # + optional 1 LS lamp/driver row inside
+    # ``synthesize_lighting_takeoff_items``; every row is tagged
+    # ``source=lighting_schedule_prepass`` for the downstream
+    # dedupe pass.
+    all_takeoffs.extend(synthesized_lighting_items)
     # T3: drop legacy LLM door aggregates ("Hollow metal doors", "Solid-core
     # wood doors", "Doors (type unspecified)") and same-mark LLM door rows
     # when a deterministic synthesised row already covers them. Pure on
@@ -838,6 +860,16 @@ def reconcile(
     # overlap). No-op when no synthesised panel exists on the project
     # (safety rule, mirrors T3 / T2.5 / T4).
     all_takeoffs = dedupe_panels_against_synthesis(all_takeoffs)
+    # T2.7 dedupe: retire legacy LLM lighting aggregates ("LED
+    # downlights", "2x4 troffer fixtures", "Wall sconces") and
+    # same-tag LLM lighting rows when a deterministic synthesised
+    # row already covers them. CSI prefixes ``26 51`` + ``26 55``
+    # keep this pass mutually exclusive with the door / window /
+    # finish / panel passes above (Division 08 / 09 / 03 / 26-24
+    # / 26-28 don't overlap with 26-51 / 26-55). No-op when no
+    # synthesised lighting fixture exists on the project (safety
+    # rule, mirrors T3 / T2.5 / T4 / T2.6).
+    all_takeoffs = dedupe_lighting_against_synthesis(all_takeoffs)
     # T5 back-fill: replace ``quantity=0.0`` on every finish-synthesis
     # row with the right SF (floor / ceiling = area; base = perimeter
     # in LF; wall = perimeter × height × share). Joins finish rows to

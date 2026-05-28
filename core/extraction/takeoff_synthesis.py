@@ -49,6 +49,8 @@ from core.schemas import (
     DoorScheduleResult,
     FinishRecord,
     FinishScheduleResult,
+    LightingFixtureRecord,
+    LightingScheduleResult,
     PanelRecord,
     PanelScheduleResult,
     TakeoffItem,
@@ -61,10 +63,12 @@ __all__ = [
     "SYNTHESIS_SOURCE_TAG_WINDOW",
     "SYNTHESIS_SOURCE_TAG_FINISH",
     "SYNTHESIS_SOURCE_TAG_PANEL",
+    "SYNTHESIS_SOURCE_TAG_LIGHTING",
     "synthesize_door_takeoff_items",
     "synthesize_window_takeoff_items",
     "synthesize_finish_takeoff_items",
     "synthesize_panel_takeoff_items",
+    "synthesize_lighting_takeoff_items",
 ]
 
 
@@ -72,6 +76,7 @@ SYNTHESIS_SOURCE_TAG: Final[str] = "door_schedule_prepass"
 SYNTHESIS_SOURCE_TAG_WINDOW: Final[str] = "window_schedule_prepass"
 SYNTHESIS_SOURCE_TAG_FINISH: Final[str] = "finish_schedule_prepass"
 SYNTHESIS_SOURCE_TAG_PANEL: Final[str] = "panel_schedule_prepass"
+SYNTHESIS_SOURCE_TAG_LIGHTING: Final[str] = "lighting_schedule_prepass"
 
 
 # ---------------------------------------------------------------------------
@@ -1068,5 +1073,271 @@ def synthesize_panel_takeoff_items(
             source_sheet_ids=list(sheets),
             notes=_panel_notes_for(panel, role="feeder_conduit"),
         ))
+
+    return items
+
+
+# ---------------------------------------------------------------------------
+# Lighting helpers (Phase T2.7)
+# ---------------------------------------------------------------------------
+#
+# Lighting-fixture schedules fan each ``LightingFixtureRecord`` out
+# into 1 or 2 families of ``TakeoffItem``:
+#
+# 1. **N EA fixture** — CSI 26 51 13 (Interior Lighting) for
+#    recessed / surface / pendant / suspended mountings, OR 26 51 19
+#    (Wall-Mounted Lighting) for wall-mounted fixtures. The CSI
+#    boundary is the same one MasterFormat draws (interior-overhead
+#    lighting vs wall-mounted sconces / cove / vanity); the
+#    classification falls back to 26 51 13 when mounting is unknown.
+# 2. **1 LS lamp/driver** — CSI 26 55 53 (lamps) for replaceable-
+#    lamp fixtures (FLUORESCENT / HID). LED-integrated fixtures
+#    have no separate lamp line; the driver is integral to the
+#    fixture and is captured by the EA price. ``INCAN`` is treated
+#    as replaceable too (a halogen / incandescent bulb is a
+#    consumable).
+#
+# Quantity routing: the schedule rarely publishes a per-type count
+# (the estimator walks the floor plan to count). When a QTY column
+# IS present, the synthesised quantity uses it at high (0.90)
+# confidence; when absent, the synthesiser emits ``quantity=1.0``
+# at **0.55 confidence** so the row lands in the HAND_TAKEOFF queue
+# (< 0.65 banding threshold) and the estimator can't miss it.
+#
+# Why the 0.55 vs 0.90 gap: 0.55 forces the row into HAND_TAKEOFF
+# (the estimator MUST supply the real count); 0.90 is below
+# AUTO_APPROVE (≥ 0.95 baseline) but well into OPERATOR_REVIEW so
+# the row appears in the headline cost while remaining flagged. The
+# 0.35 spread (vs the panel's 0.30 between 0.85 enclosure / 0.55
+# feeder) is deliberately wider because lighting counts are MORE
+# likely to be wrong than panel counts (panels are explicit on the
+# schedule; fixtures aren't).
+
+
+# CSI families used by lighting synthesis. Tuples are (division,
+# section, family-label-for-description), mirroring the shape used
+# by the door / window / finish / panel synthesisers.
+_CSI_LIGHTING_INTERIOR: Final[tuple[str, str, str]] = (
+    "26", "26 51 13", "Interior Lighting Fixture",
+)
+_CSI_LIGHTING_WALL:     Final[tuple[str, str, str]] = (
+    "26", "26 51 19", "Wall-Mounted Lighting Fixture",
+)
+_CSI_LIGHTING_EXTERIOR: Final[tuple[str, str, str]] = (
+    "26", "26 56 00", "Exterior Lighting Fixture",
+)
+_CSI_LIGHTING_LAMP:     Final[tuple[str, str, str]] = (
+    "26", "26 55 53", "Replaceable Lamp / Ballast",
+)
+
+# Confidence assigned when the schedule DOES publish a QTY column.
+# A QTY value is an explicit count, so we trust it on par with a
+# clean door / window EA row.
+_LIGHTING_QTY_CONFIDENCE: Final[float] = 0.90
+
+# Confidence assigned when the schedule omits a QTY column and the
+# synthesiser emits the default quantity=1.0. 0.55 lands the row in
+# HAND_TAKEOFF (< 0.65 threshold) so the estimator walks the floor
+# plan and supplies a real count.
+_LIGHTING_HAND_TAKEOFF_CONFIDENCE: Final[float] = 0.55
+
+# Lamp-technology families whose fixture has a separately-priced
+# replaceable lamp / driver. LED-integrated fixtures are NOT in
+# this set — their driver is integral to the fixture and is captured
+# by the EA price.
+_REPLACEABLE_LAMP_TYPES: Final[frozenset[str]] = frozenset({
+    "FLUORESCENT", "HID", "INCAN",
+})
+
+
+def _classify_lighting_fixture(
+    fixture: LightingFixtureRecord,
+) -> tuple[str, str, str]:
+    """Return ``(csi_division, csi_section, family_label)`` for one fixture.
+
+    Mounting wins when present: WALL → ``26 51 19``; RECESSED /
+    SURFACE / PENDANT / SUSPENDED → ``26 51 13``. When mounting is
+    unknown the description is scanned for an EXTERIOR / OUTDOOR /
+    SITE / POLE / LANDSCAPE hint that routes to ``26 56 00``;
+    otherwise the default is the interior section (the dominant
+    case on commercial bid sets).
+    """
+    if fixture.mounting and fixture.mounting.upper() == "WALL":
+        return _CSI_LIGHTING_WALL
+    # Exterior detection from description / notes — cheap heuristic.
+    blob = " ".join(t for t in (fixture.description, fixture.notes) if t).upper()
+    if blob:
+        for kw in ("EXTERIOR", "OUTDOOR", "SITE LIGHT", "POLE",
+                   "LANDSCAPE", "WALL PACK"):
+            if kw in blob:
+                # WALL PACK is technically wall-mounted; route it as
+                # exterior since the cost basis is closer to site
+                # lighting than to interior sconces.
+                return _CSI_LIGHTING_EXTERIOR
+    return _CSI_LIGHTING_INTERIOR
+
+
+def _fixture_label(fixture: LightingFixtureRecord) -> str:
+    """Render a ``Fixture <TAG>`` label, fallback to ``Fixture (unmarked)``."""
+    tag = (fixture.fixture_tag or "").strip()
+    if not tag:
+        return "Fixture (unmarked)"
+    return f"Fixture {tag}"
+
+
+def _describe_lighting_fixture(fixture: LightingFixtureRecord,
+                                  family: str) -> str:
+    """Build a human-readable description for the fixture row.
+
+    Examples::
+
+        "Fixture A1 — 2x4 LED RECESSED TROFFER 4000K (Lithonia 2BLT4-40L-LP840) 277V"
+        "Fixture B — Wall sconce LED 15W (Cooper LF-15W-30K)"
+        "Fixture C — Interior Lighting Fixture"
+    """
+    head = _fixture_label(fixture)
+    parts: list[str] = []
+    desc = (fixture.description or "").strip()
+    if desc:
+        parts.append(desc)
+    else:
+        parts.append(family)
+    mfr_bits: list[str] = []
+    if fixture.manufacturer:
+        mfr_bits.append(fixture.manufacturer.strip())
+    if fixture.catalog_number:
+        mfr_bits.append(fixture.catalog_number.strip())
+    if mfr_bits:
+        parts.append(f"({' '.join(mfr_bits)})")
+    if fixture.wattage is not None:
+        parts.append(f"{fixture.wattage:g}W")
+    if fixture.voltage:
+        parts.append(fixture.voltage)
+    return f"{head} — {' '.join(parts)}".rstrip()
+
+
+def _describe_lighting_lamp(fixture: LightingFixtureRecord) -> str:
+    """Build a description for the per-fixture lamp/driver LS row."""
+    head = _fixture_label(fixture)
+    lamp = (fixture.lamp_type or "lamp").lower()
+    return f"{head} — {lamp} lamp/driver replacement allowance"
+
+
+def _lighting_notes_for(fixture: LightingFixtureRecord, *, role: str) -> str:
+    """Stable, source-tagged notes string for lighting dedupe to grep.
+
+    Format mirrors door + window + finish + panel: ``key=value``
+    pairs joined by ``"; "``. The first pair is always
+    ``source=lighting_schedule_prepass`` so a prefix-match is cheap.
+    The ``role`` token disambiguates which family the row belongs to
+    (``fixture`` / ``lamp``).
+    """
+    bits: list[str] = [f"source={SYNTHESIS_SOURCE_TAG_LIGHTING}"]
+    if fixture.fixture_tag:
+        bits.append(f"mark={fixture.fixture_tag}")
+    bits.append(f"role={role}")
+    if fixture.manufacturer:
+        bits.append(f"manufacturer={fixture.manufacturer}")
+    if fixture.catalog_number:
+        bits.append(f"catalog={fixture.catalog_number}")
+    if fixture.wattage is not None:
+        bits.append(f"wattage={fixture.wattage:g}")
+    if fixture.lumens is not None:
+        bits.append(f"lumens={fixture.lumens}")
+    if fixture.color_temp_k is not None:
+        bits.append(f"color_temp_k={fixture.color_temp_k}")
+    if fixture.voltage:
+        bits.append(f"voltage={fixture.voltage}")
+    if fixture.lamp_type:
+        bits.append(f"lamp_type={fixture.lamp_type}")
+    if fixture.mounting:
+        bits.append(f"mounting={fixture.mounting}")
+    if fixture.dimmable:
+        bits.append("dimmable=true")
+    if fixture.emergency:
+        bits.append("emergency=true")
+    if fixture.quantity is not None:
+        bits.append(f"qty_from_schedule={fixture.quantity}")
+    return "; ".join(bits)
+
+
+def synthesize_lighting_takeoff_items(
+    fixtures: list[LightingFixtureRecord] | LightingScheduleResult | None,
+    *,
+    sheet_id: str | None = None,
+) -> list[TakeoffItem]:
+    """Convert each ``LightingFixtureRecord`` into 1-2 ``TakeoffItem`` rows.
+
+    Per-fixture fan-out (the structural shape of T2.7 vs. T2.6):
+
+    * One **fixture** at ``26 51 13`` (interior) or ``26 51 19``
+      (wall-mounted), unit ``EA``. Quantity = ``fixture.quantity``
+      when the schedule published a QTY column (confidence ``0.90``);
+      otherwise quantity ``1.0`` (confidence ``0.55`` → routes to
+      HAND_TAKEOFF queue).
+    * One **lamp / driver** at ``26 55 53``, unit ``LS``, ONLY for
+      lamp technologies that have a replaceable lamp (FLUORESCENT /
+      HID / INCAN). LED-integrated fixtures emit only the fixture
+      row.  Confidence inherits from the fixture record.
+
+    A fixture with no usable ``fixture_tag`` is skipped entirely
+    (defensive — the extractor already filters these).  ``sheet_id``
+    (when provided) is stored on ``source_sheet_ids`` so downstream
+    consumers can trace each row back to its sheet.
+    """
+    if fixtures is None:
+        return []
+    # Accept either the schema LightingScheduleResult OR a plain list
+    # — the integration call site in core.takeoff uses the schedule
+    # directly the same way the panel synthesiser does.
+    if hasattr(fixtures, "fixtures"):
+        fixture_list: list[LightingFixtureRecord] = list(fixtures.fixtures)
+    else:
+        fixture_list = list(fixtures)
+    if not fixture_list:
+        return []
+
+    items: list[TakeoffItem] = []
+    for fixture in fixture_list:
+        if not (fixture.fixture_tag and fixture.fixture_tag.strip()):
+            continue
+        sheets: list[str] = []
+        if sheet_id:
+            sheets.append(sheet_id)
+        elif fixture.source_sheet:
+            sheets.append(fixture.source_sheet)
+
+        # 1. Fixture row.
+        division, section, family = _classify_lighting_fixture(fixture)
+        if fixture.quantity is not None and fixture.quantity > 0:
+            qty = float(fixture.quantity)
+            fixture_confidence = _LIGHTING_QTY_CONFIDENCE
+        else:
+            qty = 1.0
+            fixture_confidence = _LIGHTING_HAND_TAKEOFF_CONFIDENCE
+        items.append(TakeoffItem(
+            csi_division=division,
+            csi_section=section,
+            description=_describe_lighting_fixture(fixture, family),
+            quantity=qty,
+            unit="EA",
+            confidence=fixture_confidence,
+            source_sheet_ids=list(sheets),
+            notes=_lighting_notes_for(fixture, role="fixture"),
+        ))
+
+        # 2. Lamp / driver — only for replaceable-lamp technologies.
+        lamp_type = (fixture.lamp_type or "").upper()
+        if lamp_type in _REPLACEABLE_LAMP_TYPES:
+            items.append(TakeoffItem(
+                csi_division=_CSI_LIGHTING_LAMP[0],
+                csi_section=_CSI_LIGHTING_LAMP[1],
+                description=_describe_lighting_lamp(fixture),
+                quantity=1.0,
+                unit="LS",
+                confidence=fixture.confidence,
+                source_sheet_ids=list(sheets),
+                notes=_lighting_notes_for(fixture, role="lamp"),
+            ))
 
     return items
