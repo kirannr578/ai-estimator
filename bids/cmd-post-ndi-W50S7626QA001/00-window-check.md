@@ -2,7 +2,23 @@
 
 **Solicitation:** W50S7626QA001 — Alter Command Post and Nondestructive Inspection (NDI) Room
 **Triage date:** Saturday, 2026-05-23
+**Re-verified:** Thursday, 2026-05-28 (5 days after initial triage; verdict unchanged)
 **Decision:** **OPEN — proceed to Phase 2 (full bid-prep + proposal package).**
+
+## Re-verification note (2026-05-28)
+
+Today's re-check confirms the bid window is still open:
+
+- **Closing date** (verbatim from SF 1442 AcroForm `/V` field `DateDue`): **04 JUN 2026** — unchanged.
+- **Closing hour** (verbatim from SF 1442 AcroForm `/V` field `Hour`): **02:00 PM** (Central, NAS JRB Fort Worth) — now extracted from the form fields and no longer "TBD-by-cover-page".
+- **Days remaining as of 2026-05-28:** **7 calendar days / 5 business days** (excludes weekend; Memorial Day already past).
+- **SAM.gov search by solicitation number returned no public-portal page** — consistent with TXANG SAP postings that sometimes route through ASFI / DIBBS rather than SAM.gov. Local PDFs remain the authoritative source for closing date.
+- **Amendment status:** still only SF 30 Amendment 0001 (drawings clause modification, no Block 13 change). No subsequent amendment has appeared on local disk.
+- **Proposal exports re-rendered 2026-05-28 09:35 CDT** via `python scripts/render_proposals.py --bid bids/cmd-post-ndi-W50S7626QA001`: all 4 artifacts regenerated OK (executive summary 14.7KB, full proposal 80.3KB, internal workbook 132.6KB, pitch deck 155.5KB).
+
+The remaining window is **tight but workable**. The two binding gates flagged below (bonding-agent commitment + 14-business-day NAS JRB site-access request) are now both critical-path — see Phase 2 risk register.
+
+---
 
 ---
 
@@ -11,7 +27,7 @@
 | Field | Value | Source (verbatim where possible) |
 |---|---|---|
 | Date offers are due (Block 13 of SF 1442) | **04 JUN 2026** | `Solicitation - W50S7626QA001 Cmd Post and NDI.pdf`, SF 1442 cover page form-field value (PDF object stream — `/V (04 JUN 2026)` and rendered text `(04 JUN 2026) Tj`). The PDF rendered cover page exposes Block 13 as a PDF AcroForm field that does not extract to flat text via the standard text-layer; the value was confirmed by direct inspection of the PDF object/content streams. |
-| Hour offers are due (Block 13) | **\[VERIFY VS SOL COVER PAGE BLOCK 13 — local time, almost certainly 1500 or 1600 local (CDT)\]** — typical FAR Part 13 SAP closings on this contracting office are 1500 CDT; user must visually confirm by opening the cover page in a PDF reader that renders form fields. |
+| Hour offers are due (Block 13) | **02:00 PM Central (CDT)** | SF 1442 AcroForm `/V` field `topmostSubform[0].Page1[0].Hour[0]` = `02:00 PM`. Confirmed by `pypdf.get_fields()` extraction on 2026-05-28. |
 | Solicitation issue date (Block 3 of SF 1442) | **03 MAY 2026** | Same PDF object-stream inspection — `/V (03 MAY 2026)` and `(03 MAY 2026) Tj`. |
 | Time zone (place of performance) | **Central (CDT)** | Place of performance is NAS/JRB Fort Worth, TX 76127 (Tarrant County) — Central Time. |
 
@@ -64,7 +80,17 @@ This is **NOT** a sealed-bid IFB (FAR Part 14), **NOT** a true negotiated FAR Pa
 
 ## 6. NAICS code
 
-**\[VERIFY VS SOL COVER PAGE — likely 236220 — Commercial and Institutional Building Construction, $45.0M small-business size standard\]**. The NAICS code field on the SF 1442 cover page is also a PDF AcroForm field that did not extract to flat text. The Product Service Code (Z2AA — *Maintenance, Repair, and Alteration of Office Buildings*) listed at Section A page 3 is consistent with NAICS 236220, and 236220 is the standard NAICS for federal building-renovation procurements at this size and scope. The user must visually confirm the NAICS in the cover page block before final SAM.gov reps & certs verification.
+**236220 — Commercial and Institutional Building Construction** ($45.0M small-business size standard). Verbatim from SF 1442 `WorkDescribed[0]` AcroForm `/V` field: *"THIS ACQUISITION IS 100% SET-ASIDE FOR SMALL BUSINESS CONCERNS UNDER THE APPLICABLE SIZE STANDARD OF NAICS 236220."* Confirmed by `pypdf.get_fields()` extraction on 2026-05-28. PSC Z2AA (Maintenance, Repair, and Alteration of Office Buildings) is consistent.
+
+Additional facts confirmed from SF 1442 AcroForm fields on 2026-05-28:
+- **Issued by / Contracting Office:** W7N2 USPFO ACTIVITY TXANG 136, 200 Hensley Ave Bldg 1672, Fort Worth, TX 76127-1672 (TX Air National Guard 136th Airlift Wing — **not** TX Army National Guard as the original brief suggested)
+- **Contracting Officer:** Sharon Krywinski, sharon.krywinski.1@us.af.mil, x874-3308
+- **Government target price range:** **$200,000 – $250,000**
+- **Performance period:** 90 calendar days from Notice to Proceed
+- **Bid acceptance period:** 60 calendar days minimum after offer due date
+- **Bonding required:** YES (per SF 1442 Block 12a `Yes[0]` AcroForm field is marked)
+- **Government target NTP:** 10 calendar days after award (SF 1442 `CalendarDaysStart[0]`)
+- **Project number:** DDPM262101
 
 ---
 
