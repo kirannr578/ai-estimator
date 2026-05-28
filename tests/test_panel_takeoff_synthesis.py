@@ -232,11 +232,19 @@ def test_branch_breakers_grouped_by_amp_size() -> None:
 
 
 def test_branch_breakers_confidence_is_panel_data_high() -> None:
-    """Branch-breaker rows synthesise at 0.85 (panel data is reliable)."""
+    """Branch-breaker rows inherit the panel record's confidence with the
+    Phase T6.1 derivation haircut (×0.95, floor 0.45). Default panel
+    record at 0.85 → breaker rows at 0.8075 (still OPERATOR_REVIEW).
+
+    Pre-T6.1 the breaker rows were a flat 0.85 regardless of the panel
+    record's confidence; T6.1 propagates the panel's confidence one
+    derivation step down so a 0.95-source panel produces 0.9025
+    breakers (AUTO) instead of flattening to 0.85 (REVIEW).
+    """
     circuits = [_circuit("1", 20), _circuit("3", 30)]
     items = synthesize_panel_takeoff_items([_panel(circuits=circuits)])
     breaker_rows = [it for it in items if it.csi_section == "26 28 16"]
-    assert all(row.confidence == pytest.approx(0.85) for row in breaker_rows)
+    assert all(row.confidence == pytest.approx(0.8075) for row in breaker_rows)
     assert all(row.unit == "EA" for row in breaker_rows)
 
 

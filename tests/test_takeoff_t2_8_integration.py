@@ -17,6 +17,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import fitz
+import pytest
 
 from core.extraction.drawing_prepass import (
     prepass_drawing_page,
@@ -279,10 +280,17 @@ def test_roughin_rows_route_to_hand_takeoff_band(tmp_path: Path) -> None:
     assert ri.confidence == 0.45
     assert band_for_confidence(ri.confidence) == CostBand.HAND_TAKEOFF
 
-    # The disconnect row at conf=0.70 should NOT be in HAND_TAKEOFF.
+    # Phase T6.1: disconnect inherits the equipment row's QTY-aware
+    # confidence with a 5% haircut. This AHU schedule omits the QTY
+    # column, so the equipment row sits at 0.55 (HAND_TAKEOFF default)
+    # and the disconnect lands at 0.5225 — also HAND_TAKEOFF, which
+    # is the correct cascade behaviour (a hand-takeoff parent should
+    # never AUTO_APPROVE its derivations). Pre-T6.1 the disconnect
+    # was a flat 0.70 regardless of parent → REVIEW band.
     disconnect_rows = [it for it in syn if it.csi_section == "26 28 16"]
     assert len(disconnect_rows) == 1
-    assert band_for_confidence(disconnect_rows[0].confidence) == CostBand.OPERATOR_REVIEW
+    assert disconnect_rows[0].confidence == pytest.approx(0.5225)
+    assert band_for_confidence(disconnect_rows[0].confidence) == CostBand.HAND_TAKEOFF
 
 
 # ---------------------------------------------------------------------------

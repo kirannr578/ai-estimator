@@ -529,3 +529,195 @@ def test_t7_band_uses_combined_confidence_not_qty_alone() -> None:
     assert band == CostBand.HAND_TAKEOFF
     # Sanity: under T6 (price=1.0), 0.95 was AUTO_APPROVE.
     assert _combined_band(0.95, 1.0, suppressed=False) == CostBand.AUTO_APPROVE
+
+
+# ---------------------------------------------------------------------------
+# Phase T6.1 — bumped 0.75 threshold + LLM default qty calibration
+# ---------------------------------------------------------------------------
+#
+# These tests pin the post-T6.1 behaviour where ``CWICR_MIN_SIMILARITY``
+# defaults to 0.75 (was 0.55) so any line that survives the matcher is
+# at LEAST CATEGORY_MATCH quality. Combined with the bumped LLM-default
+# qty fallback (0.80, see ``LLM_DEFAULT_QTY_CONFIDENCE``), this aligns
+# the matcher floor with the T6/T7 band structure that BB flagged.
+
+
+def test_t6_1_default_threshold_rejects_similarity_just_below_0_75(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A 0.74 candidate falls below the new 0.75 default → seed-DB fallback."""
+    monkeypatch.delenv("CWICR_DISABLED", raising=False)
+    monkeypatch.delenv("CWICR_MIN_SIMILARITY", raising=False)
+
+    cand = CwicrCandidate(
+        code="X", description="Interior painting walls", unit="SF",
+        unit_price=2.10, labor_cost=0.7, material_cost=1.2,
+        equipment_cost=0.2, region="usa_usd", year=2025,
+        similarity=0.74,  # JUST below the new 0.75 default
+        source_row_id=200,
+    )
+    matcher = _stub_matcher_with(cand)
+    takeoffs = [
+        TakeoffItem(
+            csi_division="09", csi_section="09 91 23",
+            description="Interior painting walls", quantity=100.0, unit="SF",
+        ),
+    ]
+    est = price_takeoff(
+        _make_project(takeoffs),
+        project_name="t",
+        cost_db=_seed_db(tmp_path),
+        cwicr_matcher=matcher,
+    )
+    line = est.line_items[0]
+    # Falls through to the seed DB by section key.
+    assert line.cost_source == "09 91 23"
+    assert line.unit_cost == pytest.approx(1.65)
+
+
+def test_t6_1_default_threshold_accepts_similarity_at_0_75(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A 0.75 candidate sits ON the new threshold → CWICR wins."""
+    from core.schemas import CostSourceTier
+    monkeypatch.delenv("CWICR_DISABLED", raising=False)
+    monkeypatch.delenv("CWICR_MIN_SIMILARITY", raising=False)
+
+    cand = CwicrCandidate(
+        code="Y", description="Slab on grade", unit="SF",
+        unit_price=8.10, labor_cost=3.0, material_cost=4.5,
+        equipment_cost=0.6, region="usa_usd", year=2025,
+        similarity=0.75,  # exactly on threshold
+        source_row_id=201,
+    )
+    matcher = _stub_matcher_with(cand)
+    takeoffs = [
+        TakeoffItem(
+            csi_division="03", csi_section="03 30 00",
+            description="Concrete slab", quantity=100.0, unit="SF",
+        ),
+    ]
+    est = price_takeoff(
+        _make_project(takeoffs),
+        project_name="t",
+        cost_db=_seed_db(tmp_path),
+        cwicr_matcher=matcher,
+    )
+    line = est.line_items[0]
+    assert line.cost_source == "cwicr:201"
+    # 0.75 sits in [0.75, 0.92) → CATEGORY_MATCH tier.
+    assert line.cost_source_tier == CostSourceTier.CATEGORY_MATCH
+
+
+def test_t6_1_min_similarity_match_lands_in_category_match_tier(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """At the new floor, price_confidence = 0.75 × 0.85 = 0.6375.
+
+    Pre-T6.1 the same matcher floor (0.55) landed at INTERPOLATED with
+    price_conf=0.65; the post-T6.1 floor moves the worst-case CWICR hit
+    one tier UP, which is the BB-intended outcome.
+    """
+    from core.schemas import CostSourceTier
+    monkeypatch.delenv("CWICR_DISABLED", raising=False)
+    monkeypatch.delenv("CWICR_MIN_SIMILARITY", raising=False)
+
+    cand = CwicrCandidate(
+        code="Z", description="Interior painting walls", unit="SF",
+        unit_price=2.10, labor_cost=0.7, material_cost=1.2,
+        equipment_cost=0.2, region="usa_usd", year=2025,
+        similarity=0.75, source_row_id=202,
+    )
+    matcher = _stub_matcher_with(cand)
+    takeoffs = [
+        TakeoffItem(
+            csi_division="09", csi_section="09 91 23",
+            description="Interior painting walls", quantity=100.0, unit="SF",
+        ),
+    ]
+    est = price_takeoff(
+        _make_project(takeoffs),
+        project_name="t",
+        cost_db=_seed_db(tmp_path),
+        cwicr_matcher=matcher,
+    )
+    line = est.line_items[0]
+    assert line.cost_source_tier == CostSourceTier.CATEGORY_MATCH
+    assert line.price_confidence == pytest.approx(0.6375)
+
+
+def test_t6_1_default_takeoff_min_similarity_cwicr_lands_in_hand_band(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A schema-default takeoff (qty=0.7) at the CWICR floor:
+
+    qty=0.70 × price=0.6375 = 0.446 → HAND_TAKEOFF.
+
+    Per the T6.1 calibration notes this is the BB-intended outcome:
+    a barely-above-threshold CWICR hit on a default-confidence takeoff
+    DOES still flag for hand review — both inputs are at boundaries,
+    so the combined number is too — but the worst-case CWICR price
+    is one tier higher than pre-T6.1.
+    """
+    from core.schemas import CostBand
+    monkeypatch.delenv("CWICR_DISABLED", raising=False)
+    monkeypatch.delenv("CWICR_MIN_SIMILARITY", raising=False)
+
+    cand = CwicrCandidate(
+        code="W", description="Concrete slab", unit="SF",
+        unit_price=8.0, labor_cost=2.0, material_cost=5.0, equipment_cost=1.0,
+        region="usa_usd", year=2025, similarity=0.75, source_row_id=203,
+    )
+    matcher = _stub_matcher_with(cand)
+    takeoffs = [
+        TakeoffItem(
+            csi_division="03", csi_section="03 30 00",
+            description="Slab on grade", quantity=100.0, unit="SF",
+            # confidence defaults to 0.7 per CostLine schema
+        ),
+    ]
+    est = price_takeoff(
+        _make_project(takeoffs),
+        project_name="t",
+        cost_db=_seed_db(tmp_path),
+        cwicr_matcher=matcher,
+    )
+    line = est.line_items[0]
+    assert line.cost_band == CostBand.HAND_TAKEOFF
+
+
+def test_t6_1_high_confidence_takeoff_exact_cwicr_lands_in_auto_band(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A high-confidence (T1–T5.1 typed-extractor) takeoff + EXACT
+    CWICR hit lands in AUTO_APPROVE under the new calibration:
+
+    qty=0.92 (panel/door/lighting typed extractor) × price=0.95
+    (EXACT_MATCH @ 0.95 similarity) = 0.874 → AUTO_APPROVE.
+    """
+    from core.schemas import CostBand, CostSourceTier
+    monkeypatch.delenv("CWICR_DISABLED", raising=False)
+    monkeypatch.delenv("CWICR_MIN_SIMILARITY", raising=False)
+
+    cand = CwicrCandidate(
+        code="V", description="Concrete slab", unit="SF",
+        unit_price=8.0, labor_cost=2.0, material_cost=5.0, equipment_cost=1.0,
+        region="usa_usd", year=2025, similarity=0.95, source_row_id=204,
+    )
+    matcher = _stub_matcher_with(cand)
+    takeoffs = [
+        TakeoffItem(
+            csi_division="03", csi_section="03 30 00",
+            description="Slab on grade", quantity=100.0, unit="SF",
+            confidence=0.92,
+        ),
+    ]
+    est = price_takeoff(
+        _make_project(takeoffs),
+        project_name="t",
+        cost_db=_seed_db(tmp_path),
+        cwicr_matcher=matcher,
+    )
+    line = est.line_items[0]
+    assert line.cost_source_tier == CostSourceTier.EXACT_MATCH
+    assert line.cost_band == CostBand.AUTO_APPROVE

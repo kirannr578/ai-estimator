@@ -174,6 +174,19 @@ def _waste_for_cwicr(item: TakeoffItem) -> float:
 # ---------------------------------------------------------------------------
 
 
+# Phase T6.1 — fallback qty-confidence used when ``_combined_band`` is
+# called with ``qty_confidence is None`` (the legacy LLM-emitted-no-
+# confidence path). Bumped from the pre-T6.1 value of 0.70 to 0.80 to
+# align with the AUTO_APPROVE / OPERATOR_REVIEW band boundary the BB
+# calibration math depends on (see T6.1 calibration notes in
+# ``docs/ROADMAP_TAKEOFF_AUTOMATION.md``). The schema-level
+# ``TakeoffItem.confidence`` and ``CostLine.confidence`` defaults
+# (still 0.70) are preserved per the T6.1 no-touch-schemas constraint;
+# this constant fires only when the runtime sees an explicit None,
+# i.e. defensive for hand-constructed payloads that omit the field.
+LLM_DEFAULT_QTY_CONFIDENCE: float = 0.80
+
+
 def _combined_band(
     qty_confidence: float | None,
     price_confidence: float,
@@ -192,13 +205,14 @@ def _combined_band(
     guard regardless of how good the price-side confidence happens to
     be.
 
-    ``qty_confidence is None`` is treated as the schema default 0.7,
-    matching the no-confidence-from-LLM legacy path. Both inputs are
+    ``qty_confidence is None`` is treated as
+    :data:`LLM_DEFAULT_QTY_CONFIDENCE` (0.80 post-T6.1, was 0.70
+    pre-T6.1) — the LLM-no-confidence legacy path. Both inputs are
     clamped into ``[0, 1]`` before multiplying.
     """
     if suppressed:
         return CostBand.HAND_TAKEOFF
-    qty = 0.7 if qty_confidence is None else float(qty_confidence)
+    qty = LLM_DEFAULT_QTY_CONFIDENCE if qty_confidence is None else float(qty_confidence)
     qty = max(0.0, min(1.0, qty))
     price = max(0.0, min(1.0, float(price_confidence)))
     combined = round(qty * price, 4)
@@ -505,3 +519,177 @@ def price_takeoff(
         profit_pct=profit_pct,
         line_items=line_items,
     )
+
+
+# ---------------------------------------------------------------------------
+# Phase T6.1 — manual override
+# ---------------------------------------------------------------------------
+
+
+# Note prefix the override pass writes onto every overridden CostLine. The
+# prefix is stable so a downstream reader (Excel / PDF / Streamlit) can
+# detect overrides by inspecting ``notes`` even when the operator forgot
+# to label them. Kept short to avoid bloating exports.
+MANUAL_OVERRIDE_NOTE_PREFIX: str = "operator override"
+
+
+def _resolve_override_index(
+    estimate: Estimate,
+    line_id: int | str,
+) -> int:
+    """Return the 0-based index of the line targeted by ``line_id``.
+
+    Matching order:
+
+    1. ``int`` -> use directly as an index (negative indexing OK).
+    2. ``str`` that equals an existing ``CostLine.cost_source`` (must
+       be unique across the estimate; ambiguous matches raise).
+    3. ``str`` that equals an existing ``CostLine.description`` (same
+       uniqueness rule).
+
+    Raises :class:`ValueError` for a missing, ambiguous, or out-of-range
+    target. Pydantic-validated input means the calling Streamlit /
+    test code can rely on ``ValueError`` to surface a clean operator-
+    facing message rather than a silent mis-update.
+    """
+    items = estimate.line_items
+    if not items:
+        raise ValueError(
+            "apply_manual_override: estimate has no line items to override."
+        )
+
+    if isinstance(line_id, int):
+        idx = line_id
+        if idx < 0:
+            idx += len(items)
+        if not 0 <= idx < len(items):
+            raise ValueError(
+                f"apply_manual_override: index {line_id} out of range "
+                f"for {len(items)} line items"
+            )
+        return idx
+
+    if not isinstance(line_id, str) or not line_id.strip():
+        raise ValueError(
+            f"apply_manual_override: line_id must be int or non-empty str, "
+            f"got {type(line_id).__name__}"
+        )
+
+    needle = line_id.strip()
+    for attr in ("cost_source", "description"):
+        matches = [
+            i for i, li in enumerate(items) if str(getattr(li, attr) or "") == needle
+        ]
+        if len(matches) == 1:
+            return matches[0]
+        if len(matches) > 1:
+            raise ValueError(
+                f"apply_manual_override: line_id {line_id!r} matched "
+                f"{len(matches)} lines on {attr}; pass an integer index "
+                f"to disambiguate"
+            )
+    raise ValueError(
+        f"apply_manual_override: no line item matched line_id {line_id!r}"
+    )
+
+
+def apply_manual_override(
+    estimate: Estimate,
+    line_id: int | str,
+    new_unit_cost: float,
+    operator_note: str | None = None,
+) -> Estimate:
+    """Apply an operator-vouched unit-cost override to one CostLine.
+
+    Returns a NEW :class:`Estimate` with one line item replaced; the
+    input ``estimate`` is not mutated. The returned estimate has every
+    aggregate recomputed automatically because all aggregates
+    (``subtotal``, ``total_by_tier``, ``grand_total``, ...) are derived
+    properties.
+
+    The targeted line is identified by ``line_id`` (see
+    :func:`_resolve_override_index` for the matching rules), the
+    ``unit_cost`` is replaced with ``new_unit_cost`` (clamped to
+    non-negative), ``total_cost`` is recomputed as
+    ``unit_cost × quantity`` (rounded to 2 dp), the
+    ``cost_source_tier`` is stamped to
+    :attr:`CostSourceTier.MANUAL_OVERRIDE` and
+    ``price_confidence`` is forced to 1.0 (the operator vouches for
+    the number). The new ``cost_band`` is recomputed against the new
+    ``combined_confidence`` (qty × 1.0 — and the suppressed flag is
+    cleared because hand-pricing IS the unit-mismatch resolution).
+    ``operator_note`` (when supplied) is appended to the line's
+    ``notes`` field with the :data:`MANUAL_OVERRIDE_NOTE_PREFIX`
+    sentinel so a downstream reader can detect the override.
+
+    Idempotency: re-applying the same override (same ``line_id`` /
+    ``new_unit_cost``) produces a CostLine with the same fields — the
+    ``operator_note`` is appended once per call when supplied, so
+    callers should pass ``operator_note=None`` on retries that
+    shouldn't grow the notes blob.
+
+    Args:
+        estimate: The :class:`Estimate` to update. NOT mutated.
+        line_id: ``int`` index OR ``str`` cost_source / description.
+        new_unit_cost: New per-unit cost. Must be ≥ 0; values < 0
+            raise :class:`ValueError`.
+        operator_note: Optional free-text note appended to the line's
+            ``notes`` field.
+
+    Returns:
+        A new :class:`Estimate` with one CostLine replaced and all
+        aggregates implicitly recomputed.
+
+    Raises:
+        ValueError: if ``new_unit_cost`` is negative, or
+            ``line_id`` doesn't resolve to a unique line item.
+    """
+    if new_unit_cost is None or float(new_unit_cost) < 0:
+        raise ValueError(
+            f"apply_manual_override: new_unit_cost must be ≥ 0, "
+            f"got {new_unit_cost!r}"
+        )
+
+    idx = _resolve_override_index(estimate, line_id)
+    line = estimate.line_items[idx]
+
+    new_uc = round(float(new_unit_cost), 2)
+    new_total = round(new_uc * line.quantity, 2)
+
+    note_addition: str | None = None
+    if operator_note:
+        note_addition = f"{MANUAL_OVERRIDE_NOTE_PREFIX}: {operator_note.strip()}"
+    elif line.cost_source_tier != CostSourceTier.MANUAL_OVERRIDE:
+        # Stamp a minimal sentinel so downstream readers can detect
+        # the override even when the operator didn't write a note.
+        note_addition = MANUAL_OVERRIDE_NOTE_PREFIX
+
+    if note_addition:
+        new_notes = (
+            f"{line.notes} | {note_addition}" if line.notes else note_addition
+        )
+    else:
+        new_notes = line.notes
+
+    # Recompute the band against the NEW combined_confidence. Manual
+    # override clears the suppression flag — hand-pricing IS the
+    # resolution to a unit-mismatch suppression, so the line should
+    # roll back into the headline once it's priced.
+    new_band = _combined_band(
+        line.confidence, 1.0, suppressed=False
+    )
+
+    new_line = line.model_copy(update={
+        "unit_cost": new_uc,
+        "total_cost": new_total,
+        "price_confidence": 1.0,
+        "cost_source_tier": CostSourceTier.MANUAL_OVERRIDE,
+        "cost_band": new_band,
+        "suppressed": False,
+        "notes": new_notes,
+    })
+
+    new_lines = list(estimate.line_items)
+    new_lines[idx] = new_line
+
+    return estimate.model_copy(update={"line_items": new_lines})

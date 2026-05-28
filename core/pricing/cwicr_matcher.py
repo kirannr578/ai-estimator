@@ -114,7 +114,20 @@ _INDEX_VERSION = 1
 _TFIDF_TOPK = 200       # how many TF-IDF candidates re-ranked by embeddings
 _EMBED_BATCH = 64
 
-_MIN_SIMILARITY_FALLBACK = 0.55  # used only when caller passes a no-op threshold
+# Phase T6.1 — minimum CWICR similarity required for a candidate to be
+# considered (the upstream estimator falls through to seed DB / no-match
+# below this threshold). Bumped from the original 0.55 to 0.75 in T6.1
+# to align with the Phase T7 ``CATEGORY_MATCH`` boundary
+# (``COST_TIER_CATEGORY_THRESHOLD``): any CWICR hit that makes it
+# through is now AT LEAST CATEGORY_MATCH-tier on the T7 axis, never
+# INTERPOLATED. Worker BB's calibration math: at the prior 0.55
+# threshold, a barely-above-threshold CWICR hit landed in
+# ``INTERPOLATED @ price_conf=0.65`` which combined with default
+# qty 0.7 produced 0.455 → ``HAND_TAKEOFF`` — the brief called this
+# out as a Phase T6.1 follow-up. Tests that need the legacy 0.55
+# floor (e.g. exercising the INTERPOLATED branch end-to-end) set
+# ``CWICR_MIN_SIMILARITY=0.55`` via env var explicitly.
+_MIN_SIMILARITY_FALLBACK = 0.75
 
 
 # ---------------------------------------------------------------------------
@@ -802,7 +815,15 @@ def is_cwicr_disabled() -> bool:
 
 
 def min_similarity_threshold() -> float:
-    """Read `CWICR_MIN_SIMILARITY` from env, falling back to 0.55."""
+    """Read `CWICR_MIN_SIMILARITY` from env, falling back to the T6.1 default.
+
+    The T6.1 default (``_MIN_SIMILARITY_FALLBACK = 0.75``) aligns the
+    minimum CWICR similarity with the Phase T7 ``CATEGORY_MATCH``
+    boundary so any CWICR hit that passes is AT LEAST CATEGORY_MATCH
+    on the T7 axis, never INTERPOLATED. Tests that need to exercise
+    the INTERPOLATED / PARAMETRIC branches end-to-end set
+    ``CWICR_MIN_SIMILARITY`` to a lower value explicitly via env.
+    """
     raw = os.environ.get("CWICR_MIN_SIMILARITY", "").strip()
     if not raw:
         return _MIN_SIMILARITY_FALLBACK

@@ -43,6 +43,39 @@ Pure function: input items are never mutated; output is a new list of
 and ``notes``. Non-finish items pass through unchanged. Finish items
 whose room# isn't in the schedule pass through with ``quantity=0.0``
 preserved and a ``backfill_skipped`` note appended for the auditor.
+
+Phase T6.1 — chain-derivation decay
+-----------------------------------
+
+Worker W's T6/T7 follow-up flagged that chained derivations (e.g.
+paint second-coat from wall area, primer from wall area, base LF
+approximated from area) reuse the parent's confidence verbatim
+instead of degrading slightly per derivation step. The conservative
+fix: apply a per-step degradation chain so a 3rd-degree derivation
+(area → approximated perimeter → wall SF → second-coat allowance)
+lands at a meaningfully-lower confidence than the primary measurement.
+
+The degradation schedule is hand-calibrated to match the band
+boundaries:
+
+* 1st-degree derivation: ``confidence × 0.95``
+* 2nd-degree derivation: ``confidence × 0.90``
+* 3rd-degree derivation: ``confidence × 0.85``
+* ≥ 4th-degree:           ``confidence × 0.85`` (clamped)
+* Floor at 0.45 (PARAMETRIC tier on T7 banding).
+
+Today's back-fill pipeline is a 1:1 transformer (one synthesis row
+gets one back-filled row), so the only real chain present is the
+sqrt-fallback path: ``area_sf → 4·sqrt(area)`` (1st step,
+approximated perimeter) ``→ perimeter × height × share`` (2nd step,
+wall SF). The existing ``_BACKFILL_CONF_FALLBACK = 0.65`` value pins
+the 2-step sqrt-fallback case lower than the chain formula would
+give (0.92 × 0.90 = 0.828) — an INTENTIONAL conservative override
+to flag the geometric approximation for hand review independently
+of the chain depth. The :func:`chain_decay` helper is exposed here
+for future N-from-one derivations (paint topcoat / primer fan-out
+from a primary wall row, joint-tape allowances, etc.) to call into
+without re-deriving the multipliers.
 """
 
 from __future__ import annotations
@@ -71,6 +104,9 @@ __all__ = [
     "BACKFILL_NOTE_NO_OPENINGS",
     "DOOR_DEFAULT_OPENING_SF",
     "WINDOW_DEFAULT_OPENING_SF",
+    "CHAIN_DECAY_MULTIPLIERS",
+    "CHAIN_DECAY_FLOOR",
+    "chain_decay",
     "backfill_finish_quantities",
 ]
 
@@ -112,6 +148,51 @@ _BACKFILL_CONF_FULL: float = 0.92
 # perimeter approximation. The 0.65 band signals "trustworthy enough to
 # show but flag for human review" per the Phase T6 binning rubric.
 _BACKFILL_CONF_FALLBACK: float = 0.65
+
+
+# Phase T6.1 — chain-derivation decay schedule. See the module docstring
+# section "Phase T6.1 — chain-derivation decay" for the rationale. Hand-
+# calibrated multipliers per derivation depth so a 3-step chain lands
+# meaningfully below a 1-step chain even when the source confidence is
+# the same. ``CHAIN_DECAY_MULTIPLIERS[0]`` is the 0-step (= primary)
+# identity multiplier; ``[1]`` is the 1st-step haircut; etc. Indices
+# beyond the table cap at the deepest published step (currently 3).
+CHAIN_DECAY_MULTIPLIERS: tuple[float, ...] = (1.00, 0.95, 0.90, 0.85)
+CHAIN_DECAY_FLOOR: float = 0.45
+
+
+def chain_decay(parent_confidence: float, depth: int) -> float:
+    """Return ``max(CHAIN_DECAY_FLOOR, parent_confidence * mult[depth])``.
+
+    Phase T6.1 helper for derivation chains where a single primary
+    measurement (e.g. wall SF) spawns multiple derived items (paint
+    primer + topcoat allowances, joint-tape, etc.). Each step in
+    the chain takes one slot from :data:`CHAIN_DECAY_MULTIPLIERS`;
+    indices beyond the table clamp at the last entry (treats deep
+    chains as "at least as bad as 3rd-degree"). The 0.45 floor pins
+    output to the PARAMETRIC tier so a deep chain can't sink below
+    the fallback that the same item would land at without a source
+    at all.
+
+    ``depth=0`` is the identity (primary, no haircut). Values < 0
+    are coerced to 0; non-integer floats are accepted but
+    intentionally not interpolated — pick the integer step that
+    matches the derivation graph.
+
+    Today's back-fill pipeline is a 1:1 transformer with no real
+    multi-step fan-out; this helper is exposed for future N-from-one
+    derivations (paint topcoat / primer / joint-tape from a primary
+    wall row) to call into without re-deriving the multipliers. The
+    sqrt-fallback case in :func:`_backfill_wall` and
+    :func:`_backfill_base` keeps its conservative
+    ``_BACKFILL_CONF_FALLBACK = 0.65`` flat value because the 0.65
+    is calibrated for the GEOMETRIC approximation uncertainty, not
+    for chain depth — see the module docstring.
+    """
+    pc = max(0.0, min(1.0, float(parent_confidence)))
+    step = max(0, int(depth))
+    idx = min(step, len(CHAIN_DECAY_MULTIPLIERS) - 1)
+    return max(CHAIN_DECAY_FLOOR, round(pc * CHAIN_DECAY_MULTIPLIERS[idx], 4))
 
 
 # Notes are formatted as ``key=value; key=value; ...`` by

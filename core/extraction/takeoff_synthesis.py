@@ -70,6 +70,9 @@ __all__ = [
     "SYNTHESIS_SOURCE_TAG_LIGHTING",
     "SYNTHESIS_SOURCE_TAG_HVAC",
     "SYNTHESIS_SOURCE_TAG_PLUMBING",
+    "DERIVATION_HAIRCUT_MULTIPLIER",
+    "DERIVATION_FLOOR_CONFIDENCE",
+    "inherit_with_haircut",
     "synthesize_door_takeoff_items",
     "synthesize_window_takeoff_items",
     "synthesize_finish_takeoff_items",
@@ -87,6 +90,62 @@ SYNTHESIS_SOURCE_TAG_PANEL: Final[str] = "panel_schedule_prepass"
 SYNTHESIS_SOURCE_TAG_LIGHTING: Final[str] = "lighting_schedule_prepass"
 SYNTHESIS_SOURCE_TAG_HVAC: Final[str] = "hvac_schedule_prepass"
 SYNTHESIS_SOURCE_TAG_PLUMBING: Final[str] = "plumbing_schedule_prepass"
+
+
+# ---------------------------------------------------------------------------
+# Phase T6.1 — derivation-confidence inheritance
+# ---------------------------------------------------------------------------
+#
+# Worker W's T6/T7 follow-up flagged that secondary / unit-converted items
+# (panel branch breakers from the parent panel record, fixture lamp/driver
+# from the parent fixture row, equipment disconnect+flex from the parent
+# HVAC equipment row) used a hard-coded confidence (0.85, 0.85, 0.70
+# respectively) regardless of how confident the underlying source record
+# actually was. Concrete consequence: a 0.95-source row produced a 0.85
+# derived item that landed in OPERATOR_REVIEW instead of AUTO_APPROVE,
+# even though the derived count is uniquely determined by the source.
+#
+# Phase T6.1 fix: derived items inherit the parent / primary row's
+# effective confidence with a small per-derivation-step haircut. The
+# 0.95 multiplier represents "we lose ~5% confidence per derivation
+# step" (matches the chain-decay convention adopted in T6.1's
+# ``takeoff_backfill`` Issue 2 fix). The 0.45 floor pins derivations
+# to the PARAMETRIC tier on T7 banding so a derivation can never sink
+# below the parametric default that the same row would get if it had
+# no source at all.
+#
+# Primary items (door enclosure, window enclosure, panel enclosure,
+# fixture EA, equipment EA) keep their unmodified source confidence —
+# the haircut only applies to SECONDARY / DERIVED rows. Parametric
+# placeholders (panel feeder LF at 0.55, HVAC MEP rough-in LS at 0.45,
+# plumbing rough-in LS at 0.45) keep their epistemological flat values
+# because their uncertainty isn't about derivation depth — it's about
+# the operator needing to walk the riser / plan to fill the real
+# quantity in.
+
+DERIVATION_HAIRCUT_MULTIPLIER: Final[float] = 0.95
+DERIVATION_FLOOR_CONFIDENCE: Final[float] = 0.45
+
+
+def inherit_with_haircut(
+    source_confidence: float,
+    *,
+    multiplier: float = DERIVATION_HAIRCUT_MULTIPLIER,
+    floor: float = DERIVATION_FLOOR_CONFIDENCE,
+) -> float:
+    """Return ``max(floor, source_confidence * multiplier)`` rounded to 4 dp.
+
+    Phase T6.1 helper used by every secondary / unit-converted item
+    in the synthesis pipeline so a high-confidence source row
+    propagates its confidence to its derived items (minus the
+    one-step haircut) instead of flattening to a hard-coded constant.
+
+    See the module-level "Phase T6.1" docstring section for the
+    rationale. ``source_confidence`` is clamped into ``[0, 1]`` so a
+    malformed input can't push the result out of bounds.
+    """
+    sc = max(0.0, min(1.0, float(source_confidence)))
+    return max(floor, round(sc * multiplier, 4))
 
 
 # ---------------------------------------------------------------------------
@@ -1053,7 +1112,13 @@ def synthesize_panel_takeoff_items(
                 description=_describe_breaker_group(panel, amps, count),
                 quantity=float(count),
                 unit="EA",
-                confidence=0.85,
+                # Phase T6.1 — branch breakers are SECONDARY items derived
+                # from the parent panel record. Inherit the panel
+                # confidence with the standard 5% per-derivation-step
+                # haircut (floor 0.45). Pre-T6.1 this was a flat 0.85
+                # regardless of the panel's confidence — see the
+                # module-level "Phase T6.1" docstring for the rationale.
+                confidence=inherit_with_haircut(panel.confidence),
                 source_sheet_ids=list(sheets),
                 notes=_panel_notes_for(
                     panel, role="breakers", amps=amps, count=count,
@@ -1345,7 +1410,17 @@ def synthesize_lighting_takeoff_items(
                 description=_describe_lighting_lamp(fixture),
                 quantity=1.0,
                 unit="LS",
-                confidence=fixture.confidence,
+                # Phase T6.1 — lamp/driver is a SECONDARY item derived
+                # from the fixture EA row (1 LS lamp pack per fixture
+                # type). Inherit the EA row's effective confidence
+                # (which already accounts for QTY-published vs hand-
+                # takeoff) with the standard 5% per-derivation-step
+                # haircut. Pre-T6.1 used ``fixture.confidence`` (the
+                # record-level schema default) regardless of whether
+                # the EA row was at 0.90 (QTY published) or 0.55
+                # (HAND_TAKEOFF) — the haircut now propagates the
+                # per-row routing decision into the lamp row.
+                confidence=inherit_with_haircut(fixture_confidence),
                 source_sheet_ids=list(sheets),
                 notes=_lighting_notes_for(fixture, role="lamp"),
             ))
@@ -1663,7 +1738,16 @@ def synthesize_hvac_takeoff_items(
                 description=_describe_hvac_disconnect(record),
                 quantity=1.0,
                 unit="EA",
-                confidence=_HVAC_DISCONNECT_CONFIDENCE,
+                # Phase T6.1 — disconnect+flex is a SECONDARY item
+                # derived from the parent equipment row (1 EA per
+                # motorised piece of equipment). Inherit the equipment
+                # row's QTY-aware confidence with the standard 5%
+                # per-derivation-step haircut. Pre-T6.1 this was a
+                # flat 0.70 (``_HVAC_DISCONNECT_CONFIDENCE``)
+                # regardless of whether the equipment row was at
+                # 0.90 (QTY published) or 0.55 (HAND_TAKEOFF) — see
+                # the module-level "Phase T6.1" docstring section.
+                confidence=inherit_with_haircut(equipment_confidence),
                 source_sheet_ids=list(sheets),
                 notes=_hvac_notes_for(record, role="disconnect"),
             ))

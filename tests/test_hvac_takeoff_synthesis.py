@@ -59,11 +59,12 @@ def test_ahu_with_qty_emits_three_items() -> None:
     assert ri.csi_section == "23 05 00"
     assert ri.unit == "LS"
     assert ri.confidence == 0.45
-    # Disconnect row
+    # Disconnect row — Phase T6.1: inherits QTY-published equipment
+    # confidence (0.90) with 5% derivation haircut → 0.855.
     dc = items[2]
     assert dc.csi_section == "26 28 16"
     assert dc.unit == "EA"
-    assert dc.confidence == 0.70
+    assert dc.confidence == pytest.approx(0.855)
 
 
 def test_rtu_without_qty_emits_three_items_low_conf() -> None:
@@ -204,12 +205,24 @@ def test_roughin_confidence_lands_at_045() -> None:
     assert roughin.confidence == 0.45
 
 
-def test_disconnect_confidence_lands_at_070() -> None:
-    """Disconnect EA row lands at 0.70 (OPERATOR_REVIEW)."""
+def test_disconnect_confidence_inherits_equipment_haircut() -> None:
+    """Disconnect EA row inherits the equipment row's confidence with the
+    Phase T6.1 5% derivation haircut.
+
+    The default ``_make_record`` fixture omits ``quantity`` so the
+    parent equipment row lands at 0.55 (HAND_TAKEOFF default). The
+    disconnect therefore lands at max(0.45, 0.55 × 0.95) = 0.5225 →
+    HAND_TAKEOFF (correctly: a hand-takeoff parent should NOT
+    AUTO_APPROVE its derived disconnect).
+
+    Pre-T6.1 the disconnect was a hard-coded 0.70 regardless of
+    parent confidence — see ``inherit_with_haircut`` rationale in
+    ``core.extraction.takeoff_synthesis``.
+    """
     rec = _make_record()  # AHU with HP+voltage → disconnect emitted
     items = synthesize_hvac_takeoff_items([rec])
     disc = [i for i in items if i.csi_section == "26 28 16"][0]
-    assert disc.confidence == 0.70
+    assert disc.confidence == pytest.approx(0.5225)
 
 
 # ---------------------------------------------------------------------------

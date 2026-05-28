@@ -317,14 +317,24 @@ def test_synthesize_qty_column_zero_treated_as_missing() -> None:
     assert items[0].confidence == _LIGHTING_HAND_TAKEOFF_CONFIDENCE
 
 
-def test_synthesize_lamp_inherits_fixture_confidence() -> None:
-    """The lamp/driver LS line takes its confidence from the fixture record."""
+def test_synthesize_lamp_inherits_fixture_ea_row_confidence_with_haircut() -> None:
+    """The lamp/driver LS line inherits the fixture EA row's confidence
+    (the QTY-aware value) with the Phase T6.1 5% haircut.
+
+    Pre-T6.1 the lamp used the fixture record's raw ``confidence``
+    field; T6.1 propagates the EA row's effective confidence
+    (0.55 hand-takeoff or 0.90 QTY-published) one derivation step
+    down.
+
+    With ``quantity=None`` (default), the EA row sits at the
+    HAND_TAKEOFF 0.55 floor → lamp at max(0.45, 0.55 × 0.95) = 0.5225.
+    """
     fixture = _fixture(
         lamp_type="FLUORESCENT",
         description="T8 fluorescent troffer",
-        confidence=0.78,
+        confidence=0.78,  # ignored by synthesis (no QTY column)
     )
     items = synthesize_lighting_takeoff_items([fixture])
     lamp_items = [it for it in items if it.csi_section == "26 55 53"]
     assert len(lamp_items) == 1
-    assert lamp_items[0].confidence == pytest.approx(0.78)
+    assert lamp_items[0].confidence == pytest.approx(0.5225)
