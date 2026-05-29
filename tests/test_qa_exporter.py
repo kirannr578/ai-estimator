@@ -301,17 +301,6 @@ class TestQAExporterEdge:
     """Scenario QA8-E-1, QA8-E-2, QA8-E-3 — bid-packages omission,
     non-ASCII cells, and ~1000-line scale."""
 
-    @pytest.mark.xfail(
-        reason=(
-            "QA-3 finding B3-3: 'Bid Packages' worksheet is OMITTED entirely "
-            "when project carries zero trade packages. core.exporter.export_"
-            "estimate_xlsx guards the sheet behind 'if trade_packages:' so "
-            "downstream consumers cannot rely on the sheet existing. Fix: "
-            "always create the sheet with header + empty-state note (mirror "
-            "the queue-sheet pattern in _render_queue_sheet)."
-        ),
-        strict=True,
-    )
     def test_qa_exporter_e1_bid_packages_sheet_present_even_with_zero_packages(self) -> None:
         """QA8-E-1: 0 bid packages → 'Bid Packages' sheet still present with
         header row (per brief). Currently FAILS — sheet is omitted."""

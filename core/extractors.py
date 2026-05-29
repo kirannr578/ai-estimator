@@ -288,6 +288,36 @@ def _coerce_bid_package(data: dict, pdf_name: str) -> BidPackage | None:
         return None
 
 
+def _bid_package_has_content(bp: BidPackage) -> bool:
+    """True when the coerced package carries at least one meaningful field."""
+    if (
+        bp.trade_name
+        or bp.package_number
+        or bp.project_name
+        or bp.project_number
+        or bp.project_location
+        or bp.bid_due
+        or bp.owner
+        or bp.gc
+        or bp.contractor
+        or bp.contact
+        or bp.summary
+    ):
+        return True
+    if (
+        bp.inclusions
+        or bp.exclusions
+        or bp.alternates
+        or bp.unit_prices
+        or bp.csi_divisions
+        or bp.csi_sections
+        or bp.referenced_drawings
+        or bp.referenced_specs
+    ):
+        return True
+    return False
+
+
 # ---------------------------------------------------------------------------
 # Supporting-document heuristic
 # ---------------------------------------------------------------------------
@@ -750,6 +780,8 @@ def extract_bid_package(bundle: "DocumentBundle", llm: LLMClient) -> SheetExtrac
                 data["document_kind"] = "supporting_document"
 
     bp = _coerce_bid_package(data, bundle.pdf_name)
+    if bp is not None and not _bid_package_has_content(bp):
+        bp = None
     summary = (bp.summary if bp and bp.summary else "") or str(data.get("summary") or "")
     return SheetExtraction(
         sheet_id=sheet_id,

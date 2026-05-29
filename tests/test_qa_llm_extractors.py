@@ -359,15 +359,6 @@ def test_qa_neg_extract_bid_package_swallows_llm_error() -> None:
     assert any("bid_package extractor error" in w for w in out.warnings)
 
 
-@pytest.mark.xfail(
-    strict=False,
-    reason=(
-        "QA-1 finding #1-1: extract_bid_package emits a near-empty "
-        "BidPackage placeholder when the LLM returns a non-dict "
-        "payload (e.g. parsed=[] or parsed=None). Expected None (skip "
-        "the row) to keep phantom rows out of downstream exports."
-    ),
-)
 def test_qa_edge_extract_bid_package_with_unparseable_response() -> None:
     """An LLM that returns a non-dict payload should yield bid_package=None.
 
@@ -398,13 +389,10 @@ def test_qa_edge_extract_bid_package_with_unparseable_response() -> None:
     assert out.bid_package is None  # phantom-row guardrail
 
 
-def test_qa_edge_extract_bid_package_unparseable_today_yields_placeholder() -> None:
-    """Locks in today's behaviour for the non-dict-payload case (B1-1 mirror).
+def test_qa_edge_extract_bid_package_unparseable_skips_phantom_row() -> None:
+    """Companion to test_qa_edge_extract_bid_package_with_unparseable_response.
 
-    Companion to the XFAIL above. This passes — it documents the
-    actual current contract so a future fix that flips the behaviour
-    can change BOTH tests together (XFAIL→PASS and PASS→FAIL),
-    drawing reviewer attention to the change explicitly.
+    Empty LLM payloads must not produce a placeholder BidPackage row.
     """
     from core.extractors import extract_bid_package
     from core.pdf_processor import DocumentBundle
@@ -421,8 +409,4 @@ def test_qa_edge_extract_bid_package_unparseable_today_yields_placeholder() -> N
     fake = _FakeLLM([_ok([])])
 
     out = extract_bid_package(bundle, fake)  # type: ignore[arg-type]
-    # Today: phantom placeholder, all fields empty.
-    assert out.bid_package is not None
-    assert out.bid_package.trade_name is None
-    assert out.bid_package.inclusions == []
-    assert out.bid_package.document_kind == "trade_package"  # default
+    assert out.bid_package is None

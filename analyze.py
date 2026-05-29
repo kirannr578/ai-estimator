@@ -118,9 +118,18 @@ def _build_client_pdf(
         log.warning(msg)
         cfg = QuoteConfig()
 
+    alternates_config = cfg.alternates_section.model_dump()
+
     out_pdf = out_dir / "quote.pdf"
     try:
-        build_quote_pdf(estimate, project, cfg, out_pdf, csi_titles=csi_titles)
+        build_quote_pdf(
+            estimate,
+            project,
+            cfg,
+            out_pdf,
+            csi_titles=csi_titles,
+            alternates_config=alternates_config,
+        )
     except Exception as exc:
         msg = f"client-pdf: render failed ({exc}); Excel/JSON output is unaffected."
         log.error(msg)

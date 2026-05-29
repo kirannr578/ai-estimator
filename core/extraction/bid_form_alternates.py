@@ -264,7 +264,7 @@ _ALT_LINE_RE = re.compile(
     ^\s*
     (?P<prefix>
         (?:add\s+|deduct\s+|deductive\s+|additive\s+|alternative\s+|substitution\s+)?
-        (?:bid\s+alternate|alternate|alt|ve\s+item|ve|alternative)
+        (?:bid\s+alternates?\b|alternate\b|alt\b|ve\s+item|ve\b|alternative\b)
     )
     \s*
     (?:no\.\s*|number\s*|num\s*|\#\s*|num\.\s*)?       # optional "No." / "#"
@@ -308,6 +308,38 @@ def _normalize_alternate_id(prefix: str, raw_id: str) -> str:
 # Trailing "$_______ ADD" / "$_______ (DEDUCT)" labels that occasionally
 # appear at the end of a bid-form line and need to be stripped from the
 # description body before we use it for the scope summary.
+# Single-letter ids and bare section-header tokens (e.g. "S" from
+# "BID ALTERNATES SECTION") must not become alternate line items.
+_ALT_ID_HEADER_STOPWORDS: frozenset[str] = frozenset(
+    {
+        "SECTION",
+        "SCHEDULE",
+        "FORM",
+        "PAGE",
+        "NOTE",
+        "NOTES",
+        "ITEM",
+        "ITEMS",
+        "ALTERNATE",
+        "ALTERNATES",
+    }
+)
+
+
+def _is_valid_alternate_id_token(raw_id: str) -> bool:
+    token = (raw_id or "").strip().upper()
+    if not token:
+        return False
+    if token in _ALT_ID_HEADER_STOPWORDS:
+        return False
+    if any(ch.isdigit() for ch in token):
+        return True
+    # Single-letter ids (A, B, C) are common on bid forms.
+    if len(token) == 1 and token.isalpha():
+        return True
+    return len(token) >= 2
+
+
 _TRAIL_LABEL_RE = re.compile(
     r"""
     [\s\.\$_]+
@@ -381,6 +413,9 @@ def extract_alternates_from_page(
             continue
         prefix = m.group("prefix") or ""
         raw_id = m.group("id") or ""
+        if not _is_valid_alternate_id_token(raw_id):
+            i += 1
+            continue
         paren_label = m.group("paren_label") or ""
         body = (m.group("body") or "").strip()
 

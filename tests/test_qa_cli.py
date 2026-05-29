@@ -276,19 +276,6 @@ class TestQACliEdge:
             "the >5 MB heuristic should have filtered big.pdf"
         )
 
-    @pytest.mark.xfail(
-        reason=(
-            "QA-3 finding B3-1: analyze.py._build_client_pdf does not "
-            "forward alternates_section config from client_quote.json to "
-            "build_quote_pdf via the alternates_config kwarg. Net effect: "
-            "the renderer-side toggle from QA9-E-2 cannot be controlled "
-            "via the CLI. Fix: thread alternates_config through "
-            "_build_client_pdf (parse the alternates_section block out "
-            "of the raw JSON BEFORE QuoteConfig.model_validate strips "
-            "it) and forward it to build_quote_pdf."
-        ),
-        strict=True,
-    )
     def test_qa_cli_e5_build_client_pdf_forwards_alternates_section_config(
         self,
     ) -> None:

@@ -812,16 +812,22 @@ def export_estimate_xlsx(
     supporting_docs = [
         p for p in project.bid_packages if p.document_kind == "supporting_document"
     ]
-    if trade_packages:
-        ws = wb.create_sheet("Bid Packages")
-        headers = [
-            "Pkg #", "Trade", "PDF", "Owner", "General Contractor",
-            "Project", "Project #",
-            "CSI Divs", "CSI Sections",
-            "# Inclusions", "# Exclusions", "# Alternates", "# Unit Prices",
-            "Refd Drawings", "Refd Specs", "Summary",
-        ]
-        _write_header(ws, 1, headers)
+    ws = wb.create_sheet("Bid Packages")
+    headers = [
+        "Pkg #", "Trade", "PDF", "Owner", "General Contractor",
+        "Project", "Project #",
+        "CSI Divs", "CSI Sections",
+        "# Inclusions", "# Exclusions", "# Alternates", "# Unit Prices",
+        "Refd Drawings", "Refd Specs", "Summary",
+    ]
+    _write_header(ws, 1, headers)
+    if not trade_packages:
+        ws.cell(
+            row=2,
+            column=1,
+            value="No trade bid packages in this project.",
+        ).alignment = Alignment(wrap_text=True, vertical="top")
+    else:
         for i, p in enumerate(sorted(trade_packages, key=lambda x: x.package_number or x.pdf_name), start=2):
             ws.cell(row=i, column=1, value=p.package_number or "")
             ws.cell(row=i, column=2, value=p.trade_name or "")
@@ -839,12 +845,19 @@ def export_estimate_xlsx(
             ws.cell(row=i, column=14, value=", ".join(p.referenced_drawings))
             ws.cell(row=i, column=15, value=", ".join(p.referenced_specs))
             ws.cell(row=i, column=16, value=p.summary or "").alignment = Alignment(wrap_text=True)
-        ws.freeze_panes = "A2"
-        _autosize(ws, max_width=80)
+    ws.freeze_panes = "A2"
+    _autosize(ws, max_width=80)
 
-        # Detail sheet: one row per inclusion/exclusion/alternate/unit price
-        ws = wb.create_sheet("Scope Matrix")
-        _write_header(ws, 1, ["Pkg #", "Trade", "Type", "Detail", "Add/Deduct", "Unit", "Amount"])
+    # Detail sheet: one row per inclusion/exclusion/alternate/unit price
+    ws = wb.create_sheet("Scope Matrix")
+    _write_header(ws, 1, ["Pkg #", "Trade", "Type", "Detail", "Add/Deduct", "Unit", "Amount"])
+    if not trade_packages:
+        ws.cell(
+            row=2,
+            column=1,
+            value="No scope rows — no trade bid packages in this project.",
+        ).alignment = Alignment(wrap_text=True, vertical="top")
+    else:
         row = 2
         for p in sorted(trade_packages, key=lambda x: x.package_number or x.pdf_name):
             for inc in p.inclusions:
@@ -877,8 +890,8 @@ def export_estimate_xlsx(
                 if u.amount is not None:
                     ws.cell(row=row, column=7, value=u.amount).number_format = "$#,##0.00"
                 row += 1
-        ws.freeze_panes = "A2"
-        _autosize(ws, max_width=100)
+    ws.freeze_panes = "A2"
+    _autosize(ws, max_width=100)
 
     # ----- Supporting Documents -----
     # Wage determinations, sample agreements, tax-exemption certificates,

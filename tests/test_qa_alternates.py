@@ -208,18 +208,6 @@ class TestQAAlternatesNegative:
         # And the predicate refuses to suggest LLM fallback for this page.
         assert should_invoke_llm_fallback(page, alts) is False
 
-    @pytest.mark.xfail(
-        strict=False,
-        reason=(
-            "QA-2 finding #1 (B2-1): bid_form_alternates regex matches "
-            "'Bid Alternate <single-char>' inside the literal section "
-            "header 'BID ALTERNATES SECTION', emitting a false-positive "
-            "alternate (alternate_id='Bid Alternate S', desc='SECTION'). "
-            "Expected: header-line text MUST NOT be parsed as an "
-            "alternate. Should anchor the line-body regex to a digit / "
-            "Roman / multi-char id token, not any single capital letter."
-        ),
-    )
     def test_qa_alternates_n2_section_present_unparseable_invokes_llm(
         self,
     ) -> None:

@@ -364,19 +364,6 @@ class TestQAPdfEdge:
         for token in ("<2026>", "&", "(Q3)", "\u00a9"):
             assert token in text, f"missing {token!r} in rendered PDF text"
 
-    @pytest.mark.xfail(
-        reason=(
-            "QA-3 finding B3-2: QuoteConfig schema lacks an "
-            "'alternates_section' field. Pydantic model_validate(raw) "
-            "silently drops the block from config/client_quote.json — "
-            "any downstream caller that loads the config and assumes "
-            "cfg.alternates_section.enabled is reachable will fail. "
-            "Workaround exists (parse the JSON twice), but the schema "
-            "should accept the block natively. Fix: add an "
-            "AlternatesSectionConfig nested model on QuoteConfig."
-        ),
-        strict=True,
-    )
     def test_qa_pdf_e4_quote_config_carries_alternates_section_field(self) -> None:
         """QA9-E-4: ``config/client_quote.json`` ships an
         ``alternates_section`` block. Loading the file through

@@ -2169,6 +2169,15 @@ class PaymentSchedule(BaseModel):
         return warnings
 
 
+class AlternatesSectionConfig(BaseModel):
+    """Bid-alternates section toggles in ``config/client_quote.json`` (Phase T9)."""
+
+    enabled: bool = True
+    intro_paragraph: Optional[str] = None
+    footer_note: Optional[str] = None
+    default_selection: Optional[list[str]] = None
+
+
 class QuoteConfig(BaseModel):
     """Top-level container persisted to `config/client_quote.json`."""
 
@@ -2177,3 +2186,6 @@ class QuoteConfig(BaseModel):
     quote_meta: QuoteMeta = Field(default_factory=QuoteMeta)
     payment_schedule: PaymentSchedule = Field(default_factory=PaymentSchedule)
     terms_text: str = ""
+    alternates_section: AlternatesSectionConfig = Field(
+        default_factory=AlternatesSectionConfig
+    )
