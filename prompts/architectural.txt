@@ -39,37 +39,166 @@ Return ONLY a JSON object with this exact shape:
   "warnings": [ "string" ]
 }
 
-UNIT SELECTION RULES (read carefully — this drives downstream pricing):
+==============================================================================
+HARD RULE — `LS` IS FORBIDDEN AS A DEFAULT UNIT (T10 F-6)
+==============================================================================
 
-Emit `unit: "LS"` (lump sum) ONLY when the line item is genuinely a
-lump-sum scope with no measurable quantity (e.g. "demolition of existing
-wall — included", "general clean-up"). Lump-sum lines collide with the
-unit-mismatch suppressor in the cost-DB and will zero out if the cost
-database expects a measurable unit — so pick the right dimensional unit
-whenever one applies.
+`LS` (lump sum) is the WRONG unit for almost every takeoff from an
+architectural drawing. Lump-sum lines collide with the unit-mismatch
+suppressor in the cost database, get zeroed in pricing, fall through to
+the HAND_TAKEOFF queue, and contribute $0 to the estimate while costing
+operator review time. This is the single largest driver of the
+AUTO_APPROVE-share gap reported in calibration v4 (finding F-6).
 
-Default dimensional units by item type:
+You MUST NOT emit `unit: "LS"` UNLESS the line item is genuinely a
+lump-sum scope with NO measurable quantity that any human estimator
+could derive from the drawing or schedule. Legitimate `LS` examples:
 
-  * 2x and dimensional lumber (studs, joists, rafters, plates, blocking,
-    beams, posts) → `LF` (linear feet) or `BF` (board feet). Prefer `LF`
-    for linear callouts; use `BF` only when the drawing quotes board-foot
-    quantities directly.
-  * Sheathing, subfloor, plywood, OSB, gypsum board, deck boards →
-    `SF` (square feet).
-  * Hardware, framing connectors, joist hangers, hold-downs, anchors,
-    fasteners-by-the-bag, individual studs called out as count → `EA`.
-  * Doors, windows, plumbing fixtures, electrical fixtures, appliances,
-    casework units → `EA`.
-  * Floor finishes, wall finishes, painted areas, roofing, siding → `SF`.
-  * Concrete, fill, excavation → `CY` (cubic yards).
-  * Structural steel by weight → `TON`.
+  * "Site demolition allowance — LS"
+  * "General clean-up allowance — LS"
+  * "Construction layout & coordination — LS"
 
-For wood-framing items in CSI 06 10 00 specifically: use `LF` for studs,
-plates, joists, rafters, beams and posts; `BF` only if a board-foot
-quantity is shown on the drawing; `SF` for sheathing and deck boards;
-`EA` for hangers, connectors, hold-downs and individual posts called out
-by count. Do NOT default to `LS` for any framing item that can be
-measured.
+For EVERYTHING else — every door, window, wall, partition, fixture,
+finish area, casework run, paint area, structural member, slab, footing,
+piece of MEP rough-in — pick a dimensional unit (EA / LF / SF / CY / TON
+/ BF / HR) from the schema enum above. Never default to `LS`.
+
+==============================================================================
+REQUIRED DIMENSIONAL UNITS BY ELEMENT TYPE
+==============================================================================
+
+Use these units. They are NOT suggestions — they are how the downstream
+cost database is keyed.
+
+| Element category                                                          | Required unit |
+|---------------------------------------------------------------------------|---------------|
+| Doors, windows, plumbing fixtures, electrical fixtures, appliances,       |               |
+| HVAC diffusers, light fixtures, casework units, equipment (countable)     | `EA`          |
+| Walls, partitions, baseboard, casework runs, handrails, top-of-wall       |               |
+| blocking, studs / plates / joists / rafters / beams / posts called out    |               |
+| by length                                                                 | `LF`          |
+| Floor finishes, ceiling finishes, roofing, paint, tile, sheathing,        |               |
+| drywall (one face), siding, glazing area, slab area, finish areas         | `SF`          |
+| Concrete, structural fill, excavation, base course, gravel                | `CY`          |
+| Structural steel quoted by weight (beams, plates, decking by ton)         | `TON`         |
+| Dimensional lumber quoted in board-feet on the drawing                    | `BF`          |
+| Labor allowances (sub on-site time)                                       | `HR`          |
+
+Element-type rules that catch the most common mistakes:
+
+  * Doors / windows / fixtures / appliances / equipment — `EA`, never `LS`.
+  * Walls / partitions / casework runs / baseboard — `LF`, never `LS`.
+  * Floors / ceilings / paint / tile / siding / roofing / drywall area —
+    `SF`, never `LS`.
+  * Concrete / fill / excavation / aggregate — `CY`, never `LS`.
+  * Structural steel members called out by count — `EA` with the size in
+    `description`; by weight — `TON`. Never `LS`.
+  * For wood-framing items in CSI 06 10 00 specifically: `LF` for studs,
+    plates, joists, rafters, beams and posts; `BF` only if a board-foot
+    quantity is printed on the drawing; `SF` for sheathing and deck
+    boards; `EA` for hangers, connectors, hold-downs and individual
+    posts called out by count.
+
+==============================================================================
+EXAMPLES — CORRECTLY-FORMED `raw_takeoffs` ROWS
+==============================================================================
+
+Each row below matches the schema and uses the right dimensional unit.
+Copy this pattern.
+
+Example 1 — door schedule (mark D-101, 3'0" x 7'0" HM door, count of 4):
+{
+  "csi_division": "08",
+  "csi_section":  "08 11 13",
+  "description":  "HM door D-101 3070 — count from door schedule",
+  "quantity":     4,
+  "unit":         "EA",
+  "confidence":   0.9,
+  "notes":        null
+}
+
+Example 2 — interior partition length (Type A wall, summed from floor plan):
+{
+  "csi_division": "09",
+  "csi_section":  "09 22 16",
+  "description":  "Type A metal-stud interior partition — total length",
+  "quantity":     186,
+  "unit":         "LF",
+  "confidence":   0.75,
+  "notes":        "summed from dimensioned floor plan"
+}
+
+Example 3 — gypsum board area (both faces of the Type A partitions above):
+{
+  "csi_division": "09",
+  "csi_section":  "09 29 00",
+  "description":  "5/8\" GWB on Type A partitions — both faces, 9 ft ceiling",
+  "quantity":     3348,
+  "unit":         "SF",
+  "confidence":   0.7,
+  "notes":        "186 LF x 9 ft x 2 sides"
+}
+
+Example 4 — sheet-vinyl floor finish (Room 105, 312 sqft from room schedule):
+{
+  "csi_division": "09",
+  "csi_section":  "09 65 19",
+  "description":  "Sheet vinyl flooring — Room 105",
+  "quantity":     312,
+  "unit":         "SF",
+  "confidence":   0.85,
+  "notes":        "area read from room finish schedule"
+}
+
+Example 5 — paint area on walls (first floor, summed from schedule):
+{
+  "csi_division": "09",
+  "csi_section":  "09 91 23",
+  "description":  "Paint, latex, wall surfaces — first floor",
+  "quantity":     4120,
+  "unit":         "SF",
+  "confidence":   0.6,
+  "notes":        "from room finish schedule x wall area"
+}
+
+Example 6 — concrete slab-on-grade (4 in thick, 1200 sqft = 14.8 CY):
+{
+  "csi_division": "03",
+  "csi_section":  "03 30 00",
+  "description":  "Concrete slab-on-grade, 4 in thick — Room 110",
+  "quantity":     14.8,
+  "unit":         "CY",
+  "confidence":   0.75,
+  "notes":        "1200 SF x 4 in / 27"
+}
+
+==============================================================================
+UNIT-INFERENCE FALLBACK — STILL DO NOT DEFAULT TO LS
+==============================================================================
+
+If you genuinely cannot determine a dimensional unit from the drawing or
+schedule (the element is visible but its measurable quantity is not
+inferable), DO NOT fall back to `unit: "LS"`. Instead, emit:
+
+{
+  "csi_division": "<best guess>",
+  "csi_section":  "<best guess or null>",
+  "description":  "<short description of the element>",
+  "quantity":     0,
+  "unit":         "EA",
+  "confidence":   <low, e.g. 0.2>,
+  "notes":        "unit_inference_failed: <one-line reason>"
+}
+
+Downstream pricing skips `quantity = 0` rows safely, and the
+`unit_inference_failed` flag routes the line to the OPERATOR_REVIEW
+queue rather than zeroing out through the unit-mismatch suppressor.
+This is strictly preferred to emitting an `LS` guess for a measurable
+element.
+
+==============================================================================
+GUIDANCE BY SHEET TYPE
+==============================================================================
 
 Guidance for floor plans:
   - For each room you can identify, populate `rooms` with the best area you
