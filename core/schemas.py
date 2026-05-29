@@ -1461,6 +1461,13 @@ class DrawingPrepassResult(BaseModel):
     lab_schedule: Optional[LabScheduleResult] = None  # T2.10 Div 12 lab casework
     av_schedule: Optional[AVScheduleResult] = None  # T2.10 Div 27 AV/IT devices
     security_schedule: Optional[SecurityScheduleResult] = None  # T2.10 Div 28 security/access
+    # T10 F-3 — page is dominated by a "REFERENCE ONLY" photograph (e.g. a
+    # US Army facility reference shot embedded on an architectural sheet).
+    # Vision-LLM analysis is skipped entirely for such pages; the
+    # deterministic prepass still records the page's title block /
+    # dimensions / schedules when they are present. Default False keeps
+    # every pre-T10 prepass result backwards-compatible.
+    is_reference_photo: bool = False
 
 
 class SheetExtraction(BaseModel):
@@ -1485,6 +1492,14 @@ class SheetExtraction(BaseModel):
     prepass: Optional[DrawingPrepassResult] = None
     lm_skipped: bool = False
     dimensions: list[Dimension] = Field(default_factory=list)
+    # T10 F-3 — set True when the vision LLM refused to analyse this sheet
+    # twice (initial attempt + constrained-context retry both surfaced a
+    # safety refusal like "I'm sorry, I can't assist with that"). The
+    # extraction itself is empty; the flag lets downstream queue worksheets
+    # and exports surface the sheet to a human reviewer rather than
+    # silently dropping zero takeoff rows. Default False keeps every
+    # pre-T10 fixture / persisted JSON backwards-compatible.
+    refused: bool = False
 
 
 # ---------------------------------------------------------------------------

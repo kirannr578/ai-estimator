@@ -47,6 +47,155 @@ SYSTEM = "You are a precise construction estimator. Return ONLY JSON. No prose, 
 
 
 # ---------------------------------------------------------------------------
+# T10 F-3 — LLM safety-refusal detection + constrained-context retry
+# ---------------------------------------------------------------------------
+#
+# Background. During T10 calibration v4 the gpt-4o vision model refused
+# to analyse 7 architectural sheets and 2 classifier prompts whose
+# embedded photographs were tagged ``REFERENCE ONLY`` (typically US
+# Army facility reference shots). The refusal text — variants of
+# "I'm sorry, I can't assist with that" — surfaced inside the
+# ``LLMClient`` JSON-repair loop and ultimately bubbled up as a
+# ``ValueError("LLM did not return JSON. First 400 chars: …")``. The
+# extractor treated this as a generic failure, returned zero takeoff
+# rows, and the page was silently dropped — costing ~25-35 missed
+# rows across the corpus.
+#
+# Fix. Detect the refusal text in any string the LLM (or its repair
+# loop) surfaces, attempt **one** retry with a constrained
+# business-context preamble that explicitly scopes the work to
+# construction takeoff and tells the model to ignore photographs /
+# REFERENCE ONLY annotations, and — if the retry also refuses — return
+# an empty extraction with ``refused=True`` so downstream queue
+# worksheets and exports surface the sheet for human review instead
+# of silently swallowing it. Crucially we do **not** modify the
+# ``LLMClient`` contract (per T10 spec) — refusal detection happens
+# at the extractor boundary by inspecting the raised exception text.
+_REFUSAL_PATTERNS: tuple[str, ...] = (
+    "i'm sorry, i can't assist",
+    "i'm sorry, i cannot assist",
+    "i cannot help with",
+    "i can't help with",
+    "i am unable to",
+    "i'm unable to",
+)
+
+_REFUSAL_RETRY_PREFIX: str = (
+    "This is a construction-bid context. The drawing sheet shows a "
+    "building floor plan, schedule, or detail. Extract only "
+    "construction takeoff line items (counts, dimensions, materials). "
+    "Ignore any photographs or REFERENCE ONLY annotations."
+)
+
+
+def _is_refusal(text: Any) -> bool:
+    """T10 F-3 — Return True iff ``text`` looks like an LLM safety refusal.
+
+    Accepts ``str`` (the common case — a response body or exception
+    message), ``None``, or anything else (returns False for non-strings
+    and for empty / whitespace-only strings). Matching is
+    case-insensitive substring on a small allow-list of refusal
+    phrases (``_REFUSAL_PATTERNS``). The patterns intentionally avoid
+    bare ``"sorry"`` so neutral prose containing the word doesn't
+    trip the detector.
+    """
+    if not isinstance(text, str):
+        return False
+    lower = text.strip().lower()
+    if not lower:
+        return False
+    return any(pat in lower for pat in _REFUSAL_PATTERNS)
+
+
+def _call_image_with_refusal_retry(
+    llm: LLMClient,
+    *,
+    image_path: str,
+    system_prompt: str,
+    user_prompt: str,
+    extra_context: str,
+    sheet_id: str,
+) -> tuple[Any, bool, list[str]]:
+    """T10 F-3 — Call ``llm.analyze_image`` with refusal detection + retry.
+
+    Returns a 3-tuple ``(parsed, refused, warnings)``:
+
+    * ``parsed`` — the parsed JSON value on success, or ``None`` when
+      both attempts refused or the call raised a non-refusal error.
+    * ``refused`` — True iff the LLM refused twice in a row (initial
+      attempt + constrained-context retry).
+    * ``warnings`` — structured warning strings to attach to the
+      ``SheetExtraction`` so they surface in exports and queue
+      worksheets.
+
+    Refusal is detected by inspecting the raised exception's message
+    (the underlying ``LLMClient`` already includes the first 400
+    chars of the offending response in its ``ValueError``). A
+    non-refusal exception is re-raised by the caller via the
+    ``warnings``/``parsed=None`` channel so the existing
+    ``except Exception`` handler in :func:`extract_sheet` keeps the
+    same shape it had before T10 F-3.
+    """
+    warnings: list[str] = []
+
+    def _try(user: str, extra: str) -> tuple[Any, bool, Exception | None]:
+        """Single attempt. Returns ``(parsed, refused, non_refusal_exc)``."""
+        try:
+            resp = llm.analyze_image(
+                image_path=image_path,
+                system_prompt=system_prompt,
+                user_prompt=user,
+                extra_context=extra,
+            )
+        except Exception as exc:  # noqa: BLE001 — narrow via _is_refusal
+            if _is_refusal(str(exc)):
+                return None, True, None
+            return None, False, exc
+        # Defensive: even if the client returned successfully, scan
+        # the response text in case a future client version stops
+        # raising on refusals.
+        if _is_refusal(getattr(resp, "text", None)):
+            return None, True, None
+        return resp.parsed, False, None
+
+    parsed, refused, exc = _try(user_prompt, extra_context)
+    if exc is not None:
+        # Non-refusal error: re-raise via warning + None so the
+        # extract_sheet handler can keep its existing failure shape.
+        raise exc
+    if not refused:
+        return parsed, False, warnings
+
+    logger.warning(
+        "LLM safety refusal on sheet %s; retrying with constrained-context prompt",
+        sheet_id,
+    )
+    warnings.append(
+        f"LLM safety refusal on initial attempt for {sheet_id}; "
+        f"retrying with constrained-context prompt"
+    )
+    retry_user_prompt = f"{_REFUSAL_RETRY_PREFIX}\n\n{user_prompt}"
+    parsed, refused, exc = _try(retry_user_prompt, extra_context)
+    if exc is not None:
+        raise exc
+    if refused:
+        logger.warning(
+            "LLM refused twice on sheet %s; returning empty extraction with refused=True",
+            sheet_id,
+        )
+        warnings.append(
+            f"LLM safety refusal repeated twice for {sheet_id} "
+            f"(initial + constrained-context retry); sheet flagged "
+            f"refused=True for human review"
+        )
+        return None, True, warnings
+    warnings.append(
+        f"LLM safety refusal on {sheet_id} resolved after constrained-context retry"
+    )
+    return parsed, False, warnings
+
+
+# ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
@@ -653,6 +802,34 @@ def extract_sheet(sheet: Sheet, llm: LLMClient) -> SheetExtraction:
         )
         return _build_from_prepass(sheet, prepass)
 
+    # T10 F-3 (Layer 2). REFERENCE_PHOTO pages are dominated by a
+    # large photograph + ``REFERENCE ONLY`` annotation; gpt-4o refuses
+    # to analyse them. Skip the vision-LLM call entirely and return a
+    # text-only extraction (the prepass already captured the title
+    # block, any present schedules, and dimensions) so we don't burn
+    # tokens on a guaranteed refusal.
+    if prepass is not None and getattr(prepass, "is_reference_photo", False):
+        logger.info(
+            "REFERENCE_PHOTO page %d on sheet %s — skipping vision-LLM call",
+            sheet.page_index + 1,
+            sheet.sheet_id,
+        )
+        ex = SheetExtraction(
+            sheet_id=sheet.sheet_id,
+            summary=(
+                f"REFERENCE_PHOTO sheet — vision-LLM analysis skipped "
+                f"(page dominated by a REFERENCE ONLY photograph)."
+            ),
+            warnings=[
+                f"REFERENCE_PHOTO: vision-LLM skipped on {sheet.sheet_id} "
+                f"(prepass detected REFERENCE ONLY annotation + dominant image bbox)"
+            ],
+            lm_skipped=True,
+        )
+        ex.prepass = prepass_to_schema(prepass)
+        ex.dimensions = list(_iter_dim_models(prepass.dimensions))
+        return ex
+
     prompt_name = _select_prompt(sheet)
     user_prompt = load_prompt(prompt_name)
 
@@ -671,14 +848,18 @@ def extract_sheet(sheet: Sheet, llm: LLMClient) -> SheetExtraction:
     extra_bits.append(sheet.embedded_text[:3000])
     extra = "\n".join(extra_bits)
 
+    refusal_warnings: list[str] = []
+    refused = False
     try:
-        resp = llm.analyze_image(
+        parsed, refused, refusal_warnings = _call_image_with_refusal_retry(
+            llm,
             image_path=sheet.image_path,
             system_prompt=SYSTEM,
             user_prompt=user_prompt,
             extra_context=extra,
+            sheet_id=sheet.sheet_id,
         )
-        data = resp.parsed if isinstance(resp.parsed, dict) else {}
+        data = parsed if isinstance(parsed, dict) else {}
     except Exception as exc:
         logger.warning("Extractor failed for %s: %s", sheet.sheet_id, exc)
         ex = SheetExtraction(
@@ -690,7 +871,24 @@ def extract_sheet(sheet: Sheet, llm: LLMClient) -> SheetExtraction:
             ex.prepass = prepass_to_schema(prepass)
         return ex
 
+    if refused:
+        ex = SheetExtraction(
+            sheet_id=sheet.sheet_id,
+            summary=(
+                f"Vision-LLM refused on {sheet.sheet_id} after one retry; "
+                f"sheet returned empty for human review."
+            ),
+            warnings=refusal_warnings,
+            refused=True,
+        )
+        if prepass is not None:
+            ex.prepass = prepass_to_schema(prepass)
+            ex.dimensions = list(_iter_dim_models(prepass.dimensions))
+        return ex
+
     extraction = _build_extraction(sheet, data)
+    if refusal_warnings:
+        extraction.warnings = list(extraction.warnings) + refusal_warnings
     if prepass is not None:
         extraction.prepass = prepass_to_schema(prepass)
         extraction.dimensions = list(_iter_dim_models(prepass.dimensions))

@@ -41,6 +41,24 @@ logger = logging.getLogger(__name__)
 
 CONFIDENCE_THRESHOLD: float = 0.65
 
+# T10 F-3 — REFERENCE_PHOTO classification thresholds.
+#
+# A drawing page is classified as REFERENCE_PHOTO when BOTH:
+#   1. The literal phrase ``REFERENCE ONLY`` appears in the page text
+#      (case-insensitive). The phrase is the architect's annotation
+#      convention for "this is a reference photo, not a measured detail".
+#   2. At least one embedded image on the page has a placement bbox
+#      whose area exceeds :data:`REFERENCE_PHOTO_IMAGE_AREA_RATIO`
+#      (default 0.60) of the page area.
+#
+# The two-signal gate intentionally excludes pages that mention
+# "reference" in a non-photo context (e.g. "reference grid", "reference
+# elevation") and pages with a small photo callout (< 60% bbox), which
+# are typically detail callouts rather than the dominant-photo failure
+# mode that gpt-4o vision refuses on.
+REFERENCE_PHOTO_PHRASE: str = "REFERENCE ONLY"
+REFERENCE_PHOTO_IMAGE_AREA_RATIO: float = 0.60
+
 
 # ---------------------------------------------------------------------------
 # Public dataclasses — mirrored by Pydantic models in `core.schemas`
@@ -197,6 +215,19 @@ class DrawingPrepassResult:
     # ``core.extraction.security_schedule.SecurityScheduleResult``
     # or ``None``.
     security_schedule: Any = None
+    # T10 F-3 — REFERENCE_PHOTO classification.
+    #
+    # Set True when the page contains the literal phrase
+    # ``REFERENCE ONLY`` (case-insensitive) AND is dominated by a
+    # single embedded image whose bbox covers more than
+    # :data:`REFERENCE_PHOTO_IMAGE_AREA_RATIO` of the page area.
+    # Typical trigger: an architectural drawing sheet with a US Army
+    # facility reference photograph that gpt-4o vision refuses to
+    # analyse. The extractor reads this flag and skips the vision-LLM
+    # call entirely for these pages, returning an empty extraction
+    # tagged with a ``reference_photo`` warning so the page surfaces
+    # in operator queue worksheets for manual review.
+    is_reference_photo: bool = False
 
 
 # ---------------------------------------------------------------------------
@@ -1104,6 +1135,53 @@ def _maybe_extract_security_schedule(page: "fitz.Page", page_index: int,
     return result if result.devices else None
 
 
+def _detect_reference_photo(page: "fitz.Page", page_text: str) -> bool:
+    """T10 F-3 — REFERENCE_PHOTO classifier for a single drawing page.
+
+    Returns ``True`` only when both signals are present:
+      * Page text contains :data:`REFERENCE_PHOTO_PHRASE`
+        (``"REFERENCE ONLY"``, case-insensitive).
+      * The page carries at least one embedded image whose placement
+        bbox area exceeds :data:`REFERENCE_PHOTO_IMAGE_AREA_RATIO`
+        (default 0.60) of the page area.
+
+    The double-gate keeps the classifier specific to the failure mode
+    we're targeting (gpt-4o refuses to analyse "REFERENCE ONLY" US
+    Army facility photographs dominating an arch sheet). Pages that
+    mention ``reference`` in a non-photo context, or pages with only
+    a small photo callout, fall through to the normal extraction path.
+    """
+    if not page_text:
+        return False
+    if REFERENCE_PHOTO_PHRASE not in page_text.upper():
+        return False
+    try:
+        rect = page.rect
+        page_area = float(rect.width) * float(rect.height)
+    except Exception:
+        return False
+    if page_area <= 0:
+        return False
+    try:
+        infos = page.get_image_info()
+    except Exception as exc:  # pragma: no cover - PyMuPDF internal
+        logger.debug("get_image_info failed on page: %s", exc)
+        return False
+    for entry in infos or []:
+        bbox = entry.get("bbox") if isinstance(entry, dict) else None
+        if not bbox or len(bbox) != 4:
+            continue
+        try:
+            w = abs(float(bbox[2]) - float(bbox[0]))
+            h = abs(float(bbox[3]) - float(bbox[1]))
+        except (TypeError, ValueError):
+            continue
+        area = w * h
+        if (area / page_area) > REFERENCE_PHOTO_IMAGE_AREA_RATIO:
+            return True
+    return False
+
+
 def prepass_drawing_page(pdf_path: Path, page_index: int) -> DrawingPrepassResult:
     """Run the deterministic pre-pass on a single page of a drawing PDF."""
     pdf_path = Path(pdf_path)
@@ -1152,9 +1230,15 @@ def prepass_drawing_page(pdf_path: Path, page_index: int) -> DrawingPrepassResul
         security_schedule = _maybe_extract_security_schedule(
             page, page_index, schedules,
         )
+        is_reference_photo = _detect_reference_photo(page, text)
 
     if not text.strip():
         quality_issues.append("page has no embedded text (likely scanned)")
+    if is_reference_photo:
+        quality_issues.append(
+            "REFERENCE_PHOTO page: dominant photo with REFERENCE ONLY annotation; "
+            "vision-LLM will be skipped"
+        )
 
     result = DrawingPrepassResult(
         title_block=title_block,
@@ -1174,6 +1258,7 @@ def prepass_drawing_page(pdf_path: Path, page_index: int) -> DrawingPrepassResul
         lab_schedule=lab_schedule,
         av_schedule=av_schedule,
         security_schedule=security_schedule,
+        is_reference_photo=is_reference_photo,
     )
     result.confidence = round(_score(result), 4)
     return result
@@ -1224,8 +1309,14 @@ def prepass_drawing_pdf(pdf_path: Path) -> list[DrawingPrepassResult]:
             security_schedule = _maybe_extract_security_schedule(
                 page, i, schedules,
             )
+            is_reference_photo = _detect_reference_photo(page, text)
             if not text.strip():
                 quality_issues.append("page has no embedded text (likely scanned)")
+            if is_reference_photo:
+                quality_issues.append(
+                    "REFERENCE_PHOTO page: dominant photo with REFERENCE ONLY annotation; "
+                    "vision-LLM will be skipped"
+                )
 
             r = DrawingPrepassResult(
                 title_block=title_block,
@@ -1245,6 +1336,7 @@ def prepass_drawing_pdf(pdf_path: Path) -> list[DrawingPrepassResult]:
                 lab_schedule=lab_schedule,
                 av_schedule=av_schedule,
                 security_schedule=security_schedule,
+                is_reference_photo=is_reference_photo,
             )
             r.confidence = round(_score(r), 4)
             results.append(r)
@@ -1356,6 +1448,7 @@ def to_schema(result: DrawingPrepassResult):
         lab_schedule=lab_schedule,
         av_schedule=av_schedule,
         security_schedule=security_schedule,
+        is_reference_photo=bool(getattr(result, "is_reference_photo", False)),
     )
 
 
