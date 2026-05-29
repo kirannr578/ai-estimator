@@ -1,0 +1,1582 @@
+{
+  "project_name": "Carr EFA Dressing Room Renovation",
+  "project_info": {
+    "name": "Carr EFA Dressing Room Renovation",
+    "number": "26-007",
+    "location": "San Angelo, Texas",
+    "owner": "Angelo State University",
+    "contractor": "SSC Services for Education",
+    "bid_due": "2026-06-05T14:00:00",
+    "sources": [
+      "26-007 RFCSP Carr EFA Dressing Room Renovation.pdf",
+      "26-007 RFCSP Carr EFA Dressing Room Renovation (1).pdf",
+      "26-007 RFCSP Carr EFA Dressing Room Renovation (2).pdf",
+      "ESBD_516718_1779308778671_26-007 Carr EFA Dressing Room Addendum #1.pdf",
+      "ESBD_516718_1778880767322_26-007 Carr EFA Dressing Room Renocation RFCSP.pdf",
+      "ESBD_516718_1778880829538_26-007 Carr EFA Dressing Room Renocation Attachment A.pdf"
+    ]
+  },
+  "region_multiplier": 1.05,
+  "subtotal": 0,
+  "contingency_pct": 10.0,
+  "contingency": 0.0,
+  "overhead_pct": 10.0,
+  "overhead": 0.0,
+  "profit_pct": 5.0,
+  "profit": 0.0,
+  "grand_total": 0.0,
+  "grand_total_with_review": 0.0,
+  "grand_total_auto_only": 0.0,
+  "total_auto_approve": 0,
+  "total_operator_review": 0,
+  "total_hand_takeoff": 0,
+  "auto_approve_count": 0,
+  "operator_review_count": 0,
+  "hand_takeoff_count": 0,
+  "total_by_tier": {
+    "exact_match": 0.0,
+    "category_match": 0.0,
+    "interpolated": 0.0,
+    "parametric": 0.0,
+    "manual_override": 0.0,
+    "missing": 0.0
+  },
+  "count_by_tier": {
+    "exact_match": 0,
+    "category_match": 0,
+    "interpolated": 0,
+    "parametric": 0,
+    "manual_override": 0,
+    "missing": 0
+  },
+  "by_division": {},
+  "by_cost_category": {},
+  "line_items": [],
+  "rooms": [],
+  "doors": [],
+  "windows": [],
+  "structural": [],
+  "mep": [],
+  "spec_sections": [],
+  "site": {
+    "site_area_sqft": null,
+    "paving_area_sqft": null,
+    "sidewalk_lf": null,
+    "landscaping_area_sqft": null,
+    "notes": null,
+    "source_sheet_id": null
+  },
+  "bid_packages": [
+    {
+      "pdf_name": "Sol_140FC126R0017.pdf",
+      "package_number": null,
+      "trade_name": null,
+      "project_name": "San Marcos Aquatic Resources Center (ARC) - Rehabilitate Shop & 2 Stall Garage Building",
+      "project_number": "140FC126R0017",
+      "project_location": "San Marcos, TX",
+      "bid_due": "June 22, 2026, 5:00 pm EDT",
+      "owner": "U.S. Fish and Wildlife Service",
+      "gc": null,
+      "contractor": null,
+      "contact": "John Ferrall, john_ferrall@fws.gov",
+      "document_kind": "supporting_document",
+      "csi_divisions": [],
+      "csi_sections": [],
+      "inclusions": [],
+      "exclusions": [],
+      "alternates": [],
+      "unit_prices": [],
+      "second_tier_required": false,
+      "referenced_drawings": [],
+      "referenced_specs": [],
+      "summary": "This document is a solicitation for a Firm Fixed Price contract by the U.S. Fish and Wildlife Service for the rehabilitation of a shop and garage building at the San Marcos Aquatic Resources Center. It includes requirements for demolition, installation of garage doors, lighting replacement, and roofing work.",
+      "warnings": []
+    },
+    {
+      "pdf_name": "Sol_140P6026Q0029.pdf",
+      "package_number": null,
+      "trade_name": null,
+      "project_name": "PAIS - Cabin Security and Improvements",
+      "project_number": "140P6026Q0029",
+      "project_location": "Padre Island National Seashore, Corpus Christi, Texas",
+      "bid_due": "06/08/2026 12:00 PM",
+      "owner": "National Park Service",
+      "gc": null,
+      "contractor": null,
+      "contact": "Bridget Parizek, bridget_parizek@ios.doi.gov",
+      "document_kind": "supporting_document",
+      "csi_divisions": [],
+      "csi_sections": [],
+      "inclusions": [],
+      "exclusions": [],
+      "alternates": [],
+      "unit_prices": [],
+      "second_tier_required": false,
+      "referenced_drawings": [],
+      "referenced_specs": [],
+      "summary": "Request for Quote for Cabin Security and Improvements at Padre Island National Seashore in Corpus Christi, Texas. The project involves repair and improvement work including roof repairs, door reinforcement, and installation of hurricane shutters.",
+      "warnings": []
+    },
+    {
+      "pdf_name": "Sol_140P6026Q0029_Amd_0001.pdf",
+      "package_number": null,
+      "trade_name": null,
+      "project_name": "Cabin Security and Improvements at Padre Island National Seashore",
+      "project_number": "140P6026Q0029",
+      "project_location": "Padre Island National Seashore, Corpus Christi, Texas",
+      "bid_due": null,
+      "owner": "National Park Service",
+      "gc": null,
+      "contractor": null,
+      "contact": null,
+      "document_kind": "supporting_document",
+      "csi_divisions": [],
+      "csi_sections": [],
+      "inclusions": [],
+      "exclusions": [],
+      "alternates": [],
+      "unit_prices": [],
+      "second_tier_required": false,
+      "referenced_drawings": [],
+      "referenced_specs": [],
+      "summary": "[amendment of solicitation] This document is an amendment to the solicitation for the Cabin Security and Improvements project at Padre Island National Seashore. It includes changes to the site visit date due to inclement weather and extends the quote due date. The project involves commercial and institutional building construction with a performance period of 60 days from the Notice to Proceed. Key facts: NAICS: 236220; Small Business Size Standard: $45m; Bonding: Payment Bond or Irrevocable Letter of Credit (100% of contract value) due within 10 days after award Key dates: Site visit: 6/4/2026 at 10am CT; Quote due date: 6/18/2026 at 12pm CT",
+      "warnings": []
+    },
+    {
+      "pdf_name": "CHS Serving Line Renovation.pdf",
+      "package_number": null,
+      "trade_name": null,
+      "project_name": "CHS Serving Line Renovation",
+      "project_number": "2026-0608-01",
+      "project_location": "Cleburne High School, 850 N. Nolan River Road, Cleburne, Texas 76033",
+      "bid_due": "2026-06-08T14:00:00",
+      "owner": "Cleburne Independent School District",
+      "gc": null,
+      "contractor": null,
+      "contact": "Stefanie McBroom, smcbroom@C-ISD.COM",
+      "document_kind": "supporting_document",
+      "csi_divisions": [],
+      "csi_sections": [],
+      "inclusions": [],
+      "exclusions": [],
+      "alternates": [],
+      "unit_prices": [],
+      "second_tier_required": false,
+      "referenced_drawings": [],
+      "referenced_specs": [],
+      "summary": "Cleburne Independent School District is accepting competitive sealed proposals for the renovation of cafeteria serving lines at Cleburne High School. Proposals are due by 2:00 PM on June 8, 2026.",
+      "warnings": []
+    },
+    {
+      "pdf_name": "Notice_of_Project_2026-05-08.pdf",
+      "package_number": null,
+      "trade_name": null,
+      "project_name": "Harrington Education Center Lab 303 Renovation",
+      "project_number": "2025-06813",
+      "project_location": "College Station, TX, Harrington Education Center Office Tower, 0435",
+      "bid_due": "2026-06-10T14:00:00",
+      "owner": "Texas A&M University",
+      "gc": "SSC Services for Education",
+      "contractor": "SSC Services for Education",
+      "contact": "Patty Winkler - p-winkler@tamu.edu",
+      "document_kind": "supporting_document",
+      "csi_divisions": [],
+      "csi_sections": [],
+      "inclusions": [],
+      "exclusions": [],
+      "alternates": [],
+      "unit_prices": [],
+      "second_tier_required": false,
+      "referenced_drawings": [],
+      "referenced_specs": [],
+      "summary": "Notice of Project for the Harrington Education Center Lab 303 Renovation at Texas A&M University. Includes project details and submission information for the CSP RFP & HSP.",
+      "warnings": []
+    },
+    {
+      "pdf_name": "SOW_-_Final_-_San_Marcos_-_02192026_Word_r_1.pdf",
+      "package_number": null,
+      "trade_name": "Building Renovation",
+      "project_name": "San Marcos Aquatic Resource Center Shop & 2 Stall Garage Building Renovation 2026",
+      "project_number": null,
+      "project_location": "500 East McCarty Lane, San Marcos, TX 78666-1024",
+      "bid_due": null,
+      "owner": "United States Fish and Wildlife Service",
+      "gc": null,
+      "contractor": null,
+      "contact": "Bockrath, Katherine D, Supervisory Biologist, 512-610-5597",
+      "document_kind": "trade_package",
+      "csi_divisions": [],
+      "csi_sections": [],
+      "inclusions": [
+        "Replace the three overhead roll-up style doors to include hardware, weather stripping and manual chain hoists.",
+        "Replace current light fixtures with LED light fixtures to meet OSHA requirements.",
+        "Remove all suspended ceiling grids and tiles. Approximately 416 square feet.",
+        "Replace three (3) exterior personnel doors with insulated hollow metal doors to include frames and hardware.",
+        "Terminate, cap and remove existing gas lines from the building.",
+        "Remove and replace existing gutter system including down spouts.",
+        "Remove and replace existing roof with new 24-gauge roofing panels. Exclude lean-to shed (awning) on the south side of the building.",
+        "Remove existing gas fired unit heaters."
+      ],
+      "exclusions": [],
+      "alternates": [],
+      "unit_prices": [],
+      "second_tier_required": false,
+      "referenced_drawings": [],
+      "referenced_specs": [],
+      "summary": "This document outlines the scope of work for the renovation of the San Marcos Aquatic Resource Center's shop and 2 stall garage building. The renovation includes replacing doors, light fixtures, ceiling tiles, and the roof, as well as removing gas lines and heaters. The project is managed by the United States Fish and Wildlife Service.",
+      "warnings": []
+    },
+    {
+      "pdf_name": "26-007 RFCSP Carr EFA Dressing Room Renovation.pdf",
+      "package_number": null,
+      "trade_name": null,
+      "project_name": "Carr EFA Dressing Room Renovation",
+      "project_number": "26-007",
+      "project_location": null,
+      "bid_due": "2026-06-05T14:00:00",
+      "owner": "Angelo State University",
+      "gc": null,
+      "contractor": null,
+      "contact": "Hannah Bignall hannah.bignall@angelo.edu",
+      "document_kind": "supporting_document",
+      "csi_divisions": [],
+      "csi_sections": [],
+      "inclusions": [],
+      "exclusions": [],
+      "alternates": [],
+      "unit_prices": [],
+      "second_tier_required": false,
+      "referenced_drawings": [],
+      "referenced_specs": [],
+      "summary": "This document is a solicitation notice for the Carr EFA Dressing Room Renovation project at Angelo State University. It includes complete demolition and replacement of interior finishes, mechanical, plumbing, electrical systems, and new IT infrastructure.",
+      "warnings": []
+    },
+    {
+      "pdf_name": "B08_Solicitation_-_Att_3_-_DOL_Wage_Determination.pdf",
+      "package_number": null,
+      "trade_name": null,
+      "project_name": null,
+      "project_number": null,
+      "project_location": null,
+      "bid_due": null,
+      "owner": null,
+      "gc": null,
+      "contractor": null,
+      "contact": null,
+      "document_kind": "supporting_document",
+      "csi_divisions": [],
+      "csi_sections": [],
+      "inclusions": [],
+      "exclusions": [],
+      "alternates": [],
+      "unit_prices": [],
+      "second_tier_required": false,
+      "referenced_drawings": [],
+      "referenced_specs": [],
+      "summary": "[other] This document is a Department of Labor Wage Determination, which outlines the prevailing wage rates for various labor categories in a specific geographic area. It is a standard document used to ensure compliance with federal wage laws on government contracts.",
+      "warnings": []
+    },
+    {
+      "pdf_name": "26-007 RFCSP Carr EFA Dressing Room Renovation (1).pdf",
+      "package_number": null,
+      "trade_name": null,
+      "project_name": "Carr EFA Dressing Room Renovation",
+      "project_number": "26-007",
+      "project_location": null,
+      "bid_due": "2026-06-05T14:00:00",
+      "owner": "Angelo State University",
+      "gc": null,
+      "contractor": null,
+      "contact": "Hannah Bignall, hannah.bignall@angelo.edu",
+      "document_kind": "supporting_document",
+      "csi_divisions": [],
+      "csi_sections": [],
+      "inclusions": [],
+      "exclusions": [],
+      "alternates": [],
+      "unit_prices": [],
+      "second_tier_required": false,
+      "referenced_drawings": [],
+      "referenced_specs": [],
+      "summary": "This document is a supporting document related to the Carr EFA Dressing Room Renovation project at Angelo State University. It includes various attachments such as prevailing wage rates, tax exemption certificate, and general conditions.",
+      "warnings": []
+    },
+    {
+      "pdf_name": "26-007 RFCSP Carr EFA Dressing Room Renovation (2).pdf",
+      "package_number": null,
+      "trade_name": null,
+      "project_name": "Carr EFA Dressing Room Renovation",
+      "project_number": "26-007",
+      "project_location": null,
+      "bid_due": "2026-06-05T14:00:00",
+      "owner": "Angelo State University",
+      "gc": null,
+      "contractor": null,
+      "contact": "Hannah Bignall hannah.bignall@angelo.edu",
+      "document_kind": "supporting_document",
+      "csi_divisions": [],
+      "csi_sections": [],
+      "inclusions": [],
+      "exclusions": [],
+      "alternates": [],
+      "unit_prices": [],
+      "second_tier_required": false,
+      "referenced_drawings": [],
+      "referenced_specs": [],
+      "summary": "This document is a supporting document related to the Carr EFA Dressing Room Renovation project at Angelo State University. It includes attachments such as prevailing wage rates, tax exemption certificate, and general conditions.",
+      "warnings": []
+    },
+    {
+      "pdf_name": "SAM_-_Davis-Bacon_Act_WD_TX20260254__Hays_County__Building.pdf",
+      "package_number": null,
+      "trade_name": null,
+      "project_name": null,
+      "project_number": null,
+      "project_location": "Hays County",
+      "bid_due": null,
+      "owner": null,
+      "gc": null,
+      "contractor": null,
+      "contact": null,
+      "document_kind": "supporting_document",
+      "csi_divisions": [],
+      "csi_sections": [],
+      "inclusions": [],
+      "exclusions": [],
+      "alternates": [],
+      "unit_prices": [],
+      "second_tier_required": false,
+      "referenced_drawings": [],
+      "referenced_specs": [],
+      "summary": "[other] This document appears to be related to the Davis-Bacon Act wage determinations for Hays County. It likely contains information about prevailing wage rates for construction projects in the area, as mandated by the Davis-Bacon Act. The document is primarily boilerplate and does not provide specific project details.",
+      "warnings": []
+    },
+    {
+      "pdf_name": "ESBD_516718_1778880901623_Attachment E - Tax Exemption Certificate.pdf",
+      "package_number": null,
+      "trade_name": null,
+      "project_name": null,
+      "project_number": null,
+      "project_location": null,
+      "bid_due": null,
+      "owner": null,
+      "gc": null,
+      "contractor": null,
+      "contact": null,
+      "document_kind": "supporting_document",
+      "csi_divisions": [],
+      "csi_sections": [],
+      "inclusions": [],
+      "exclusions": [],
+      "alternates": [],
+      "unit_prices": [],
+      "second_tier_required": false,
+      "referenced_drawings": [],
+      "referenced_specs": [],
+      "summary": "[other] This document is a Texas Sales and Use Tax Exemption Certification form. It allows the purchaser to claim an exemption from sales and use taxes for certain taxable items. The form includes fields for the purchaser's and seller's information and requires the purchaser to acknowledge the legal implications of misuse.",
+      "warnings": []
+    },
+    {
+      "pdf_name": "ESBD_516718_1779308778671_26-007 Carr EFA Dressing Room Addendum #1.pdf",
+      "package_number": null,
+      "trade_name": null,
+      "project_name": "Carr EFA Dressing Room Renovation",
+      "project_number": "26-007",
+      "project_location": "San Angelo, Texas",
+      "bid_due": "2026-06-05T14:00:00",
+      "owner": "Angelo State University",
+      "gc": null,
+      "contractor": null,
+      "contact": "samuel.guevara@angelo.edu",
+      "document_kind": "supporting_document",
+      "csi_divisions": [],
+      "csi_sections": [],
+      "inclusions": [],
+      "exclusions": [],
+      "alternates": [],
+      "unit_prices": [],
+      "second_tier_required": false,
+      "referenced_drawings": [],
+      "referenced_specs": [],
+      "summary": "This document is an addendum to the Request for Competitive Sealed Proposals for the Carr EFA Dressing Room Renovation at Angelo State University. It includes project information, schedule, proposal requirements, and evaluation criteria.",
+      "warnings": []
+    },
+    {
+      "pdf_name": "Bid_Schedule_San_Marcos_ARC__Rehabilitate_Shop___2_Stall_Garage_Build.pdf",
+      "package_number": null,
+      "trade_name": "Bid Schedule",
+      "project_name": "San Marcos Aquatic Resource Center Shop & 2 Stall Garage Building",
+      "project_number": null,
+      "project_location": "Hays County, Texas",
+      "bid_due": null,
+      "owner": null,
+      "gc": null,
+      "contractor": null,
+      "contact": null,
+      "document_kind": "trade_package",
+      "csi_divisions": [],
+      "csi_sections": [],
+      "inclusions": [],
+      "exclusions": [],
+      "alternates": [],
+      "unit_prices": [
+        {
+          "description": "Remove and replace the three overhead sectional doors to include hardware, weather stripping and openers.",
+          "unit": "EA",
+          "amount": null
+        },
+        {
+          "description": "Remove and replace existing light fixtures with LED light fixtures to meet OSHA requirements.",
+          "unit": "JOB",
+          "amount": null
+        },
+        {
+          "description": "Remove all suspended ceiling grids and tiles.",
+          "unit": "JOB",
+          "amount": null
+        },
+        {
+          "description": "Remove and replace the existing three exterior personnel doors with insulated hollow metal doors to include frames, hardware, weather stripping and threshold.",
+          "unit": "JOB",
+          "amount": null
+        },
+        {
+          "description": "Terminate, cap and remove existing gas lines from the building.",
+          "unit": "JOB",
+          "amount": null
+        },
+        {
+          "description": "Remove and replace existing gutter system to include and replace down spouts.",
+          "unit": "LF",
+          "amount": null
+        },
+        {
+          "description": "Remove and replace existing roof with new roofing sheets.",
+          "unit": "JOB",
+          "amount": null
+        },
+        {
+          "description": "Remove existing gas fired unit heaters.",
+          "unit": "JOB",
+          "amount": null
+        }
+      ],
+      "second_tier_required": false,
+      "referenced_drawings": [],
+      "referenced_specs": [],
+      "summary": "This bid schedule requests pricing for various construction tasks including the removal and replacement of doors, light fixtures, ceiling grids, gas lines, gutter systems, roofing sheets, and unit heaters at the San Marcos Aquatic Resource Center Shop & 2 Stall Garage Building.",
+      "warnings": []
+    },
+    {
+      "pdf_name": "ESBD_516718_1778880767322_26-007 Carr EFA Dressing Room Renocation RFCSP.pdf",
+      "package_number": null,
+      "trade_name": null,
+      "project_name": "Carr EFA Dressing Room Renovation",
+      "project_number": "26-007",
+      "project_location": "San Angelo, Texas",
+      "bid_due": "2026-06-05T14:00:00",
+      "owner": "Angelo State University",
+      "gc": null,
+      "contractor": null,
+      "contact": "Samuel Guevara, Samuel.Guevara@angelo.edu",
+      "document_kind": "trade_package",
+      "csi_divisions": [],
+      "csi_sections": [],
+      "inclusions": [],
+      "exclusions": [],
+      "alternates": [],
+      "unit_prices": [],
+      "second_tier_required": false,
+      "referenced_drawings": [],
+      "referenced_specs": [],
+      "summary": "The document is a Request for Competitive Sealed Proposals for the Carr EFA Dressing Room Renovation project at Angelo State University. The project involves demolition and replacement of interior finishes and systems, with a construction budget of $500,000. Proposals are due by June 5, 2026.",
+      "warnings": []
+    },
+    {
+      "pdf_name": "ESBD_516718_1778880829538_26-007 Carr EFA Dressing Room Renocation Attachment A.pdf",
+      "package_number": null,
+      "trade_name": "FORM OF PROPOSAL",
+      "project_name": "Carr EFA Dressing Room Renovation",
+      "project_number": "26-007",
+      "project_location": "San Angelo, TX",
+      "bid_due": null,
+      "owner": null,
+      "gc": "Angelo State University",
+      "contractor": "Angelo State University",
+      "contact": "Tracie Howell",
+      "document_kind": "trade_package",
+      "csi_divisions": [],
+      "csi_sections": [
+        "01030"
+      ],
+      "inclusions": [],
+      "exclusions": [],
+      "alternates": [],
+      "unit_prices": [
+        {
+          "description": "Include a cash/contingency allowance for unforeseen scope of work.",
+          "unit": "ALLOWANCE",
+          "amount": null
+        }
+      ],
+      "second_tier_required": false,
+      "referenced_drawings": [],
+      "referenced_specs": [
+        "01030"
+      ],
+      "summary": "The bid form requests proposals for construction services for the Carr EFA Dressing Room Renovation project. It includes a base proposal for construction services, a specified allowance for unforeseen work, and certifications and affirmations required by Texas law.",
+      "warnings": []
+    },
+    {
+      "pdf_name": "ESBD_516718_1778880857161_Attachment B.2 - Sample Construction Services Agreement.pdf",
+      "package_number": null,
+      "trade_name": null,
+      "project_name": null,
+      "project_number": null,
+      "project_location": "San Angelo, Texas",
+      "bid_due": null,
+      "owner": "Angelo State University",
+      "gc": null,
+      "contractor": null,
+      "contact": null,
+      "document_kind": "supporting_document",
+      "csi_divisions": [],
+      "csi_sections": [],
+      "inclusions": [],
+      "exclusions": [],
+      "alternates": [],
+      "unit_prices": [],
+      "second_tier_required": false,
+      "referenced_drawings": [],
+      "referenced_specs": [],
+      "summary": "[sample construction services agreement] This document is a sample construction services agreement for a project at Angelo State University. It outlines the scope of work, contract sum, time of commencement and completion, HUB contracting commitments, liquidated damages, dispute resolution, indemnity, and various miscellaneous provisions. The agreement emphasizes the use of certified HUB contractors for at least 30% of the total contract sum and details the procedures for handling changes to the HUB Subcontracting Plan. Key facts: HUB contracting commitment: 30% of total contract sum; Liquidated damages: $###.00 per calendar day",
+      "warnings": []
+    },
+    {
+      "pdf_name": "ESBD_518571_1779300513068_RFCSP 2026-0608-01 CHS Cafeteria Serving Line Renovation.pdf",
+      "package_number": null,
+      "trade_name": "Cafeteria Serving Line Renovation",
+      "project_name": "CHS Serving Line Renovation",
+      "project_number": "2026-0608-01",
+      "project_location": "Cleburne High School, 850 N. Nolan River Road, Cleburne, Texas 76033",
+      "bid_due": "2026-06-08T14:00:00",
+      "owner": "Cleburne Independent School District",
+      "gc": null,
+      "contractor": null,
+      "contact": "Stefanie McBroom, smcbroom@c-isd.com",
+      "document_kind": "trade_package",
+      "csi_divisions": [],
+      "csi_sections": [],
+      "inclusions": [
+        "The Contractor shall complete the removal and disposal of existing serving lines and installation of new serving lines.",
+        "The Contractor shall be able to complete all tasks normally encountered in commercial kitchen equipment replacement.",
+        "The Contractor must comply with all National, State and Local codes and pay all applicable costs, fees and permits.",
+        "Prices must include all transportation costs.",
+        "All new equipment are turn-key purchases and must include all needed installations, equipment and related costs."
+      ],
+      "exclusions": [
+        "Sales tax",
+        "Bonds and Taxes",
+        "Mass excavation"
+      ],
+      "alternates": [],
+      "unit_prices": [],
+      "second_tier_required": false,
+      "referenced_drawings": [
+        "MF1_Submittal_Item101_CleburneHighSchool",
+        "MF2_Submittal_Item102_CleburneHighSchool",
+        "MF3_Submittal_Item103_CleburneHighSchool",
+        "MF4_Submittal_Item104_CleburneHighSchool",
+        "MF5_Submittal_Item105_CleburneHighSchool",
+        "MF6_Submittal_Item106_CleburneHighSchool"
+      ],
+      "referenced_specs": [],
+      "summary": "Cleburne ISD is soliciting proposals for the renovation of cafeteria serving lines at Cleburne High School. The project includes removal and disposal of existing equipment, procurement and installation of new equipment, with a budget of $295,000. Proposals are due by June 8, 2026.",
+      "warnings": []
+    },
+    {
+      "pdf_name": "ESBD_516718_1778880917414_Attachment F.1 - Tom Green County Prevailing Wage 2023 (TTUS).pdf",
+      "package_number": null,
+      "trade_name": null,
+      "project_name": "Angelo State University \u2013 San Angelo",
+      "project_number": null,
+      "project_location": "Tom Green County",
+      "bid_due": null,
+      "owner": "Angelo State University",
+      "gc": null,
+      "contractor": null,
+      "contact": null,
+      "document_kind": "supporting_document",
+      "csi_divisions": [],
+      "csi_sections": [],
+      "inclusions": [],
+      "exclusions": [],
+      "alternates": [],
+      "unit_prices": [],
+      "second_tier_required": false,
+      "referenced_drawings": [],
+      "referenced_specs": [],
+      "summary": "[other] This document is a prevailing wage determination for Tom Green County, specifically for a building construction project at Angelo State University in San Angelo. It lists the prevailing wage rates for various trade classifications as of July 2023. Contractors are responsible for classifying workers according to these rates. Key facts: Construction type: Building; Location: Tom Green County; Date: July 2023",
+      "warnings": []
+    },
+    {
+      "pdf_name": "DDPM262101-Alter CP and NDI-SOW (05032026).pdf",
+      "package_number": null,
+      "trade_name": null,
+      "project_name": "Alter Command Post and Nondestructive Inspection (NDI) Room",
+      "project_number": "DDPM262101",
+      "project_location": "136th Airlift Wing, Naval Air Station Joint Reserve Base, Fort Worth, TX",
+      "bid_due": null,
+      "owner": "136th Airlift Wing, Naval Air Station Joint Reserve Base, Fort Worth, TX",
+      "gc": null,
+      "contractor": null,
+      "contact": "Mr. David Shamburger, david.shamburger.5@us.af.mil",
+      "document_kind": "trade_package",
+      "csi_divisions": [],
+      "csi_sections": [],
+      "inclusions": [
+        "Furnish all labor, materials, equipment, supervision, and services necessary to renovate the designated spaces into complete, durable, and fully operational facilities.",
+        "Perform all required interior wall demolition and construction, painting, caulking, carpentry, and associated electrical, mechanical, and plumbing work to deliver the finished spaces.",
+        "Ensure all work complies strictly with applicable federal, state, and local codes, as well as all DoD standards, including the Unified Facilities Criteria (UFCs) and Unified Facilities Guide Specifications (UFGSs) cited in any project documentation.",
+        "Provide any and all components, services, or materials required to deliver a complete and fully functional system, even if not explicitly specified in this SOW.",
+        "Protect all adjacent vehicles, equipment, landscaping, and facilities from overspray, debris, and damage.",
+        "Install and maintain a clearly marked construction boundary fence to identify the limits of the work area.",
+        "Comply with all applicable Occupational Safety and Health Administration (OSHA), U.S. Army Corps of Engineers EM 385\u20111\u20111, and State safety requirements.",
+        "Maintain a clean job site at all times. Demolition debris and excess materials shall be removed daily.",
+        "Coordinate inspections with the Contracting Officer\u2019s Representative (COR) prior to commencing and during critical phases of work.",
+        "Request a Pre-Final Inspection at approximately 75% completion to identify deficiencies requiring correction prior to final completion.",
+        "Request a Final Acceptance Inspection at 100% completion, submitted at least 14 days in advance and include written assurance that all deficiencies have been corrected.",
+        "Provide proof of insurance.",
+        "Provide electronic submittals on the AF 3000 Material Approval Submittal form for each item listed on the AF 66 Submittal Register, as applicable.",
+        "Provide a submittal register, updated at least twice per month.",
+        "Provide bi-weekly meeting minutes for each progress meeting, updated schedule by task, planned work for the next week.",
+        "Provide a Letter of Guarantee that warrants the project against defects in materials and workmanship for one year from the date of final acceptance.",
+        "Provide minimum one (1) year on all workmanship and standard manufacturer\u2019s warranty on products.",
+        "Electrical power and water shall be provided as required. The Contractor is responsible for any required connections.",
+        "Obtain and maintain all necessary base access for its personnel, including subcontractors.",
+        "Halt any ground disturbance activity if any Native American or other historical artifacts, fossils, human remains, unmarked graves, or burial sites are found."
+      ],
+      "exclusions": [],
+      "alternates": [],
+      "unit_prices": [],
+      "second_tier_required": false,
+      "referenced_drawings": [],
+      "referenced_specs": [
+        "01 30 00",
+        "01 33 00",
+        "01 33 29",
+        "01 35 26",
+        "01 45 00",
+        "01 45 35",
+        "01 74 19",
+        "01 78 00",
+        "01 78 23"
+      ],
+      "summary": "This document outlines the scope of work for the renovation of the Command Post and Nondestructive Inspection (NDI) Room at the 136th Airlift Wing, Naval Air Station Joint Reserve Base, Fort Worth, TX. The project involves interior demolition, construction, and compliance with federal, state, and DoD standards. The contractor is responsible for a complete, turnkey renovation, including all necessary labor, materials, and services.",
+      "warnings": []
+    },
+    {
+      "pdf_name": "DDPM262101_Alter CP and NDI_Plans (20260512).pdf",
+      "package_number": null,
+      "trade_name": null,
+      "project_name": "Alter CP and NDI Plans",
+      "project_number": "DDPM262001",
+      "project_location": null,
+      "bid_due": null,
+      "owner": null,
+      "gc": null,
+      "contractor": null,
+      "contact": null,
+      "document_kind": "supporting_document",
+      "csi_divisions": [],
+      "csi_sections": [],
+      "inclusions": [],
+      "exclusions": [],
+      "alternates": [],
+      "unit_prices": [],
+      "second_tier_required": false,
+      "referenced_drawings": [],
+      "referenced_specs": [],
+      "summary": "[general instructions to bidders] This document provides detailed construction instructions for alterations involving metal stud framing, gypsum board installation, painting, and flooring to match existing finishes. It includes specifications for electrical, HVAC, and security installations, such as mantrap doors and emergency systems. The document outlines requirements for ceiling modifications, door installations, and the relocation of existing equipment to accommodate new wall partitions. Key facts: Project Number: DDPM262001; Install VCT: AZrock, Shale Gray #V-866; Install new carpet: Shaw Contract, Clear Tile Style# 59564, color Moonstone 62500; Paint standard color: Sherwin-Williams SW1016 Silver Screen",
+      "warnings": []
+    },
+    {
+      "pdf_name": "Solicitation - W50S7626QA001 Cmd Post and NDI.pdf",
+      "package_number": null,
+      "trade_name": null,
+      "project_name": "Renovate Space for Command Post and Nondestructive Inspection (NDI) Operations",
+      "project_number": "DDPM262101",
+      "project_location": "NAS JRB Fort Worth, Texas",
+      "bid_due": "04 JUN 2026 02:00 PM",
+      "owner": "U.S. Department of Defense",
+      "gc": null,
+      "contractor": null,
+      "contact": "Sharon Krywinski, sharon.krywinski.1@us.af.mil",
+      "document_kind": "supporting_document",
+      "csi_divisions": [],
+      "csi_sections": [],
+      "inclusions": [
+        "ASBESTOS WORKER/HEAT & FROST INSULATOR: $33.23/hr + $7.52 fringe",
+        "BOILERMAKER: $33.17/hr + $24.92 fringe",
+        "MILLWRIGHT: $32.02/hr + $11.27 fringe",
+        "ELEVATOR MECHANIC: $51.93/hr + $38.435 fringe",
+        "POWER EQUIPMENT OPERATOR (Tower Crane): $32.85/hr + $13.10 fringe",
+        "IRONWORKER (ORNAMENTAL AND STRUCTURAL): $29.64/hr + $8.43 fringe",
+        "PAINTER (Brush, Roller, and Spray): $16.40/hr + $5.45 fringe",
+        "PIPEFITTER (Excludes HVAC Pipe Installation): $41.28/hr + $12.16 fringe"
+      ],
+      "exclusions": [],
+      "alternates": [],
+      "unit_prices": [],
+      "second_tier_required": false,
+      "referenced_drawings": [],
+      "referenced_specs": [],
+      "summary": "This document is a Davis-Bacon wage determination for Tarrant County, Texas, effective 01/02/2026. It includes prevailing wage rates for various construction trades involved in building projects.",
+      "warnings": []
+    },
+    {
+      "pdf_name": "Solicitation Amendment W50S7626QA0010001 SF 30.pdf",
+      "package_number": null,
+      "trade_name": null,
+      "project_name": "Alter CP and NDI",
+      "project_number": "DDPM262101",
+      "project_location": "Fort Worth, TX",
+      "bid_due": null,
+      "owner": "TXANG (Texas Air National Guard)",
+      "gc": null,
+      "contractor": null,
+      "contact": null,
+      "document_kind": "supporting_document",
+      "csi_divisions": [],
+      "csi_sections": [],
+      "inclusions": [],
+      "exclusions": [],
+      "alternates": [],
+      "unit_prices": [],
+      "second_tier_required": false,
+      "referenced_drawings": [],
+      "referenced_specs": [],
+      "summary": "[amendment of solicitation] This document is an amendment to the solicitation W50S7626QA001, specifically incorporating revision 1 to the B1672 (CLIN 0001) plans. It includes modifications to contract clauses, particularly regarding contract drawings and specifications. The amendment requires acknowledgment from offerors and outlines responsibilities for checking and reproducing drawings. Key facts: Project Number: DDPM262101; Location: Fort Worth, TX Key dates: 03 May 2026; 13 May 2026",
+      "warnings": []
+    },
+    {
+      "pdf_name": "ESBD_516718_1778880887164_Attachment D - HSP (Historically Underutilized Businesses (HUB) Subcontracting Plan) documents.pdf",
+      "package_number": null,
+      "trade_name": "HUB Subcontracting Plan",
+      "project_name": null,
+      "project_number": null,
+      "project_location": null,
+      "bid_due": null,
+      "owner": null,
+      "gc": null,
+      "contractor": null,
+      "contact": null,
+      "document_kind": "trade_package",
+      "csi_divisions": [],
+      "csi_sections": [],
+      "inclusions": [],
+      "exclusions": [],
+      "alternates": [],
+      "unit_prices": [],
+      "second_tier_required": false,
+      "referenced_drawings": [],
+      "referenced_specs": [],
+      "summary": "This document is a HUB Subcontracting Plan (HSP) required by the State of Texas for contracts with probable subcontracting opportunities. It outlines the requirements for respondents to complete and submit the HSP with their bid, including sections on subcontracting intentions, self-performing justification, and good faith effort methods. The plan aims to promote equal business opportunities for economically disadvantaged persons by encouraging the use of Texas certified Historically Underutilized Businesses (HUBs).",
+      "warnings": []
+    },
+    {
+      "pdf_name": "ESBD_516718_1778880869361_Attachment C - 2010 Uniform General Conditions and Supplementary General Conditions dated (TTUS edited 09.07.2023).pdf",
+      "package_number": null,
+      "trade_name": null,
+      "project_name": null,
+      "project_number": null,
+      "project_location": null,
+      "bid_due": null,
+      "owner": "Texas Tech University System",
+      "gc": null,
+      "contractor": null,
+      "contact": null,
+      "document_kind": "supporting_document",
+      "csi_divisions": [],
+      "csi_sections": [],
+      "inclusions": [],
+      "exclusions": [],
+      "alternates": [],
+      "unit_prices": [],
+      "second_tier_required": false,
+      "referenced_drawings": [],
+      "referenced_specs": [],
+      "summary": "[general instructions to bidders] This document outlines the Uniform General Conditions and Supplementary General Conditions for construction contracts under the Texas Tech University System. It incorporates specific supplementary conditions applicable to all Texas Tech System and member institution construction projects, alongside the Uniform General Conditions from the Texas Facilities Commission. The document includes detailed articles on definitions, wage rates, responsibilities, subcontracting plans, bonds, insurance, construction documents, safety, quality control, schedules, payments, changes, project completion, warranties, suspension, termination, and dispute resolution. Key facts: Document revision date: 09/07/2023; Incorporates Texas Facilities Commission's 2010 edition Uniform General Conditions",
+      "warnings": []
+    }
+  ],
+  "supporting_documents": [
+    {
+      "pdf_name": "Sol_140FC126R0017.pdf",
+      "package_number": null,
+      "trade_name": null,
+      "project_name": "San Marcos Aquatic Resources Center (ARC) - Rehabilitate Shop & 2 Stall Garage Building",
+      "project_number": "140FC126R0017",
+      "project_location": "San Marcos, TX",
+      "bid_due": "June 22, 2026, 5:00 pm EDT",
+      "owner": "U.S. Fish and Wildlife Service",
+      "gc": null,
+      "contractor": null,
+      "contact": "John Ferrall, john_ferrall@fws.gov",
+      "document_kind": "supporting_document",
+      "csi_divisions": [],
+      "csi_sections": [],
+      "inclusions": [],
+      "exclusions": [],
+      "alternates": [],
+      "unit_prices": [],
+      "second_tier_required": false,
+      "referenced_drawings": [],
+      "referenced_specs": [],
+      "summary": "This document is a solicitation for a Firm Fixed Price contract by the U.S. Fish and Wildlife Service for the rehabilitation of a shop and garage building at the San Marcos Aquatic Resources Center. It includes requirements for demolition, installation of garage doors, lighting replacement, and roofing work.",
+      "warnings": []
+    },
+    {
+      "pdf_name": "Sol_140P6026Q0029.pdf",
+      "package_number": null,
+      "trade_name": null,
+      "project_name": "PAIS - Cabin Security and Improvements",
+      "project_number": "140P6026Q0029",
+      "project_location": "Padre Island National Seashore, Corpus Christi, Texas",
+      "bid_due": "06/08/2026 12:00 PM",
+      "owner": "National Park Service",
+      "gc": null,
+      "contractor": null,
+      "contact": "Bridget Parizek, bridget_parizek@ios.doi.gov",
+      "document_kind": "supporting_document",
+      "csi_divisions": [],
+      "csi_sections": [],
+      "inclusions": [],
+      "exclusions": [],
+      "alternates": [],
+      "unit_prices": [],
+      "second_tier_required": false,
+      "referenced_drawings": [],
+      "referenced_specs": [],
+      "summary": "Request for Quote for Cabin Security and Improvements at Padre Island National Seashore in Corpus Christi, Texas. The project involves repair and improvement work including roof repairs, door reinforcement, and installation of hurricane shutters.",
+      "warnings": []
+    },
+    {
+      "pdf_name": "Sol_140P6026Q0029_Amd_0001.pdf",
+      "package_number": null,
+      "trade_name": null,
+      "project_name": "Cabin Security and Improvements at Padre Island National Seashore",
+      "project_number": "140P6026Q0029",
+      "project_location": "Padre Island National Seashore, Corpus Christi, Texas",
+      "bid_due": null,
+      "owner": "National Park Service",
+      "gc": null,
+      "contractor": null,
+      "contact": null,
+      "document_kind": "supporting_document",
+      "csi_divisions": [],
+      "csi_sections": [],
+      "inclusions": [],
+      "exclusions": [],
+      "alternates": [],
+      "unit_prices": [],
+      "second_tier_required": false,
+      "referenced_drawings": [],
+      "referenced_specs": [],
+      "summary": "[amendment of solicitation] This document is an amendment to the solicitation for the Cabin Security and Improvements project at Padre Island National Seashore. It includes changes to the site visit date due to inclement weather and extends the quote due date. The project involves commercial and institutional building construction with a performance period of 60 days from the Notice to Proceed. Key facts: NAICS: 236220; Small Business Size Standard: $45m; Bonding: Payment Bond or Irrevocable Letter of Credit (100% of contract value) due within 10 days after award Key dates: Site visit: 6/4/2026 at 10am CT; Quote due date: 6/18/2026 at 12pm CT",
+      "warnings": []
+    },
+    {
+      "pdf_name": "CHS Serving Line Renovation.pdf",
+      "package_number": null,
+      "trade_name": null,
+      "project_name": "CHS Serving Line Renovation",
+      "project_number": "2026-0608-01",
+      "project_location": "Cleburne High School, 850 N. Nolan River Road, Cleburne, Texas 76033",
+      "bid_due": "2026-06-08T14:00:00",
+      "owner": "Cleburne Independent School District",
+      "gc": null,
+      "contractor": null,
+      "contact": "Stefanie McBroom, smcbroom@C-ISD.COM",
+      "document_kind": "supporting_document",
+      "csi_divisions": [],
+      "csi_sections": [],
+      "inclusions": [],
+      "exclusions": [],
+      "alternates": [],
+      "unit_prices": [],
+      "second_tier_required": false,
+      "referenced_drawings": [],
+      "referenced_specs": [],
+      "summary": "Cleburne Independent School District is accepting competitive sealed proposals for the renovation of cafeteria serving lines at Cleburne High School. Proposals are due by 2:00 PM on June 8, 2026.",
+      "warnings": []
+    },
+    {
+      "pdf_name": "Notice_of_Project_2026-05-08.pdf",
+      "package_number": null,
+      "trade_name": null,
+      "project_name": "Harrington Education Center Lab 303 Renovation",
+      "project_number": "2025-06813",
+      "project_location": "College Station, TX, Harrington Education Center Office Tower, 0435",
+      "bid_due": "2026-06-10T14:00:00",
+      "owner": "Texas A&M University",
+      "gc": "SSC Services for Education",
+      "contractor": "SSC Services for Education",
+      "contact": "Patty Winkler - p-winkler@tamu.edu",
+      "document_kind": "supporting_document",
+      "csi_divisions": [],
+      "csi_sections": [],
+      "inclusions": [],
+      "exclusions": [],
+      "alternates": [],
+      "unit_prices": [],
+      "second_tier_required": false,
+      "referenced_drawings": [],
+      "referenced_specs": [],
+      "summary": "Notice of Project for the Harrington Education Center Lab 303 Renovation at Texas A&M University. Includes project details and submission information for the CSP RFP & HSP.",
+      "warnings": []
+    },
+    {
+      "pdf_name": "26-007 RFCSP Carr EFA Dressing Room Renovation.pdf",
+      "package_number": null,
+      "trade_name": null,
+      "project_name": "Carr EFA Dressing Room Renovation",
+      "project_number": "26-007",
+      "project_location": null,
+      "bid_due": "2026-06-05T14:00:00",
+      "owner": "Angelo State University",
+      "gc": null,
+      "contractor": null,
+      "contact": "Hannah Bignall hannah.bignall@angelo.edu",
+      "document_kind": "supporting_document",
+      "csi_divisions": [],
+      "csi_sections": [],
+      "inclusions": [],
+      "exclusions": [],
+      "alternates": [],
+      "unit_prices": [],
+      "second_tier_required": false,
+      "referenced_drawings": [],
+      "referenced_specs": [],
+      "summary": "This document is a solicitation notice for the Carr EFA Dressing Room Renovation project at Angelo State University. It includes complete demolition and replacement of interior finishes, mechanical, plumbing, electrical systems, and new IT infrastructure.",
+      "warnings": []
+    },
+    {
+      "pdf_name": "B08_Solicitation_-_Att_3_-_DOL_Wage_Determination.pdf",
+      "package_number": null,
+      "trade_name": null,
+      "project_name": null,
+      "project_number": null,
+      "project_location": null,
+      "bid_due": null,
+      "owner": null,
+      "gc": null,
+      "contractor": null,
+      "contact": null,
+      "document_kind": "supporting_document",
+      "csi_divisions": [],
+      "csi_sections": [],
+      "inclusions": [],
+      "exclusions": [],
+      "alternates": [],
+      "unit_prices": [],
+      "second_tier_required": false,
+      "referenced_drawings": [],
+      "referenced_specs": [],
+      "summary": "[other] This document is a Department of Labor Wage Determination, which outlines the prevailing wage rates for various labor categories in a specific geographic area. It is a standard document used to ensure compliance with federal wage laws on government contracts.",
+      "warnings": []
+    },
+    {
+      "pdf_name": "26-007 RFCSP Carr EFA Dressing Room Renovation (1).pdf",
+      "package_number": null,
+      "trade_name": null,
+      "project_name": "Carr EFA Dressing Room Renovation",
+      "project_number": "26-007",
+      "project_location": null,
+      "bid_due": "2026-06-05T14:00:00",
+      "owner": "Angelo State University",
+      "gc": null,
+      "contractor": null,
+      "contact": "Hannah Bignall, hannah.bignall@angelo.edu",
+      "document_kind": "supporting_document",
+      "csi_divisions": [],
+      "csi_sections": [],
+      "inclusions": [],
+      "exclusions": [],
+      "alternates": [],
+      "unit_prices": [],
+      "second_tier_required": false,
+      "referenced_drawings": [],
+      "referenced_specs": [],
+      "summary": "This document is a supporting document related to the Carr EFA Dressing Room Renovation project at Angelo State University. It includes various attachments such as prevailing wage rates, tax exemption certificate, and general conditions.",
+      "warnings": []
+    },
+    {
+      "pdf_name": "26-007 RFCSP Carr EFA Dressing Room Renovation (2).pdf",
+      "package_number": null,
+      "trade_name": null,
+      "project_name": "Carr EFA Dressing Room Renovation",
+      "project_number": "26-007",
+      "project_location": null,
+      "bid_due": "2026-06-05T14:00:00",
+      "owner": "Angelo State University",
+      "gc": null,
+      "contractor": null,
+      "contact": "Hannah Bignall hannah.bignall@angelo.edu",
+      "document_kind": "supporting_document",
+      "csi_divisions": [],
+      "csi_sections": [],
+      "inclusions": [],
+      "exclusions": [],
+      "alternates": [],
+      "unit_prices": [],
+      "second_tier_required": false,
+      "referenced_drawings": [],
+      "referenced_specs": [],
+      "summary": "This document is a supporting document related to the Carr EFA Dressing Room Renovation project at Angelo State University. It includes attachments such as prevailing wage rates, tax exemption certificate, and general conditions.",
+      "warnings": []
+    },
+    {
+      "pdf_name": "SAM_-_Davis-Bacon_Act_WD_TX20260254__Hays_County__Building.pdf",
+      "package_number": null,
+      "trade_name": null,
+      "project_name": null,
+      "project_number": null,
+      "project_location": "Hays County",
+      "bid_due": null,
+      "owner": null,
+      "gc": null,
+      "contractor": null,
+      "contact": null,
+      "document_kind": "supporting_document",
+      "csi_divisions": [],
+      "csi_sections": [],
+      "inclusions": [],
+      "exclusions": [],
+      "alternates": [],
+      "unit_prices": [],
+      "second_tier_required": false,
+      "referenced_drawings": [],
+      "referenced_specs": [],
+      "summary": "[other] This document appears to be related to the Davis-Bacon Act wage determinations for Hays County. It likely contains information about prevailing wage rates for construction projects in the area, as mandated by the Davis-Bacon Act. The document is primarily boilerplate and does not provide specific project details.",
+      "warnings": []
+    },
+    {
+      "pdf_name": "ESBD_516718_1778880901623_Attachment E - Tax Exemption Certificate.pdf",
+      "package_number": null,
+      "trade_name": null,
+      "project_name": null,
+      "project_number": null,
+      "project_location": null,
+      "bid_due": null,
+      "owner": null,
+      "gc": null,
+      "contractor": null,
+      "contact": null,
+      "document_kind": "supporting_document",
+      "csi_divisions": [],
+      "csi_sections": [],
+      "inclusions": [],
+      "exclusions": [],
+      "alternates": [],
+      "unit_prices": [],
+      "second_tier_required": false,
+      "referenced_drawings": [],
+      "referenced_specs": [],
+      "summary": "[other] This document is a Texas Sales and Use Tax Exemption Certification form. It allows the purchaser to claim an exemption from sales and use taxes for certain taxable items. The form includes fields for the purchaser's and seller's information and requires the purchaser to acknowledge the legal implications of misuse.",
+      "warnings": []
+    },
+    {
+      "pdf_name": "ESBD_516718_1779308778671_26-007 Carr EFA Dressing Room Addendum #1.pdf",
+      "package_number": null,
+      "trade_name": null,
+      "project_name": "Carr EFA Dressing Room Renovation",
+      "project_number": "26-007",
+      "project_location": "San Angelo, Texas",
+      "bid_due": "2026-06-05T14:00:00",
+      "owner": "Angelo State University",
+      "gc": null,
+      "contractor": null,
+      "contact": "samuel.guevara@angelo.edu",
+      "document_kind": "supporting_document",
+      "csi_divisions": [],
+      "csi_sections": [],
+      "inclusions": [],
+      "exclusions": [],
+      "alternates": [],
+      "unit_prices": [],
+      "second_tier_required": false,
+      "referenced_drawings": [],
+      "referenced_specs": [],
+      "summary": "This document is an addendum to the Request for Competitive Sealed Proposals for the Carr EFA Dressing Room Renovation at Angelo State University. It includes project information, schedule, proposal requirements, and evaluation criteria.",
+      "warnings": []
+    },
+    {
+      "pdf_name": "ESBD_516718_1778880857161_Attachment B.2 - Sample Construction Services Agreement.pdf",
+      "package_number": null,
+      "trade_name": null,
+      "project_name": null,
+      "project_number": null,
+      "project_location": "San Angelo, Texas",
+      "bid_due": null,
+      "owner": "Angelo State University",
+      "gc": null,
+      "contractor": null,
+      "contact": null,
+      "document_kind": "supporting_document",
+      "csi_divisions": [],
+      "csi_sections": [],
+      "inclusions": [],
+      "exclusions": [],
+      "alternates": [],
+      "unit_prices": [],
+      "second_tier_required": false,
+      "referenced_drawings": [],
+      "referenced_specs": [],
+      "summary": "[sample construction services agreement] This document is a sample construction services agreement for a project at Angelo State University. It outlines the scope of work, contract sum, time of commencement and completion, HUB contracting commitments, liquidated damages, dispute resolution, indemnity, and various miscellaneous provisions. The agreement emphasizes the use of certified HUB contractors for at least 30% of the total contract sum and details the procedures for handling changes to the HUB Subcontracting Plan. Key facts: HUB contracting commitment: 30% of total contract sum; Liquidated damages: $###.00 per calendar day",
+      "warnings": []
+    },
+    {
+      "pdf_name": "ESBD_516718_1778880917414_Attachment F.1 - Tom Green County Prevailing Wage 2023 (TTUS).pdf",
+      "package_number": null,
+      "trade_name": null,
+      "project_name": "Angelo State University \u2013 San Angelo",
+      "project_number": null,
+      "project_location": "Tom Green County",
+      "bid_due": null,
+      "owner": "Angelo State University",
+      "gc": null,
+      "contractor": null,
+      "contact": null,
+      "document_kind": "supporting_document",
+      "csi_divisions": [],
+      "csi_sections": [],
+      "inclusions": [],
+      "exclusions": [],
+      "alternates": [],
+      "unit_prices": [],
+      "second_tier_required": false,
+      "referenced_drawings": [],
+      "referenced_specs": [],
+      "summary": "[other] This document is a prevailing wage determination for Tom Green County, specifically for a building construction project at Angelo State University in San Angelo. It lists the prevailing wage rates for various trade classifications as of July 2023. Contractors are responsible for classifying workers according to these rates. Key facts: Construction type: Building; Location: Tom Green County; Date: July 2023",
+      "warnings": []
+    },
+    {
+      "pdf_name": "DDPM262101_Alter CP and NDI_Plans (20260512).pdf",
+      "package_number": null,
+      "trade_name": null,
+      "project_name": "Alter CP and NDI Plans",
+      "project_number": "DDPM262001",
+      "project_location": null,
+      "bid_due": null,
+      "owner": null,
+      "gc": null,
+      "contractor": null,
+      "contact": null,
+      "document_kind": "supporting_document",
+      "csi_divisions": [],
+      "csi_sections": [],
+      "inclusions": [],
+      "exclusions": [],
+      "alternates": [],
+      "unit_prices": [],
+      "second_tier_required": false,
+      "referenced_drawings": [],
+      "referenced_specs": [],
+      "summary": "[general instructions to bidders] This document provides detailed construction instructions for alterations involving metal stud framing, gypsum board installation, painting, and flooring to match existing finishes. It includes specifications for electrical, HVAC, and security installations, such as mantrap doors and emergency systems. The document outlines requirements for ceiling modifications, door installations, and the relocation of existing equipment to accommodate new wall partitions. Key facts: Project Number: DDPM262001; Install VCT: AZrock, Shale Gray #V-866; Install new carpet: Shaw Contract, Clear Tile Style# 59564, color Moonstone 62500; Paint standard color: Sherwin-Williams SW1016 Silver Screen",
+      "warnings": []
+    },
+    {
+      "pdf_name": "Solicitation - W50S7626QA001 Cmd Post and NDI.pdf",
+      "package_number": null,
+      "trade_name": null,
+      "project_name": "Renovate Space for Command Post and Nondestructive Inspection (NDI) Operations",
+      "project_number": "DDPM262101",
+      "project_location": "NAS JRB Fort Worth, Texas",
+      "bid_due": "04 JUN 2026 02:00 PM",
+      "owner": "U.S. Department of Defense",
+      "gc": null,
+      "contractor": null,
+      "contact": "Sharon Krywinski, sharon.krywinski.1@us.af.mil",
+      "document_kind": "supporting_document",
+      "csi_divisions": [],
+      "csi_sections": [],
+      "inclusions": [
+        "ASBESTOS WORKER/HEAT & FROST INSULATOR: $33.23/hr + $7.52 fringe",
+        "BOILERMAKER: $33.17/hr + $24.92 fringe",
+        "MILLWRIGHT: $32.02/hr + $11.27 fringe",
+        "ELEVATOR MECHANIC: $51.93/hr + $38.435 fringe",
+        "POWER EQUIPMENT OPERATOR (Tower Crane): $32.85/hr + $13.10 fringe",
+        "IRONWORKER (ORNAMENTAL AND STRUCTURAL): $29.64/hr + $8.43 fringe",
+        "PAINTER (Brush, Roller, and Spray): $16.40/hr + $5.45 fringe",
+        "PIPEFITTER (Excludes HVAC Pipe Installation): $41.28/hr + $12.16 fringe"
+      ],
+      "exclusions": [],
+      "alternates": [],
+      "unit_prices": [],
+      "second_tier_required": false,
+      "referenced_drawings": [],
+      "referenced_specs": [],
+      "summary": "This document is a Davis-Bacon wage determination for Tarrant County, Texas, effective 01/02/2026. It includes prevailing wage rates for various construction trades involved in building projects.",
+      "warnings": []
+    },
+    {
+      "pdf_name": "Solicitation Amendment W50S7626QA0010001 SF 30.pdf",
+      "package_number": null,
+      "trade_name": null,
+      "project_name": "Alter CP and NDI",
+      "project_number": "DDPM262101",
+      "project_location": "Fort Worth, TX",
+      "bid_due": null,
+      "owner": "TXANG (Texas Air National Guard)",
+      "gc": null,
+      "contractor": null,
+      "contact": null,
+      "document_kind": "supporting_document",
+      "csi_divisions": [],
+      "csi_sections": [],
+      "inclusions": [],
+      "exclusions": [],
+      "alternates": [],
+      "unit_prices": [],
+      "second_tier_required": false,
+      "referenced_drawings": [],
+      "referenced_specs": [],
+      "summary": "[amendment of solicitation] This document is an amendment to the solicitation W50S7626QA001, specifically incorporating revision 1 to the B1672 (CLIN 0001) plans. It includes modifications to contract clauses, particularly regarding contract drawings and specifications. The amendment requires acknowledgment from offerors and outlines responsibilities for checking and reproducing drawings. Key facts: Project Number: DDPM262101; Location: Fort Worth, TX Key dates: 03 May 2026; 13 May 2026",
+      "warnings": []
+    },
+    {
+      "pdf_name": "ESBD_516718_1778880869361_Attachment C - 2010 Uniform General Conditions and Supplementary General Conditions dated (TTUS edited 09.07.2023).pdf",
+      "package_number": null,
+      "trade_name": null,
+      "project_name": null,
+      "project_number": null,
+      "project_location": null,
+      "bid_due": null,
+      "owner": "Texas Tech University System",
+      "gc": null,
+      "contractor": null,
+      "contact": null,
+      "document_kind": "supporting_document",
+      "csi_divisions": [],
+      "csi_sections": [],
+      "inclusions": [],
+      "exclusions": [],
+      "alternates": [],
+      "unit_prices": [],
+      "second_tier_required": false,
+      "referenced_drawings": [],
+      "referenced_specs": [],
+      "summary": "[general instructions to bidders] This document outlines the Uniform General Conditions and Supplementary General Conditions for construction contracts under the Texas Tech University System. It incorporates specific supplementary conditions applicable to all Texas Tech System and member institution construction projects, alongside the Uniform General Conditions from the Texas Facilities Commission. The document includes detailed articles on definitions, wage rates, responsibilities, subcontracting plans, bonds, insurance, construction documents, safety, quality control, schedules, payments, changes, project completion, warranties, suspension, termination, and dispute resolution. Key facts: Document revision date: 09/07/2023; Incorporates Texas Facilities Commission's 2010 edition Uniform General Conditions",
+      "warnings": []
+    }
+  ],
+  "scope_matrix": {
+    "by_division": {},
+    "all_alternates": [],
+    "coverage_warnings": []
+  },
+  "aggregated_inclusions": [
+    {
+      "text": "Replace the three overhead roll-up style doors to include hardware, weather stripping and manual chain hoists.",
+      "source_packages": [
+        "SOW_-_Final_-_San_Marcos_-_02192026_Word_r_1.pdf"
+      ]
+    },
+    {
+      "text": "Replace current light fixtures with LED light fixtures to meet OSHA requirements.",
+      "source_packages": [
+        "SOW_-_Final_-_San_Marcos_-_02192026_Word_r_1.pdf"
+      ]
+    },
+    {
+      "text": "Remove all suspended ceiling grids and tiles. Approximately 416 square feet.",
+      "source_packages": [
+        "SOW_-_Final_-_San_Marcos_-_02192026_Word_r_1.pdf"
+      ]
+    },
+    {
+      "text": "Replace three (3) exterior personnel doors with insulated hollow metal doors to include frames and hardware.",
+      "source_packages": [
+        "SOW_-_Final_-_San_Marcos_-_02192026_Word_r_1.pdf"
+      ]
+    },
+    {
+      "text": "Terminate, cap and remove existing gas lines from the building.",
+      "source_packages": [
+        "SOW_-_Final_-_San_Marcos_-_02192026_Word_r_1.pdf"
+      ]
+    },
+    {
+      "text": "Remove and replace existing gutter system including down spouts.",
+      "source_packages": [
+        "SOW_-_Final_-_San_Marcos_-_02192026_Word_r_1.pdf"
+      ]
+    },
+    {
+      "text": "Remove and replace existing roof with new 24-gauge roofing panels. Exclude lean-to shed (awning) on the south side of the building.",
+      "source_packages": [
+        "SOW_-_Final_-_San_Marcos_-_02192026_Word_r_1.pdf"
+      ]
+    },
+    {
+      "text": "Remove existing gas fired unit heaters.",
+      "source_packages": [
+        "SOW_-_Final_-_San_Marcos_-_02192026_Word_r_1.pdf"
+      ]
+    },
+    {
+      "text": "The Contractor shall complete the removal and disposal of existing serving lines and installation of new serving lines.",
+      "source_packages": [
+        "ESBD_518571_1779300513068_RFCSP 2026-0608-01 CHS Cafeteria Serving Line Renovation.pdf"
+      ]
+    },
+    {
+      "text": "The Contractor shall be able to complete all tasks normally encountered in commercial kitchen equipment replacement.",
+      "source_packages": [
+        "ESBD_518571_1779300513068_RFCSP 2026-0608-01 CHS Cafeteria Serving Line Renovation.pdf"
+      ]
+    },
+    {
+      "text": "The Contractor must comply with all National, State and Local codes and pay all applicable costs, fees and permits.",
+      "source_packages": [
+        "ESBD_518571_1779300513068_RFCSP 2026-0608-01 CHS Cafeteria Serving Line Renovation.pdf"
+      ]
+    },
+    {
+      "text": "Prices must include all transportation costs.",
+      "source_packages": [
+        "ESBD_518571_1779300513068_RFCSP 2026-0608-01 CHS Cafeteria Serving Line Renovation.pdf"
+      ]
+    },
+    {
+      "text": "All new equipment are turn-key purchases and must include all needed installations, equipment and related costs.",
+      "source_packages": [
+        "ESBD_518571_1779300513068_RFCSP 2026-0608-01 CHS Cafeteria Serving Line Renovation.pdf"
+      ]
+    },
+    {
+      "text": "Furnish all labor, materials, equipment, supervision, and services necessary to renovate the designated spaces into complete, durable, and fully operational facilities.",
+      "source_packages": [
+        "DDPM262101-Alter CP and NDI-SOW (05032026).pdf"
+      ]
+    },
+    {
+      "text": "Perform all required interior wall demolition and construction, painting, caulking, carpentry, and associated electrical, mechanical, and plumbing work to deliver the finished spaces.",
+      "source_packages": [
+        "DDPM262101-Alter CP and NDI-SOW (05032026).pdf"
+      ]
+    },
+    {
+      "text": "Ensure all work complies strictly with applicable federal, state, and local codes, as well as all DoD standards, including the Unified Facilities Criteria (UFCs) and Unified Facilities Guide Specifications (UFGSs) cited in any project documentation.",
+      "source_packages": [
+        "DDPM262101-Alter CP and NDI-SOW (05032026).pdf"
+      ]
+    },
+    {
+      "text": "Provide any and all components, services, or materials required to deliver a complete and fully functional system, even if not explicitly specified in this SOW.",
+      "source_packages": [
+        "DDPM262101-Alter CP and NDI-SOW (05032026).pdf"
+      ]
+    },
+    {
+      "text": "Protect all adjacent vehicles, equipment, landscaping, and facilities from overspray, debris, and damage.",
+      "source_packages": [
+        "DDPM262101-Alter CP and NDI-SOW (05032026).pdf"
+      ]
+    },
+    {
+      "text": "Install and maintain a clearly marked construction boundary fence to identify the limits of the work area.",
+      "source_packages": [
+        "DDPM262101-Alter CP and NDI-SOW (05032026).pdf"
+      ]
+    },
+    {
+      "text": "Comply with all applicable Occupational Safety and Health Administration (OSHA), U.S. Army Corps of Engineers EM 385\u20111\u20111, and State safety requirements.",
+      "source_packages": [
+        "DDPM262101-Alter CP and NDI-SOW (05032026).pdf"
+      ]
+    },
+    {
+      "text": "Maintain a clean job site at all times. Demolition debris and excess materials shall be removed daily.",
+      "source_packages": [
+        "DDPM262101-Alter CP and NDI-SOW (05032026).pdf"
+      ]
+    },
+    {
+      "text": "Coordinate inspections with the Contracting Officer\u2019s Representative (COR) prior to commencing and during critical phases of work.",
+      "source_packages": [
+        "DDPM262101-Alter CP and NDI-SOW (05032026).pdf"
+      ]
+    },
+    {
+      "text": "Request a Pre-Final Inspection at approximately 75% completion to identify deficiencies requiring correction prior to final completion.",
+      "source_packages": [
+        "DDPM262101-Alter CP and NDI-SOW (05032026).pdf"
+      ]
+    },
+    {
+      "text": "Request a Final Acceptance Inspection at 100% completion, submitted at least 14 days in advance and include written assurance that all deficiencies have been corrected.",
+      "source_packages": [
+        "DDPM262101-Alter CP and NDI-SOW (05032026).pdf"
+      ]
+    },
+    {
+      "text": "Provide proof of insurance.",
+      "source_packages": [
+        "DDPM262101-Alter CP and NDI-SOW (05032026).pdf"
+      ]
+    },
+    {
+      "text": "Provide electronic submittals on the AF 3000 Material Approval Submittal form for each item listed on the AF 66 Submittal Register, as applicable.",
+      "source_packages": [
+        "DDPM262101-Alter CP and NDI-SOW (05032026).pdf"
+      ]
+    },
+    {
+      "text": "Provide a submittal register, updated at least twice per month.",
+      "source_packages": [
+        "DDPM262101-Alter CP and NDI-SOW (05032026).pdf"
+      ]
+    },
+    {
+      "text": "Provide bi-weekly meeting minutes for each progress meeting, updated schedule by task, planned work for the next week.",
+      "source_packages": [
+        "DDPM262101-Alter CP and NDI-SOW (05032026).pdf"
+      ]
+    },
+    {
+      "text": "Provide a Letter of Guarantee that warrants the project against defects in materials and workmanship for one year from the date of final acceptance.",
+      "source_packages": [
+        "DDPM262101-Alter CP and NDI-SOW (05032026).pdf"
+      ]
+    },
+    {
+      "text": "Provide minimum one (1) year on all workmanship and standard manufacturer\u2019s warranty on products.",
+      "source_packages": [
+        "DDPM262101-Alter CP and NDI-SOW (05032026).pdf"
+      ]
+    },
+    {
+      "text": "Electrical power and water shall be provided as required. The Contractor is responsible for any required connections.",
+      "source_packages": [
+        "DDPM262101-Alter CP and NDI-SOW (05032026).pdf"
+      ]
+    },
+    {
+      "text": "Obtain and maintain all necessary base access for its personnel, including subcontractors.",
+      "source_packages": [
+        "DDPM262101-Alter CP and NDI-SOW (05032026).pdf"
+      ]
+    },
+    {
+      "text": "Halt any ground disturbance activity if any Native American or other historical artifacts, fossils, human remains, unmarked graves, or burial sites are found.",
+      "source_packages": [
+        "DDPM262101-Alter CP and NDI-SOW (05032026).pdf"
+      ]
+    },
+    {
+      "text": "ASBESTOS WORKER/HEAT & FROST INSULATOR: $33.23/hr + $7.52 fringe",
+      "source_packages": [
+        "Solicitation - W50S7626QA001 Cmd Post and NDI.pdf"
+      ]
+    },
+    {
+      "text": "BOILERMAKER: $33.17/hr + $24.92 fringe",
+      "source_packages": [
+        "Solicitation - W50S7626QA001 Cmd Post and NDI.pdf"
+      ]
+    },
+    {
+      "text": "MILLWRIGHT: $32.02/hr + $11.27 fringe",
+      "source_packages": [
+        "Solicitation - W50S7626QA001 Cmd Post and NDI.pdf"
+      ]
+    },
+    {
+      "text": "ELEVATOR MECHANIC: $51.93/hr + $38.435 fringe",
+      "source_packages": [
+        "Solicitation - W50S7626QA001 Cmd Post and NDI.pdf"
+      ]
+    },
+    {
+      "text": "POWER EQUIPMENT OPERATOR (Tower Crane): $32.85/hr + $13.10 fringe",
+      "source_packages": [
+        "Solicitation - W50S7626QA001 Cmd Post and NDI.pdf"
+      ]
+    },
+    {
+      "text": "IRONWORKER (ORNAMENTAL AND STRUCTURAL): $29.64/hr + $8.43 fringe",
+      "source_packages": [
+        "Solicitation - W50S7626QA001 Cmd Post and NDI.pdf"
+      ]
+    },
+    {
+      "text": "PAINTER (Brush, Roller, and Spray): $16.40/hr + $5.45 fringe",
+      "source_packages": [
+        "Solicitation - W50S7626QA001 Cmd Post and NDI.pdf"
+      ]
+    },
+    {
+      "text": "PIPEFITTER (Excludes HVAC Pipe Installation): $41.28/hr + $12.16 fringe",
+      "source_packages": [
+        "Solicitation - W50S7626QA001 Cmd Post and NDI.pdf"
+      ]
+    }
+  ],
+  "aggregated_exclusions": [
+    {
+      "text": "Sales tax",
+      "source_packages": [
+        "ESBD_518571_1779300513068_RFCSP 2026-0608-01 CHS Cafeteria Serving Line Renovation.pdf"
+      ]
+    },
+    {
+      "text": "Bonds and Taxes",
+      "source_packages": [
+        "ESBD_518571_1779300513068_RFCSP 2026-0608-01 CHS Cafeteria Serving Line Renovation.pdf"
+      ]
+    },
+    {
+      "text": "Mass excavation",
+      "source_packages": [
+        "ESBD_518571_1779300513068_RFCSP 2026-0608-01 CHS Cafeteria Serving Line Renovation.pdf"
+      ]
+    }
+  ],
+  "sheet_summaries": {
+    "Sol_140FC126R0017.pdf": "This document is a solicitation for a Firm Fixed Price contract by the U.S. Fish and Wildlife Service for the rehabilitation of a shop and garage building at the San Marcos Aquatic Resources Center. It includes requirements for demolition, installation of garage doors, lighting replacement, and roofing work.",
+    "Sol_140P6026Q0029.pdf": "Request for Quote for Cabin Security and Improvements at Padre Island National Seashore in Corpus Christi, Texas. The project involves repair and improvement work including roof repairs, door reinforcement, and installation of hurricane shutters.",
+    "Sol_140P6026Q0029_Amd_0001.pdf": "[amendment of solicitation] This document is an amendment to the solicitation for the Cabin Security and Improvements project at Padre Island National Seashore. It includes changes to the site visit date due to inclement weather and extends the quote due date. The project involves commercial and institutional building construction with a performance period of 60 days from the Notice to Proceed. Key facts: NAICS: 236220; Small Business Size Standard: $45m; Bonding: Payment Bond or Irrevocable Letter of Credit (100% of contract value) due within 10 days after award Key dates: Site visit: 6/4/2026 at 10am CT; Quote due date: 6/18/2026 at 12pm CT",
+    "CHS Serving Line Renovation.pdf": "Cleburne Independent School District is accepting competitive sealed proposals for the renovation of cafeteria serving lines at Cleburne High School. Proposals are due by 2:00 PM on June 8, 2026.",
+    "Notice_of_Project_2026-05-08.pdf": "Notice of Project for the Harrington Education Center Lab 303 Renovation at Texas A&M University. Includes project details and submission information for the CSP RFP & HSP.",
+    "SOW_-_Final_-_San_Marcos_-_02192026_Word_r_1.pdf": "This document outlines the scope of work for the renovation of the San Marcos Aquatic Resource Center's shop and 2 stall garage building. The renovation includes replacing doors, light fixtures, ceiling tiles, and the roof, as well as removing gas lines and heaters. The project is managed by the United States Fish and Wildlife Service.",
+    "26-007 RFCSP Carr EFA Dressing Room Renovation.pdf": "This document is a solicitation notice for the Carr EFA Dressing Room Renovation project at Angelo State University. It includes complete demolition and replacement of interior finishes, mechanical, plumbing, electrical systems, and new IT infrastructure.",
+    "B08_Solicitation_-_Att_3_-_DOL_Wage_Determination.pdf": "[other] This document is a Department of Labor Wage Determination, which outlines the prevailing wage rates for various labor categories in a specific geographic area. It is a standard document used to ensure compliance with federal wage laws on government contracts.",
+    "26-007 RFCSP Carr EFA Dressing Room Renovation (1).pdf": "This document is a supporting document related to the Carr EFA Dressing Room Renovation project at Angelo State University. It includes various attachments such as prevailing wage rates, tax exemption certificate, and general conditions.",
+    "26-007 RFCSP Carr EFA Dressing Room Renovation (2).pdf": "This document is a supporting document related to the Carr EFA Dressing Room Renovation project at Angelo State University. It includes attachments such as prevailing wage rates, tax exemption certificate, and general conditions.",
+    "SAM_-_Davis-Bacon_Act_WD_TX20260254__Hays_County__Building.pdf": "[other] This document appears to be related to the Davis-Bacon Act wage determinations for Hays County. It likely contains information about prevailing wage rates for construction projects in the area, as mandated by the Davis-Bacon Act. The document is primarily boilerplate and does not provide specific project details.",
+    "ESBD_516718_1778880901623_Attachment E - Tax Exemption Certificate.pdf": "[other] This document is a Texas Sales and Use Tax Exemption Certification form. It allows the purchaser to claim an exemption from sales and use taxes for certain taxable items. The form includes fields for the purchaser's and seller's information and requires the purchaser to acknowledge the legal implications of misuse.",
+    "ESBD_516718_1779308778671_26-007 Carr EFA Dressing Room Addendum #1.pdf": "This document is an addendum to the Request for Competitive Sealed Proposals for the Carr EFA Dressing Room Renovation at Angelo State University. It includes project information, schedule, proposal requirements, and evaluation criteria.",
+    "Bid_Schedule_San_Marcos_ARC__Rehabilitate_Shop___2_Stall_Garage_Build.pdf": "This bid schedule requests pricing for various construction tasks including the removal and replacement of doors, light fixtures, ceiling grids, gas lines, gutter systems, roofing sheets, and unit heaters at the San Marcos Aquatic Resource Center Shop & 2 Stall Garage Building.",
+    "ESBD_516718_1778880767322_26-007 Carr EFA Dressing Room Renocation RFCSP.pdf": "The document is a Request for Competitive Sealed Proposals for the Carr EFA Dressing Room Renovation project at Angelo State University. The project involves demolition and replacement of interior finishes and systems, with a construction budget of $500,000. Proposals are due by June 5, 2026.",
+    "ESBD_516718_1778880829538_26-007 Carr EFA Dressing Room Renocation Attachment A.pdf": "The bid form requests proposals for construction services for the Carr EFA Dressing Room Renovation project. It includes a base proposal for construction services, a specified allowance for unforeseen work, and certifications and affirmations required by Texas law.",
+    "ESBD_516718_1778880857161_Attachment B.2 - Sample Construction Services Agreement.pdf": "[sample construction services agreement] This document is a sample construction services agreement for a project at Angelo State University. It outlines the scope of work, contract sum, time of commencement and completion, HUB contracting commitments, liquidated damages, dispute resolution, indemnity, and various miscellaneous provisions. The agreement emphasizes the use of certified HUB contractors for at least 30% of the total contract sum and details the procedures for handling changes to the HUB Subcontracting Plan. Key facts: HUB contracting commitment: 30% of total contract sum; Liquidated damages: $###.00 per calendar day",
+    "ESBD_518571_1779300513068_RFCSP 2026-0608-01 CHS Cafeteria Serving Line Renovation.pdf": "Cleburne ISD is soliciting proposals for the renovation of cafeteria serving lines at Cleburne High School. The project includes removal and disposal of existing equipment, procurement and installation of new equipment, with a budget of $295,000. Proposals are due by June 8, 2026.",
+    "ESBD_516718_1778880917414_Attachment F.1 - Tom Green County Prevailing Wage 2023 (TTUS).pdf": "[other] This document is a prevailing wage determination for Tom Green County, specifically for a building construction project at Angelo State University in San Angelo. It lists the prevailing wage rates for various trade classifications as of July 2023. Contractors are responsible for classifying workers according to these rates. Key facts: Construction type: Building; Location: Tom Green County; Date: July 2023",
+    "DDPM262101-Alter CP and NDI-SOW (05032026).pdf": "This document outlines the scope of work for the renovation of the Command Post and Nondestructive Inspection (NDI) Room at the 136th Airlift Wing, Naval Air Station Joint Reserve Base, Fort Worth, TX. The project involves interior demolition, construction, and compliance with federal, state, and DoD standards. The contractor is responsible for a complete, turnkey renovation, including all necessary labor, materials, and services.",
+    "DDPM262101_Alter CP and NDI_Plans (20260512).pdf": "[general instructions to bidders] This document provides detailed construction instructions for alterations involving metal stud framing, gypsum board installation, painting, and flooring to match existing finishes. It includes specifications for electrical, HVAC, and security installations, such as mantrap doors and emergency systems. The document outlines requirements for ceiling modifications, door installations, and the relocation of existing equipment to accommodate new wall partitions. Key facts: Project Number: DDPM262001; Install VCT: AZrock, Shale Gray #V-866; Install new carpet: Shaw Contract, Clear Tile Style# 59564, color Moonstone 62500; Paint standard color: Sherwin-Williams SW1016 Silver Screen",
+    "Solicitation - W50S7626QA001 Cmd Post and NDI.pdf": "This document is a Davis-Bacon wage determination for Tarrant County, Texas, effective 01/02/2026. It includes prevailing wage rates for various construction trades involved in building projects.",
+    "Solicitation Amendment W50S7626QA0010001 SF 30.pdf": "[amendment of solicitation] This document is an amendment to the solicitation W50S7626QA001, specifically incorporating revision 1 to the B1672 (CLIN 0001) plans. It includes modifications to contract clauses, particularly regarding contract drawings and specifications. The amendment requires acknowledgment from offerors and outlines responsibilities for checking and reproducing drawings. Key facts: Project Number: DDPM262101; Location: Fort Worth, TX Key dates: 03 May 2026; 13 May 2026",
+    "ESBD_516718_1778880887164_Attachment D - HSP (Historically Underutilized Businesses (HUB) Subcontracting Plan) documents.pdf": "This document is a HUB Subcontracting Plan (HSP) required by the State of Texas for contracts with probable subcontracting opportunities. It outlines the requirements for respondents to complete and submit the HSP with their bid, including sections on subcontracting intentions, self-performing justification, and good faith effort methods. The plan aims to promote equal business opportunities for economically disadvantaged persons by encouraging the use of Texas certified Historically Underutilized Businesses (HUBs).",
+    "ESBD_516718_1778880869361_Attachment C - 2010 Uniform General Conditions and Supplementary General Conditions dated (TTUS edited 09.07.2023).pdf": "[general instructions to bidders] This document outlines the Uniform General Conditions and Supplementary General Conditions for construction contracts under the Texas Tech University System. It incorporates specific supplementary conditions applicable to all Texas Tech System and member institution construction projects, alongside the Uniform General Conditions from the Texas Facilities Commission. The document includes detailed articles on definitions, wage rates, responsibilities, subcontracting plans, bonds, insurance, construction documents, safety, quality control, schedules, payments, changes, project completion, warranties, suspension, termination, and dispute resolution. Key facts: Document revision date: 09/07/2023; Incorporates Texas Facilities Commission's 2010 edition Uniform General Conditions"
+  },
+  "warnings": [],
+  "alternates": [],
+  "alternates_selected_default": [],
+  "alternates_total_additive": 0,
+  "alternates_total_deductive": 0,
+  "alternates_total_substitution": 0,
+  "alternates_count_missing": 0,
+  "project_alternates": []
+}
