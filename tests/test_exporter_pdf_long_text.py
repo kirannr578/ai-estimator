@@ -30,7 +30,10 @@ import pytest
 reportlab = pytest.importorskip("reportlab")
 fitz = pytest.importorskip("fitz")  # PyMuPDF; already a project dep
 
-from core.exporter_pdf import build_quote_pdf  # noqa: E402
+from reportlab.lib.styles import ParagraphStyle  # noqa: E402
+from reportlab.platypus import KeepInFrame, Paragraph  # noqa: E402
+
+from core.exporter_pdf import _fit_in_cell, build_quote_pdf  # noqa: E402
 from core.schemas import (  # noqa: E402
     BidPackage,
     CostCategory,
@@ -164,6 +167,61 @@ _LONG_INCLUSION = (
     "issuance; one-year warranty walk-through scheduled at substantial "
     "completion plus eleven months. "
 ) * 6
+
+
+class TestFitInCellHelper:
+    """Unit-level contract for the ``_fit_in_cell`` shrink-to-fit
+    wrapper. Pins shape, mode, and empty-input handling so a regression
+    in the helper itself is caught even if the integration paths below
+    happen not to overflow on a given run.
+    """
+
+    _BODY_STYLE = ParagraphStyle("UnitBody", fontName="Helvetica", fontSize=10)
+
+    def test_single_paragraph_returns_shrink_keepinframe(self) -> None:
+        """A single Paragraph must be wrapped in KeepInFrame(mode='shrink')."""
+        para = Paragraph("hello world", self._BODY_STYLE)
+        result = _fit_in_cell(para, max_width=200.0)
+
+        assert isinstance(result, KeepInFrame)
+        assert result.mode == "shrink"
+        assert result.maxWidth == 200.0
+        assert result.maxHeight > 0
+        assert result._content == [para]
+
+    def test_list_of_paragraphs_returns_keepinframe(self) -> None:
+        """A list of Paragraphs must round-trip into the wrapper's contents."""
+        paras = [
+            Paragraph("first", self._BODY_STYLE),
+            Paragraph("second", self._BODY_STYLE),
+            Paragraph("third", self._BODY_STYLE),
+        ]
+        result = _fit_in_cell(paras, max_width=300.0)
+
+        assert isinstance(result, KeepInFrame)
+        assert result.mode == "shrink"
+        assert result.maxWidth == 300.0
+        assert result._content == paras
+        # Defensive copy: later mutation of the caller's list must not
+        # leak into the rendered cell.
+        assert result._content is not paras
+
+    def test_none_content_returns_empty_keepinframe(self) -> None:
+        """``None`` collapses to an empty wrapper -- safe to drop unconditionally."""
+        result = _fit_in_cell(None, max_width=150.0)
+
+        assert isinstance(result, KeepInFrame)
+        assert result.mode == "shrink"
+        assert result._content == []
+
+    def test_explicit_max_height_is_respected(self) -> None:
+        """Caller-supplied ``max_height`` overrides the module default."""
+        para = Paragraph("explicit-height", self._BODY_STYLE)
+        result = _fit_in_cell(para, max_width=100.0, max_height=42.0)
+
+        assert isinstance(result, KeepInFrame)
+        assert result.maxHeight == 42.0
+        assert result.maxWidth == 100.0
 
 
 class TestLongInclusionRendersWithoutCrash:
