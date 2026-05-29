@@ -74,6 +74,31 @@ _SECTION_KEYWORDS: tuple[str, ...] = (
     "alternative bid",
     "alternative bids",
     "alternative pricing",
+    "alternate pricing",
+    "alternate proposal",
+    "alternate price",
+    "alternate item",
+    "alternate add",
+    "alternate deduct",
+    "voluntary alternate",
+    "voluntary alternates",
+    # CSI section labels for the Schedule of Alternates (Texas-State /
+    # TTUS / federal architectural specifications). T10 F-4: the Carr
+    # EFA RFCSP main file labels its alternates page "01220 Schedule of
+    # Alternates" rather than "BID ALTERNATES SECTION", so the bare
+    # keyword scan misses it.
+    "schedule of alternates",
+    "section 01220",
+    "section 01 22 00",
+    "section 01 23 00",
+    "01 23 00 - alternates",
+    "01 22 00 - alternates",
+    # CLIN-Option pattern (federal SF18/SF1449 evaluation options per FAR
+    # 52.217-5). T10 F-4: the PAIS Cabin solicitation enumerates two
+    # alternates as "Option 001 / Option 002" in the Price/Bid Schedule
+    # without using the word "alternate".
+    "option no",
+    "clin option",
     "value engineering",
     "ve item",
     "ve items",
@@ -88,22 +113,35 @@ _SECTION_KEYWORDS: tuple[str, ...] = (
 )
 
 
+# Additional regex-based section detectors for patterns that need digit
+# disambiguation (so they don't fire on narrative phrases). T10 F-4: the
+# PAIS Cabin solicitation enumerates alternates as bare ``Option 001`` /
+# ``Option 002`` lines with no other "alternate" wording on the page.
+_SECTION_REGEXES: tuple[re.Pattern[str], ...] = (
+    re.compile(r"\boption\s+(?:no\.?\s*)?\d", re.IGNORECASE),
+    re.compile(r"\bclin\s+(?:option|alt)", re.IGNORECASE),
+)
+
+
 def detect_alternates_section(page_text: str) -> bool:
     """Return True if ``page_text`` looks like it contains a bid-alternates section.
 
-    Keyword-substring scan against :data:`_SECTION_KEYWORDS`,
-    case-insensitive. Designed to be cheap (one ``.lower()`` + a
-    small list of substring checks) so a caller can run it across
-    every bid-form page in O(n) text length.
+    Keyword-substring scan against :data:`_SECTION_KEYWORDS` plus a
+    short regex pass over :data:`_SECTION_REGEXES` for patterns that
+    need digit-disambiguation (e.g. ``Option 001`` vs the narrative
+    phrase ``"option to extend"``). All matching is case-insensitive.
 
     False positives are tolerated — see the module docstring rationale.
     False negatives are the real risk; extend :data:`_SECTION_KEYWORDS`
-    when calibration surfaces a new section-header variant.
+    or :data:`_SECTION_REGEXES` when calibration surfaces a new
+    section-header variant.
     """
     if not page_text:
         return False
     needle = page_text.lower()
-    return any(kw in needle for kw in _SECTION_KEYWORDS)
+    if any(kw in needle for kw in _SECTION_KEYWORDS):
+        return True
+    return any(rx.search(page_text) for rx in _SECTION_REGEXES)
 
 
 # ---------------------------------------------------------------------------
@@ -266,11 +304,41 @@ _ALT_LINE_RE = re.compile(
         (?:add\s+|deduct\s+|deductive\s+|additive\s+|alternative\s+|substitution\s+)?
         (?:bid\s+alternates?\b|alternate\b|alt\b|ve\s+item|ve\b|alternative\b)
     )
-    \s*
+    # T10 F-4: allow a hyphen separator between the prefix word and
+    # the id (e.g. ``ALT-A``, ``Alternate-3``, ``VE-1.2``). Without
+    # this the regex required whitespace between the prefix and id,
+    # missing a common shorthand seen on smaller bid forms.
+    \s*[-]?\s*
     (?:no\.\s*|number\s*|num\s*|\#\s*|num\.\s*)?       # optional "No." / "#"
     (?P<id>[A-Z0-9]+(?:[-\.][A-Z0-9]+)?)               # 1 / 2 / A / B / 1A / VE-3
     \s*
     (?:\((?P<paren_label>[^)]+)\))?                    # optional "(DEDUCT)" or similar
+    \s*
+    [:\-—\.]?                                          # optional separator
+    \s*
+    (?P<body>.*)
+    $
+    """,
+    re.IGNORECASE | re.VERBOSE,
+)
+
+
+# T10 F-4. CLIN-Option / FAR-52.217-5 evaluation-option pattern. Federal
+# SF18 / SF1449 bid schedules (e.g. NPS PAIS Cabin RFQ) enumerate
+# alternates as ``Option 001`` / ``Option 002`` lines inside the
+# Price/Bid Schedule, without using the word "alternate" anywhere on
+# the page. The id MUST start with a digit so narrative phrases like
+# ``Option to extend the contract`` do not match (the alphabetic
+# next-token would otherwise be captured as a phantom id).
+_CLIN_OPTION_LINE_RE = re.compile(
+    r"""
+    ^\s*
+    (?P<prefix>option)\b
+    \s+
+    (?:no\.\s*|number\s*|\#\s*)?                       # optional "No." / "#"
+    (?P<id>\d{1,4}[A-Z0-9\-\.]*)                       # MUST start with a digit
+    \s*
+    (?:\((?P<paren_label>[^)]+)\))?                    # optional "(ADD)" / "(DEDUCT)"
     \s*
     [:\-—\.]?                                          # optional separator
     \s*
@@ -286,9 +354,10 @@ def _normalize_alternate_id(prefix: str, raw_id: str) -> str:
 
     The dedupe key uses this normalized form so "Alt #1", "Alternate
     No. 1", and "Alternate 1" all collapse to the same key. VE / Bid
-    Alternate / Add Alternate / Deduct Alternate prefixes are
-    preserved (different alternate families with overlapping numeric
-    ids — VE-1 and Alternate #1 are distinct items).
+    Alternate / Add Alternate / Deduct Alternate / CLIN-Option
+    prefixes are preserved (different alternate families with
+    overlapping numeric ids — VE-1, Alternate #1, and Option 001 are
+    each distinct items even when their raw id strings collide).
     """
     p = prefix.strip().lower()
     raw = raw_id.strip().upper()
@@ -300,6 +369,12 @@ def _normalize_alternate_id(prefix: str, raw_id: str) -> str:
         return f"Add Alternate {raw}"
     if "deduct alternate" in p or "deductive alternate" in p:
         return f"Deduct Alternate {raw}"
+    # T10 F-4: CLIN-Option pattern keeps its own family — "Option 001"
+    # is semantically distinct from "Alternate 1" on the same form
+    # (federal solicitations sometimes carry both shapes on adjacent
+    # pages).
+    if "option" in p:
+        return f"Option {raw}"
     if "substitution" in p or "alternative" in p:
         return f"Alternate {raw}"
     return f"Alternate {raw}"
@@ -308,8 +383,12 @@ def _normalize_alternate_id(prefix: str, raw_id: str) -> str:
 # Trailing "$_______ ADD" / "$_______ (DEDUCT)" labels that occasionally
 # appear at the end of a bid-form line and need to be stripped from the
 # description body before we use it for the scope summary.
-# Single-letter ids and bare section-header tokens (e.g. "S" from
-# "BID ALTERNATES SECTION") must not become alternate line items.
+# Single-letter ids and bare section-header / column-header tokens
+# (e.g. "S" from "BID ALTERNATES SECTION", "PRICING" from "BID
+# ALTERNATES PRICING", "BIDS" from "ALTERNATIVE BIDS") must not become
+# alternate line items. T10 F-4 broadens the stopword list to cover
+# additional header / column-header fragments surfaced by the
+# RFCSP-style bundles in the v4 calibration corpus.
 _ALT_ID_HEADER_STOPWORDS: frozenset[str] = frozenset(
     {
         "SECTION",
@@ -322,11 +401,61 @@ _ALT_ID_HEADER_STOPWORDS: frozenset[str] = frozenset(
         "ITEMS",
         "ALTERNATE",
         "ALTERNATES",
+        # T10 F-4 additions — header / column-header fragments from
+        # Texas-State RFCSP and federal SF18/SF1449 bundles.
+        "ALTERNATIVE",
+        "ALTERNATIVES",
+        "PRICING",
+        "PRICE",
+        "PROPOSAL",
+        "PROPOSALS",
+        "BID",
+        "BIDS",
+        "TABLE",
+        "LIST",
+        "REQUEST",
+        "REQUESTS",
+        "OPTION",
+        "OPTIONS",
+        "ADDITION",
+        "ADDITIONS",
+        "DEDUCTION",
+        "DEDUCTIONS",
+        "DESCRIPTION",
+        "DESC",
+        "AMOUNT",
+        "AMOUNTS",
+        "TOTAL",
+        "TOTALS",
+        "QUANTITY",
+        "UNIT",
+        "BIDDER",
+        "OFFEROR",
+        "RESPONDENT",
     }
 )
 
 
 def _is_valid_alternate_id_token(raw_id: str) -> bool:
+    """Return True iff ``raw_id`` is a plausible alternate identifier.
+
+    Accepts:
+
+    * any token containing at least one digit (``"1"``, ``"01"``,
+      ``"VE-3"``, ``"1A"``)
+    * any single-letter alphabetic token (``"A"``, ``"B"``, ``"C"``)
+    * any multi-character alphanumeric token that is NOT in the
+      header / column-header stopword set
+      (:data:`_ALT_ID_HEADER_STOPWORDS`)
+
+    The stopword set is the B2-1 false-positive guard from QA Pair 25
+    extended in T10 F-4 with additional column-header fragments that
+    leaked through on RFCSP-style bundles ("PRICING", "BID", "OPTION",
+    etc.). The guard rejects the literal "BID ALTERNATES SECTION"
+    style headers so they don't synthesise phantom alternates, while
+    keeping the genuinely valid letter-only ids ("Alt A", "Alternate
+    One") flowing.
+    """
     token = (raw_id or "").strip().upper()
     if not token:
         return False
@@ -407,7 +536,13 @@ def extract_alternates_from_page(
     i = 0
     while i < len(lines):
         line = lines[i].rstrip()
-        m = _ALT_LINE_RE.match(line)
+        # T10 F-4: try the canonical alternate regex first, then fall
+        # back to the CLIN-Option regex for federal SF18/SF1449
+        # solicitations that enumerate alternates as ``Option 001``.
+        # `_ALT_LINE_RE` matches first when both could fire so the
+        # canonical id family ("Alternate", "VE", "Add Alternate")
+        # takes precedence over the CLIN-Option family.
+        m = _ALT_LINE_RE.match(line) or _CLIN_OPTION_LINE_RE.match(line)
         if not m:
             i += 1
             continue
@@ -428,7 +563,7 @@ def extract_alternates_from_page(
             nxt = lines[j].rstrip()
             if not nxt.strip():
                 break
-            if _ALT_LINE_RE.match(nxt):
+            if _ALT_LINE_RE.match(nxt) or _CLIN_OPTION_LINE_RE.match(nxt):
                 break
             body = f"{body} {nxt.strip()}".strip() if body else nxt.strip()
             cont_count += 1
