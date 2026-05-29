@@ -24,8 +24,10 @@ from reportlab.lib.units import inch
 from reportlab.pdfgen.canvas import Canvas
 from reportlab.platypus import (
     BaseDocTemplate,
+    Flowable,
     Frame,
     Image,
+    KeepInFrame,
     KeepTogether,
     PageBreak,
     PageTemplate,
@@ -67,6 +69,66 @@ TEXT_DIM = colors.HexColor("#555555")
 WARNING_BG = colors.HexColor("#FFF3CD")
 WARNING_BORDER = colors.HexColor("#FFEEBA")
 WARNING_TEXT = colors.HexColor("#856404")
+
+
+# ---------------------------------------------------------------------------
+# Long-text cell guard (T10 calibration v4 finding F-2)
+# ---------------------------------------------------------------------------
+#
+# Reportlab Table cells cannot split a single Flowable across pages: a
+# Paragraph carrying user-supplied free-form text (bid-package inclusions,
+# scope notes, payment-milestone descriptions, alternates description,
+# etc.) that wraps to more than one page of vertical space aborts the
+# build with a ``LayoutError: Flowable ... too large on page X in
+# frame ...``. The F-2 repro from the v4 calibration corpus was a
+# single ~1641-pt cell on the CP+NDI SOW bundle.
+#
+# ``_fit_in_cell`` wraps the content in ``KeepInFrame(mode='shrink')``
+# so anything that would otherwise overflow scales uniformly to fit a
+# single page. Normal short content is unaffected — ``KeepInFrame.wrap``
+# only rescales when the wrapped height exceeds ``maxHeight``.
+
+# Conservative cell-content height bound. The page frame is
+# ``PAGE_SIZE[1] - 2*MARGIN`` (~684 pt on LETTER); knock off a small
+# allowance for the section heading + intro + table header row that
+# share the page so a shrunk cell still leaves breathing room.
+_MAX_CELL_HEIGHT = PAGE_SIZE[1] - 2 * MARGIN - 0.4 * inch
+
+
+def _fit_in_cell(
+    content: "Flowable | list[Flowable] | None",
+    max_width: float,
+    *,
+    max_height: float = _MAX_CELL_HEIGHT,
+) -> KeepInFrame:
+    """Wrap a Table-cell Paragraph (or list of Paragraphs) in a
+    shrink-to-fit ``KeepInFrame``.
+
+    Defensive guard around any user-supplied free-form text that lands
+    inside a Table cell. Without this, reportlab aborts the PDF build
+    with ``LayoutError: Flowable ... too large on page X in frame ...``
+    when a single cell's wrapped content exceeds one page of vertical
+    space — the T10 calibration v4 F-2 bug class.
+
+    ``mode='shrink'`` scales the contents uniformly when they exceed
+    ``max_height``; otherwise the contents render at full size, so the
+    common short-text path is unaffected. ``None`` or empty input
+    yields an empty wrapper that takes zero vertical space — safe to
+    drop into a cell unconditionally.
+    """
+    if content is None:
+        flowables: list = []
+    elif isinstance(content, list):
+        flowables = list(content)
+    else:
+        flowables = [content]
+    return KeepInFrame(
+        maxWidth=max_width,
+        maxHeight=max_height,
+        content=flowables,
+        mode="shrink",
+        mergeSpace=True,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -817,11 +879,22 @@ def _suppressed_lines_footnote(
         ),
     ]
     rows = [["Div", "Description", "Qty", "Unit", "Unit Cost", "Total"]]
+    desc_width = (
+        CONTENT_WIDTH
+        - 0.6 * inch
+        - 0.9 * inch
+        - 0.7 * inch
+        - 1.0 * inch
+        - 0.9 * inch
+        - 8
+    )
     for li in suppressed:
         rows.append(
             [
                 li.csi_division,
-                Paragraph(li.description, styles["body_small"]),
+                _fit_in_cell(
+                    Paragraph(li.description, styles["body_small"]), desc_width
+                ),
                 f"{li.quantity:,.2f}",
                 li.unit or "",
                 "\u2014",
@@ -939,9 +1012,15 @@ def _scope_coverage(project: ProjectModel, styles: dict[str, ParagraphStyle]) ->
         Paragraph(f"<b>Inclusions ({len(inc)})</b>", styles["h2"]),
         Paragraph(f"<b>Exclusions ({len(exc)})</b>", styles["h2"]),
     ]
+    # T10 F-2 guard: a single bid-package can contribute a multi-thousand-
+    # character inclusion line that wraps into a Flowable taller than one
+    # page (the CP+NDI SOW bundle hit ~1641 pt here). KeepInFrame shrinks
+    # the whole side-of-the-table contents uniformly so the build doesn't
+    # abort with ``LayoutError: Flowable ... too large``.
+    inc_col_width = CONTENT_WIDTH / 2 - 16  # 8 pt left/right cell padding
     body_row = [
-        [*inc_cells],
-        [*exc_cells],
+        _fit_in_cell(inc_cells, inc_col_width),
+        _fit_in_cell(exc_cells, inc_col_width),
     ]
     tbl = Table(
         [header_row, body_row],
@@ -1022,11 +1101,16 @@ def _alternates_and_unit_prices(
 
         if p.alternates:
             rows = [["Alt #", "Description", "Add/Deduct", "Amount"]]
+            # T10 F-2 guard for the alternate-description column.
+            alt_desc_width = CONTENT_WIDTH - 0.7 * inch - 1.1 * inch - 1.1 * inch - 8
             for a in p.alternates:
                 rows.append(
                     [
                         a.number or "",
-                        Paragraph(a.description or "", styles["body"]),
+                        _fit_in_cell(
+                            Paragraph(a.description or "", styles["body"]),
+                            alt_desc_width,
+                        ),
                         a.add_or_deduct or "",
                         _money(a.amount) if a.amount is not None else "",
                     ]
@@ -1042,10 +1126,14 @@ def _alternates_and_unit_prices(
 
         if p.unit_prices:
             rows = [["Description", "Unit", "Amount"]]
+            up_desc_width = CONTENT_WIDTH - 2.2 * inch - 8
             for u in p.unit_prices:
                 rows.append(
                     [
-                        Paragraph(u.description or "", styles["body"]),
+                        _fit_in_cell(
+                            Paragraph(u.description or "", styles["body"]),
+                            up_desc_width,
+                        ),
                         u.unit or "",
                         _money(u.amount) if u.amount is not None else "",
                     ]
@@ -1088,15 +1176,23 @@ def _supporting_documents_page(
         Spacer(1, 0.1 * inch),
     ]
     rows = [["Filename", "Kind", "Notes"]]
+    filename_width = CONTENT_WIDTH * 0.45 - 8
+    notes_width = CONTENT_WIDTH * 0.35 - 8
     for p in sorted(docs, key=lambda x: x.pdf_name):
         # Lazy import to avoid a hard circular dep with exporter.py.
         from .exporter import _classify_supporting_doc
         kind = _classify_supporting_doc(p)
         rows.append(
             [
-                Paragraph(p.pdf_name, styles["body_small"]),
+                _fit_in_cell(
+                    Paragraph(p.pdf_name, styles["body_small"]),
+                    filename_width,
+                ),
                 kind,
-                Paragraph(p.summary or "", styles["body_small"]),
+                _fit_in_cell(
+                    Paragraph(p.summary or "", styles["body_small"]),
+                    notes_width,
+                ),
             ]
         )
     col_widths = [
@@ -1140,6 +1236,8 @@ def _payment_schedule(
 
     if sched.mode == "percentage":
         rows = [["Milestone", "% of contract", "Amount", "Notes"]]
+        label_width = CONTENT_WIDTH * 0.30 - 8
+        notes_width = CONTENT_WIDTH * 0.35 - 8
         running = 0.0
         for m in sched.milestones:
             pct = float(m.percentage or 0.0)
@@ -1147,10 +1245,15 @@ def _payment_schedule(
             running += amount
             rows.append(
                 [
-                    Paragraph(m.label, styles["body"]),
+                    _fit_in_cell(
+                        Paragraph(m.label, styles["body"]), label_width
+                    ),
                     f"{pct:.1f}%",
                     _money(amount),
-                    Paragraph(m.notes or "", styles["body_small"]),
+                    _fit_in_cell(
+                        Paragraph(m.notes or "", styles["body_small"]),
+                        notes_width,
+                    ),
                 ]
             )
         rows.append(["Total", "100.0%", _money(contract_total), ""])
@@ -1162,15 +1265,22 @@ def _payment_schedule(
         ]
     else:
         rows = [["Milestone", "Amount", "Notes"]]
+        label_width = CONTENT_WIDTH * 0.35 - 8
+        notes_width = CONTENT_WIDTH * 0.45 - 8
         total_amt = 0.0
         for m in sched.milestones:
             amt = float(m.amount or 0.0)
             total_amt += amt
             rows.append(
                 [
-                    Paragraph(m.label, styles["body"]),
+                    _fit_in_cell(
+                        Paragraph(m.label, styles["body"]), label_width
+                    ),
                     _money(amt),
-                    Paragraph(m.notes or "", styles["body_small"]),
+                    _fit_in_cell(
+                        Paragraph(m.notes or "", styles["body_small"]),
+                        notes_width,
+                    ),
                 ]
             )
         rows.append(["Total", _money(total_amt), ""])
@@ -1543,6 +1653,12 @@ def _render_alternates_section(
     rows: list[list] = [
         ["Alt ID", "Type", "Description", "Cost Delta", "Notes"]
     ]
+    # Column widths reused for both the Table and the per-cell
+    # KeepInFrame guards below; kept in lock-step with the col_widths
+    # passed to Table(rows=...) further down.
+    desc_col_width = CONTENT_WIDTH - 0.7 * inch - 0.7 * inch - 1.4 * inch - 1.4 * inch
+    notes_col_width = 1.4 * inch - 8
+    desc_cell_width = desc_col_width - 8
     long_descriptions: list[tuple[str, str]] = []
     for a in sorted_alts:
         truncated, full_text = _truncate_description_for_pdf(a.description)
@@ -1558,17 +1674,25 @@ def _render_alternates_section(
         # relevant notes; skip the basis tag". Operator notes on
         # AlternateLineEstimate are already free-form (the basis lives
         # on .pricing_basis, not in .operator_notes), so we surface
-        # them as-is. Empty notes render as a blank cell.
+        # them as-is. Empty notes render as a blank cell. KeepInFrame
+        # guards the notes cell against the T10 F-2 overflow class
+        # when an operator pastes a multi-paragraph rationale.
         notes = (a.operator_notes or "").strip()
         notes_cell = (
-            Paragraph(notes, styles["body_small"]) if notes else ""
+            _fit_in_cell(
+                Paragraph(notes, styles["body_small"]), notes_col_width
+            )
+            if notes
+            else ""
         )
 
         rows.append(
             [
                 a.alternate_id,
                 _format_alternate_type_short(a.alternate_type),
-                Paragraph(truncated, styles["body"]),
+                _fit_in_cell(
+                    Paragraph(truncated, styles["body"]), desc_cell_width
+                ),
                 cost_str,
                 notes_cell,
             ]
