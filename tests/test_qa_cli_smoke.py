@@ -176,13 +176,19 @@ def test_qa_neg_cli_nonexistent_path_raises(tmp_path: Path, monkeypatch) -> None
 
 
 def test_qa_edge_cli_skips_drawings_when_flag_set(tmp_path: Path, monkeypatch) -> None:
-    """``--no-drawings`` filters out >5MB PDFs (heuristic) — small PDFs proceed."""
-    # Build two small text PDFs (well under 5MB) so the no-drawings flag
-    # leaves them in the run.
-    pdf1 = tmp_path / "manual.pdf"
-    pdf2 = tmp_path / "spec.pdf"
-    _build_text_pdf(pdf1, title="PROJECT MANUAL", body_lines=["Spec section 01"])
-    _build_text_pdf(pdf2, title="SPEC", body_lines=["Spec body"])
+    """``--no-drawings`` keeps bundle-classified PDFs and drops drawing sets.
+
+    Updated for T10 Finding F-5: the flag is now a doc-level classifier
+    filter, not a 5 MB size heuristic. We give the surviving PDFs filenames
+    that the classifier recognizes as a bundle (``Bid_Schedule_*`` →
+    BID_FORM, ``Sol_*`` → BID_PACKAGE) so the test's intent ("the flag
+    leaves non-drawing PDFs in the run") still holds under the corrected
+    semantic.
+    """
+    pdf1 = tmp_path / "Bid_Schedule_QA.pdf"
+    pdf2 = tmp_path / "Sol_140QA000001.pdf"
+    _build_text_pdf(pdf1, title="BID SCHEDULE", body_lines=["Item 1", "Item 2"])
+    _build_text_pdf(pdf2, title="REQUEST FOR PROPOSALS", body_lines=["Solicitation"])
     out_dir = tmp_path / "out"
 
     monkeypatch.setattr(analyze, "LLMClient", _NullLLM)

@@ -12,6 +12,8 @@ extractor rather than page-by-page with vision.
 
 from __future__ import annotations
 
+import hashlib
+import logging
 import os
 import re
 from dataclasses import dataclass
@@ -21,6 +23,9 @@ from typing import Iterable
 import fitz  # PyMuPDF
 
 from .schemas import Discipline, Sheet, SheetType
+
+
+logger = logging.getLogger(__name__)
 
 
 # Sheet-number regex covers most US conventions:
@@ -345,6 +350,64 @@ def _classify_document(
     return SheetType.UNKNOWN
 
 
+# --- F-1: content-hash deduplication ---------------------------------------
+#
+# Calibration v4 (CALIBRATION_REPORT.md, Finding F-1) discovered that the
+# corpus contained 16 PDFs that lived both at the root of an attachments
+# folder AND under a `potentialsols/` sibling folder. With `--recursive` the
+# ingestion path picked them up twice and inflated `bid_packages` ~1.6×. The
+# `_pdf_content_hash` + dedupe filter inside `process_pdfs` collapses
+# identical-content duplicates to a single canonical path. The canonical
+# choice is "first seen wins after sorting by path length ascending", which
+# preserves the root-level file over its `subdir/...` shadow.
+
+_HASH_CHUNK_BYTES = 1 << 20  # 1 MiB; PDFs are small so a single chunk usually
+
+
+def _pdf_content_hash(path: str | os.PathLike) -> str:
+    """Return the SHA-256 hex digest of the file at ``path``.
+
+    Treats the file as raw bytes — PDF metadata, embedded thumbnails, and
+    any encryption envelope all participate in the identity. Two PDFs that
+    encode the same source content but have different metadata (e.g.
+    saved-by-different-versions of the same template) will hash differently
+    and are NOT deduplicated; that conservative bias is intentional, since
+    the consequence of a false-positive dedupe (silently dropping a real
+    document) is much worse than a false-negative.
+    """
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        while True:
+            chunk = f.read(_HASH_CHUNK_BYTES)
+            if not chunk:
+                break
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def _classify_pdf_kind(pdf_path: str | os.PathLike) -> SheetType:
+    """Classify a PDF as a document-level :class:`SheetType` for filtering.
+
+    Opens the PDF, reads the first 3 pages of text, and delegates to
+    :func:`_classify_document`. The return is the same value
+    :func:`process_pdfs` would compute internally — surfacing it here lets
+    `analyze.py --no-drawings` filter out drawing-set PDFs (those that
+    classify to :attr:`SheetType.UNKNOWN`) before the expensive
+    vision-extraction stage.
+
+    Raises whatever ``fitz.open`` raises on a malformed PDF; callers that
+    need a non-throwing variant should wrap in try/except.
+    """
+    pdf_path = Path(pdf_path)
+    with fitz.open(pdf_path) as doc:
+        page_count = len(doc)
+        first_text = "".join(
+            (doc[i].get_text("text") or "") for i in range(min(3, page_count))
+        )
+        avg_chars = (len(first_text) / max(min(3, page_count), 1)) if page_count else 0.0
+        return _classify_document(pdf_path.name, first_text, page_count, avg_chars)
+
+
 def _read_full_text(doc: fitz.Document, max_pages: int = 60) -> str:
     """Concatenate text across pages with simple page markers."""
     chunks: list[str] = []
@@ -366,8 +429,26 @@ def process_pdfs(
         SheetType.BID_FORM,
         SheetType.PROJECT_MANUAL,
     ),
+    dedupe: bool = True,
 ) -> tuple[list[Sheet], list[DocumentBundle]]:
     """Split every PDF into sheets and render them.
+
+    Args:
+        pdf_paths: Iterable of paths to source PDFs. When ``dedupe`` is on
+            (the default), the order does not matter — paths are re-sorted by
+            length ascending so the shortest path wins on hash collision.
+        cache_dir: Directory to write rendered page images / thumbnails to.
+        dpi: Render DPI for drawing pages.
+        document_level_types: Which :class:`SheetType` values route a PDF
+            through the bundle (whole-document) path instead of the per-page
+            sheet path.
+        dedupe: When True (F-1 calibration finding), collapse PDFs with
+            identical SHA-256 of file bytes to the single shortest-path
+            occurrence and emit a warning naming both paths. When False, the
+            duplicate-PDF inflation described in
+            ``exports/calibration_v4/CALIBRATION_REPORT.md`` Finding F-1 is
+            preserved — useful only when an operator genuinely wants to see
+            shadowed duplicates.
 
     Returns:
         ``(sheets, document_bundles)``.
@@ -387,7 +468,40 @@ def process_pdfs(
     sheets: list[Sheet] = []
     bundles: list[DocumentBundle] = []
 
-    for pdf_path in pdf_paths:
+    # --- F-1 dedupe pass: collapse identical-content PDFs by SHA-256 -------
+    # We sort the paths by length ascending so that on a collision the
+    # shorter (canonical) path wins. Hashing is read-only and never touches
+    # PyMuPDF — encrypted / malformed PDFs hash fine and will surface their
+    # error later inside ``fitz.open`` below, the same as before this filter.
+    ordered = [Path(p) for p in pdf_paths]
+    if dedupe and ordered:
+        ordered.sort(key=lambda p: (len(str(p)), str(p)))
+        seen: dict[str, Path] = {}
+        deduped: list[Path] = []
+        for path in ordered:
+            try:
+                digest = _pdf_content_hash(path)
+            except OSError as exc:
+                logger.warning(
+                    "dedupe: could not hash %s (%s); keeping it in the input set.",
+                    path,
+                    exc,
+                )
+                deduped.append(path)
+                continue
+            existing = seen.get(digest)
+            if existing is None:
+                seen[digest] = path
+                deduped.append(path)
+            else:
+                logger.warning(
+                    "dedupe: dropping duplicate PDF (same SHA-256): kept=%s, dropped=%s",
+                    existing,
+                    path,
+                )
+        ordered = deduped
+
+    for pdf_path in ordered:
         pdf_path = Path(pdf_path)
         if pdf_path.name.upper().startswith("DO_NOT_USE"):
             continue

@@ -35,8 +35,8 @@ from core.estimator import CostDatabase, price_takeoff
 from core.exporter import export_estimate_json, export_estimate_xlsx, save_to_disk
 from core.extractors import extract_bundle, extract_sheet
 from core.llm_client import LLMClient
-from core.pdf_processor import process_pdfs
-from core.schemas import SheetExtraction
+from core.pdf_processor import _classify_pdf_kind, process_pdfs
+from core.schemas import SheetExtraction, SheetType
 from core.sheet_classifier import classify_sheet
 from core.takeoff import reconcile
 
@@ -48,6 +48,14 @@ CONFIG_DIR = Path(__file__).resolve().parent / "config"
 
 
 def _gather_pdfs(target: Path, recursive: bool, include_drawings: bool) -> list[Path]:
+    """Enumerate candidate PDFs under ``target``.
+
+    NOTE: the ``include_drawings`` flag here preserves the legacy 5 MB
+    size-heuristic so callers (and the back-compat ``test_qa_cli_e4``) keep
+    working. The CLI no longer wires ``--no-drawings`` to this argument —
+    see :func:`_filter_out_drawing_pdfs` for the F-5 (classifier-based)
+    replacement and :func:`_filter_by_max_size_mb` for the rescue flag.
+    """
     if target.is_file() and target.suffix.lower() == ".pdf":
         return [target]
     if not target.is_dir():
@@ -55,9 +63,88 @@ def _gather_pdfs(target: Path, recursive: bool, include_drawings: bool) -> list[
     pattern = "**/*.pdf" if recursive else "*.pdf"
     pdfs = sorted(p for p in target.glob(pattern) if p.is_file())
     if not include_drawings:
-        # Heuristic: very large PDFs (>5 MB) are usually drawing sets.
+        # Legacy heuristic: very large PDFs (>5 MB) are usually drawing sets.
         pdfs = [p for p in pdfs if p.stat().st_size <= 5 * 1024 * 1024]
     return pdfs
+
+
+def _filter_out_drawing_pdfs(
+    pdf_paths: list[Path], log: logging.Logger | None = None
+) -> list[Path]:
+    """Drop PDFs whose dominant document type is a drawing set (F-5).
+
+    Replaces the buggy ``--no-drawings`` size heuristic that wrongly filtered
+    by file size. Calibration v4 Finding F-5 documented two failure modes
+    the size proxy caused: (a) small drawing PDFs (<5 MB) still got
+    vision-classified, and (b) large non-drawing files (project manuals,
+    spec PDFs) were excluded even though they're not drawings.
+
+    "Drawing" here means the same thing :func:`process_pdfs` means: a PDF
+    that :func:`_classify_document` routes to :attr:`SheetType.UNKNOWN` (the
+    per-page vision path). Bundle types — ``BID_PACKAGE``, ``BID_FORM``,
+    ``PROJECT_MANUAL`` — are kept regardless of size.
+
+    Malformed or password-protected PDFs that fail to classify are KEPT;
+    they will surface their real error inside ``process_pdfs`` later and
+    we do not want to silently drop a file because of a transient I/O
+    or encryption issue.
+    """
+    if not pdf_paths:
+        return []
+    kept: list[Path] = []
+    for p in pdf_paths:
+        try:
+            kind = _classify_pdf_kind(p)
+        except Exception as exc:
+            if log is not None:
+                log.warning(
+                    "--no-drawings: could not classify %s (%s); keeping it.",
+                    p,
+                    exc,
+                )
+            kept.append(p)
+            continue
+        if kind == SheetType.UNKNOWN:
+            if log is not None:
+                log.info("--no-drawings: skipping drawing PDF %s", p)
+            continue
+        kept.append(p)
+    return kept
+
+
+def _filter_by_max_size_mb(
+    pdf_paths: list[Path], max_mb: float, log: logging.Logger | None = None
+) -> list[Path]:
+    """Drop PDFs whose on-disk size exceeds ``max_mb`` megabytes.
+
+    Companion to :func:`_filter_out_drawing_pdfs`: this is the size-only
+    filter exposed under ``--max-pdf-mb`` so the legacy ``--no-drawings``
+    behaviour ("skip anything > 5 MB") remains reachable without
+    re-introducing the F-5 semantic bug into the default flag.
+    """
+    if not pdf_paths or max_mb <= 0:
+        return list(pdf_paths)
+    threshold = int(max_mb * 1024 * 1024)
+    kept: list[Path] = []
+    for p in pdf_paths:
+        try:
+            size = p.stat().st_size
+        except OSError as exc:
+            if log is not None:
+                log.warning("--max-pdf-mb: could not stat %s (%s); keeping it.", p, exc)
+            kept.append(p)
+            continue
+        if size > threshold:
+            if log is not None:
+                log.info(
+                    "--max-pdf-mb: skipping %s (%.1f MB > %.1f MB)",
+                    p,
+                    size / (1024 * 1024),
+                    max_mb,
+                )
+            continue
+        kept.append(p)
+    return kept
 
 
 def _process_sheet(args):
@@ -214,8 +301,35 @@ def main() -> int:
     p.add_argument("--overhead",    type=float, default=10.0, help="Overhead %% (default 10).")
     p.add_argument("--profit",      type=float, default=5.0,  help="Profit %% (default 5).")
     p.add_argument("--project-name", default="CLI Run", help="Project name for the estimate header.")
-    p.add_argument("--no-drawings", action="store_true",
-                   help="Skip large PDFs (>5 MB) - cheap text-only run.")
+    p.add_argument(
+        "--no-drawings",
+        action="store_true",
+        help=(
+            "Skip files classified as drawings (uses doc-level classifier, "
+            "not file size). For the legacy size-only behaviour, use "
+            "--max-pdf-mb=5 instead."
+        ),
+    )
+    p.add_argument(
+        "--max-pdf-mb",
+        type=float,
+        default=None,
+        metavar="MB",
+        help=(
+            "Drop PDFs larger than MB megabytes BEFORE the classifier runs. "
+            "Pass --max-pdf-mb=5 to recover the legacy --no-drawings size "
+            "heuristic (calibration v4 Finding F-5)."
+        ),
+    )
+    p.add_argument(
+        "--no-dedupe",
+        action="store_true",
+        help=(
+            "Disable SHA-256 content-hash deduplication at ingestion. By "
+            "default identical-content PDFs at different paths are collapsed "
+            "to the shortest path (calibration v4 Finding F-1)."
+        ),
+    )
     p.add_argument("--client-pdf", action="store_true",
                    help="Also render a client-ready quote.pdf using config/client_quote.json.")
     p.add_argument(
@@ -248,7 +362,24 @@ def main() -> int:
     )
     log = logging.getLogger("analyze")
 
-    pdf_paths = _gather_pdfs(args.path, args.recursive, include_drawings=not args.no_drawings)
+    pdf_paths = _gather_pdfs(args.path, args.recursive, include_drawings=True)
+    if args.max_pdf_mb is not None:
+        pre = len(pdf_paths)
+        pdf_paths = _filter_by_max_size_mb(pdf_paths, args.max_pdf_mb, log)
+        log.info(
+            "--max-pdf-mb=%.1f filtered %d → %d PDF(s).",
+            args.max_pdf_mb,
+            pre,
+            len(pdf_paths),
+        )
+    if args.no_drawings:
+        pre = len(pdf_paths)
+        pdf_paths = _filter_out_drawing_pdfs(pdf_paths, log)
+        log.info(
+            "--no-drawings (classifier) filtered %d → %d PDF(s).",
+            pre,
+            len(pdf_paths),
+        )
     if args.limit > 0:
         pdf_paths = pdf_paths[: args.limit]
     if not pdf_paths:
@@ -261,7 +392,12 @@ def main() -> int:
     cache_dir = args.out / "renders"
 
     t0 = time.time()
-    sheets, bundles = process_pdfs(pdf_paths, cache_dir=cache_dir, dpi=args.dpi)
+    sheets, bundles = process_pdfs(
+        pdf_paths,
+        cache_dir=cache_dir,
+        dpi=args.dpi,
+        dedupe=not args.no_dedupe,
+    )
     log.info("Split into %d drawing sheets and %d text documents in %.1fs.",
              len(sheets), len(bundles), time.time() - t0)
 
