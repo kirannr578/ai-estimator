@@ -20,6 +20,8 @@ from __future__ import annotations
 
 import json
 import logging
+import re
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -32,6 +34,7 @@ from .pricing.cwicr_matcher import (
 )
 from .schemas import (
     COST_TIER_SEED_DB_PRICE_CONFIDENCE,
+    MAX_OVERRIDE_SNAPSHOTS,
     AlternateLine,
     AlternateLineEstimate,
     AlternatePricingBasis,
@@ -39,6 +42,7 @@ from .schemas import (
     CostBand,
     CostCategory,
     CostLine,
+    CostLineOverrideSnapshot,
     CostSourceTier,
     Estimate,
     TakeoffItem,
@@ -1016,6 +1020,21 @@ def apply_manual_override(
         line.confidence, 1.0, suppressed=False
     )
 
+    # Phase T6.4.d — capture the pre-override snapshot BEFORE mutating
+    # the line so an operator can roll back this single override later
+    # via :func:`revert_last_override`. Append to the existing stack
+    # (preserves any prior batch / sub-quote / manual snapshots so a
+    # multi-layer chain can be unwound one layer at a time) and enforce
+    # the FIFO cap so a pathological re-apply loop cannot grow the
+    # line's footprint without bound. This applies to EVERY override
+    # path because batch / sub-quote apply both flow through this same
+    # primitive (see :func:`core.pricing.batch_override.apply_batch_plan`
+    # and :func:`core.pricing.subquote_parser.apply_subquote_plan`).
+    snapshot = _capture_line_snapshot(line)
+    new_snapshots = list(line.override_snapshots) + [snapshot]
+    if len(new_snapshots) > MAX_OVERRIDE_SNAPSHOTS:
+        new_snapshots = new_snapshots[-MAX_OVERRIDE_SNAPSHOTS:]
+
     new_line = line.model_copy(update={
         "unit_cost": new_uc,
         "total_cost": new_total,
@@ -1024,9 +1043,205 @@ def apply_manual_override(
         "cost_band": new_band,
         "suppressed": False,
         "notes": new_notes,
+        "override_snapshots": new_snapshots,
     })
 
     new_lines = list(estimate.line_items)
     new_lines[idx] = new_line
 
     return estimate.model_copy(update={"line_items": new_lines})
+
+
+# ---------------------------------------------------------------------------
+# Phase T6.4.d — per-line undo via snapshot store
+# ---------------------------------------------------------------------------
+#
+# Every override path (T6.1 manual primitive, T6.3 batch CSV, T8.1 / T8.2
+# sub-quote PDF) flows through :func:`apply_manual_override` — so wiring
+# the snapshot capture into that single function gives us pre-override
+# snapshot capture for FREE on every batch / sub-quote / manual apply.
+#
+# Design choice: snapshot store (Option A) over notes-suffix parsing
+# (Option C). The ``| previous: ...`` suffix that T6.4.c / T6.4.c.2
+# already write into ``CostLine.notes`` carries the prior tag /
+# bracketed-fields description but does NOT preserve actual numeric
+# values (``unit_cost``, ``qty``, ``total_cost``, ``price_confidence``,
+# ``combined_confidence``, ``cost_band``). So a notes-only undo cannot
+# rebuild the pre-override numeric state without re-running the pricing
+# pipeline. The snapshot store sidesteps the lossiness entirely: each
+# entry carries every field needed to restore the line byte-identically.
+#
+# UU's "elegant path" suggestion (parse the notes suffix) was an
+# over-optimistic read — the brief acknowledged this and recommended
+# Option A. The implementation below realises Option A. Notes-suffix
+# parsing is still useful for human-facing audit (Excel / PDF / UI), but
+# the canonical undo target is always the snapshot.
+
+
+# Regex matching the canonical T6.4.c source-tag pattern at the head of
+# a ``CostLine.notes`` string. Mirrors
+# :data:`core.pricing.batch_override.SOURCE_TAG_PATTERN` but kept local
+# to avoid a circular import (``core.pricing.batch_override`` already
+# imports :func:`apply_manual_override` from this module). Pinned to the
+# same shape by tests in ``tests/test_per_line_undo.py``.
+_SOURCE_TAG_HEAD_RE = re.compile(r"^(\[[a-z][a-z\-]*\])\s")
+
+
+def _extract_leading_source_tag(notes: str | None) -> str:
+    """Return the canonical source tag at position 0 of ``notes``, or ``""``.
+
+    Helper for :func:`_capture_line_snapshot`. The snapshot's
+    ``source_tag`` field labels the layer we're about to bury so the
+    Streamlit revert UI can show "revert to vendor-CSV state from
+    14:32" without re-parsing the chain.
+
+    A line at priced-from-cost-DB defaults (no override yet) has no
+    leading tag — those snapshots carry ``source_tag=""`` which the UI
+    renders as "(priced default)".
+    """
+    if not notes:
+        return ""
+    m = _SOURCE_TAG_HEAD_RE.match(notes)
+    return m.group(1) if m else ""
+
+
+def _capture_line_snapshot(
+    line: CostLine,
+    *,
+    applied_at: datetime | None = None,
+) -> CostLineOverrideSnapshot:
+    """Snapshot the current state of ``line`` for per-line undo.
+
+    Captured BEFORE every override path (T6.1 manual / T6.3 batch /
+    T8.1 / T8.2 sub-quote) mutates the line. The snapshot describes
+    the state to roll back TO — i.e. the state the line was in at
+    the moment this function ran.
+
+    Args:
+        line: The :class:`CostLine` whose pre-override state to
+            capture. Not mutated.
+        applied_at: UTC timestamp to stamp on the snapshot. Defaults
+            to ``datetime.now(timezone.utc)`` — caller injects a
+            fixed value in tests for deterministic comparisons.
+
+    Returns:
+        A new :class:`CostLineOverrideSnapshot` carrying every field
+        needed for :func:`revert_last_override` to restore the line
+        byte-identically.
+    """
+    return CostLineOverrideSnapshot(
+        unit_cost=float(line.unit_cost),
+        qty=float(line.quantity),
+        total_cost=float(line.total_cost),
+        notes=line.notes or "",
+        cost_source_tier=line.cost_source_tier,
+        price_confidence=float(line.price_confidence),
+        combined_confidence=float(line.combined_confidence),
+        cost_band=line.cost_band,
+        suppressed=bool(line.suppressed),
+        applied_at=applied_at or datetime.now(timezone.utc),
+        source_tag=_extract_leading_source_tag(line.notes),
+    )
+
+
+def revert_last_override(line: CostLine) -> CostLineOverrideSnapshot | None:
+    """Pop the stack-top override snapshot and restore ``line`` to it.
+
+    Phase T6.4.d — per-line undo. The ``↶ revert`` affordance in the
+    Streamlit Estimate tab calls this once per click; a bulk
+    "revert all batch applies" iterates every line with a non-empty
+    snapshot stack and calls this once per line. Mutates ``line``
+    in place (Pydantic ``BaseModel`` is mutable by default and
+    :class:`CostLine` does not opt into ``frozen``).
+
+    Restoration order: pop the stack-top snapshot, then assign each
+    snapshotted field back onto the line. Numeric fields are coerced
+    via ``float(...)`` to match the line's original schema types
+    (``CostLine.unit_cost`` / ``quantity`` / ``total_cost`` are
+    ``float`` per :class:`CostLine`, even though the snapshot carries
+    them as ``float`` too — the explicit coercion guards a future
+    schema migration). Enum fields (``cost_source_tier`` /
+    ``cost_band``) round-trip as enum instances.
+
+    Notes are restored to the snapshot's ``notes`` string verbatim —
+    that is the state we are rolling back to, including whatever
+    head tag (or absence of one) was at position 0 at the time the
+    snapshot was captured. The ``[manual-override]`` (or
+    ``[batch]`` / ``[sub-quote]`` / ``[sub-quote-llm]``) head that
+    THIS override layered on top is gone after revert.
+
+    The returned snapshot carries the popped values so a downstream
+    "undo of undo" / "show snapshot details" affordance can replay
+    the operation later if the operator changes their mind.
+
+    Args:
+        line: The :class:`CostLine` to roll back. Mutated in place.
+
+    Returns:
+        The popped :class:`CostLineOverrideSnapshot`, or ``None`` when
+        the line had no snapshots (line is at its priced-from-cost-DB
+        defaults, OR the line predates Phase T6.4.d and was loaded
+        from a saved JSON estimate without an ``override_snapshots``
+        field).
+    """
+    snapshots = list(line.override_snapshots or [])
+    if not snapshots:
+        return None
+
+    snapshot = snapshots.pop()
+
+    # Restore each snapshotted field. The order here doesn't matter
+    # mechanically (Pydantic doesn't run cross-field validators on
+    # bare assignment) but tracks the field declaration order in
+    # :class:`CostLineOverrideSnapshot` for readability.
+    line.unit_cost = float(snapshot.unit_cost)
+    line.quantity = float(snapshot.qty)
+    line.total_cost = float(snapshot.total_cost)
+    # The snapshot's ``notes`` is always a string (default ""); the
+    # CostLine schema's ``notes`` field is ``Optional[str]``. Restore
+    # ``None`` when the snapshot recorded an empty string so a line at
+    # priced-from-cost-DB defaults (no notes) round-trips byte-identically
+    # — Excel / PDF / UI readers treat empty-string and None differently.
+    line.notes = None if snapshot.notes == "" else snapshot.notes
+    line.cost_source_tier = snapshot.cost_source_tier
+    line.price_confidence = float(snapshot.price_confidence)
+    line.cost_band = snapshot.cost_band
+    line.suppressed = bool(snapshot.suppressed)
+    # combined_confidence is a derived @property — no need to assign;
+    # the property recomputes from confidence × price_confidence.
+    line.override_snapshots = snapshots
+
+    return snapshot
+
+
+def revert_last_override_in_estimate(
+    estimate: Estimate,
+    line_id: int | str,
+) -> tuple[Estimate, CostLineOverrideSnapshot | None]:
+    """Estimate-level wrapper around :func:`revert_last_override`.
+
+    Mirrors the immutability convention of :func:`apply_manual_override`
+    (returns a new :class:`Estimate`; does not mutate the input). Useful
+    for callers that want to thread the revert through a session-state
+    re-assignment without worrying about shared object identity.
+
+    Args:
+        estimate: The :class:`Estimate` to roll back. NOT mutated.
+        line_id: ``int`` index OR ``str`` cost_source / description
+            (same matching rules as :func:`apply_manual_override`).
+
+    Returns:
+        ``(new_estimate, popped_snapshot)``. ``popped_snapshot`` is
+        ``None`` when the targeted line had no snapshots; ``new_estimate``
+        in that case is identical to the input.
+    """
+    idx = _resolve_override_index(estimate, line_id)
+    # Deep-copy the targeted line so we don't mutate the input estimate's
+    # CostLine object; revert_last_override mutates in place.
+    target = estimate.line_items[idx].model_copy(deep=True)
+    snapshot = revert_last_override(target)
+    if snapshot is None:
+        return estimate, None
+    new_lines = list(estimate.line_items)
+    new_lines[idx] = target
+    return estimate.model_copy(update={"line_items": new_lines}), snapshot

@@ -7,10 +7,23 @@ the result on the way back.
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+
+# Phase T6.4.d — per-line undo cap. Each :class:`CostLine` keeps at most
+# this many :class:`CostLineOverrideSnapshot` entries on its
+# ``override_snapshots`` stack; older entries are dropped FIFO when the
+# cap is exceeded so a pathological re-apply loop (200-row vendor batch
+# accidentally re-applied 50 times) cannot grow the line's memory
+# footprint without bound. Calibration intent: typical override-chain
+# depth on a real bid is 1-3 (priced-from-cost-DB → vendor batch →
+# manual override on top). 10 leaves comfortable headroom while still
+# bounding the worst case.
+MAX_OVERRIDE_SNAPSHOTS: int = 10
 
 
 # ---------------------------------------------------------------------------
@@ -1492,6 +1505,69 @@ class TakeoffItem(BaseModel):
     notes: Optional[str] = None
 
 
+class CostLineOverrideSnapshot(BaseModel):
+    """Phase T6.4.d — pre-override snapshot of a :class:`CostLine`.
+
+    Captured by :func:`core.estimator._capture_line_snapshot` BEFORE
+    every override path mutates a line, then pushed onto the line's
+    :pyattr:`CostLine.override_snapshots` stack. A per-line revert
+    (:func:`core.estimator.revert_last_override`) pops the top
+    snapshot and restores the recorded fields back onto the line
+    exactly, so an operator who clicked "Apply" on a 200-row vendor
+    batch can roll back line 47 without re-running the whole pipeline.
+
+    Why not parse the ``| previous: ...`` suffix that T6.4.c /
+    T6.4.c.2 already write into ``CostLine.notes``? The notes string
+    is **human-readable** — it carries ``[unit_cost: $3.00]`` text
+    describing what each override DID, but does not preserve the
+    actual numeric values that existed BEFORE each override. So a
+    notes-only undo cannot recompute ``total_cost`` /
+    ``price_confidence`` / ``cost_band`` from scratch — restoration
+    would be lossy. A parallel snapshot store sidesteps the
+    lossiness entirely. The brief acknowledged this and recommended
+    Option A (snapshot store) over Option C (notes parse); this
+    model is the realisation.
+
+    Bounded: at most :data:`MAX_OVERRIDE_SNAPSHOTS` (10) entries
+    per line; older entries drop FIFO. Default empty list on
+    :pyattr:`CostLine.override_snapshots` keeps every pre-T6.4.d
+    estimate (loaded from JSON, hand-built fixture, etc.)
+    backwards-compatible — those lines simply can't undo because
+    they predate this feature.
+    """
+
+    unit_cost: float = 0.0
+    qty: float = 0.0
+    total_cost: float = 0.0
+    notes: str = ""
+    cost_source_tier: CostSourceTier = CostSourceTier.EXACT_MATCH
+    price_confidence: float = 1.0
+    combined_confidence: float = 1.0
+    cost_band: CostBand = CostBand.AUTO_APPROVE
+    suppressed: bool = False
+    applied_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc),
+        description=(
+            "UTC timestamp when this snapshot was captured (i.e. just "
+            "before the override mutated the line). Surfaced in the "
+            "Streamlit revert toast so the operator sees 'reverted to "
+            "state from 14:32 UTC'."
+        ),
+    )
+    source_tag: str = Field(
+        default="",
+        description=(
+            "Canonical source tag at position 0 of ``CostLine.notes`` "
+            "BEFORE this override layered on top — i.e. the provenance "
+            "tag of the layer we are about to bury. Examples: "
+            "``\"\"`` (no tag; line was at priced-from-cost-DB defaults), "
+            "``\"[batch]\"``, ``\"[sub-quote]\"``, ``\"[manual-override]\"``. "
+            "Used by the Streamlit revert UI to label the snapshot ('revert "
+            "to vendor-CSV state from 14:32') without re-parsing the notes."
+        ),
+    )
+
+
 class CostLine(BaseModel):
     """Priced takeoff line.
 
@@ -1539,6 +1615,20 @@ class CostLine(BaseModel):
     # is unchanged for any code path that doesn't explicitly set these.
     price_confidence: float = 1.0
     cost_source_tier: CostSourceTier = CostSourceTier.EXACT_MATCH
+    # Phase T6.4.d — per-line undo stack. Each entry is a
+    # :class:`CostLineOverrideSnapshot` captured by
+    # :func:`core.estimator._capture_line_snapshot` BEFORE one of the
+    # override paths (T6.1 manual, T6.3 batch CSV, T8.1 / T8.2
+    # sub-quote PDF) mutated this line. The Streamlit "↶ revert" affordance
+    # in the Estimate tab pops the stack-top snapshot via
+    # :func:`core.estimator.revert_last_override` to roll back the line
+    # without re-running the pricing pipeline. Bounded at
+    # :data:`MAX_OVERRIDE_SNAPSHOTS` (10) entries — older snapshots
+    # drop FIFO so a pathological re-apply loop can't grow the line's
+    # footprint without bound. Default empty list keeps every pre-T6.4.d
+    # estimate backwards-compatible (those lines simply have nothing to
+    # revert).
+    override_snapshots: list[CostLineOverrideSnapshot] = Field(default_factory=list)
 
     @property
     def combined_confidence(self) -> float:

@@ -44,6 +44,7 @@ from core.estimator import (
     apply_manual_override,
     attach_alternates_to_estimate,
     price_takeoff,
+    revert_last_override_in_estimate,
 )
 from core.exporter import export_estimate_json, export_estimate_xlsx
 from core.extractors import extract_bundle, extract_sheet
@@ -82,6 +83,7 @@ from core.schemas import (
     ClientInfo,
     CompanyInfo,
     CostLine,
+    CostLineOverrideSnapshot,
     CostSourceTier,
     Estimate,
     PaymentMilestone,
@@ -299,6 +301,132 @@ def _initialize_override_session_state(estimate: Estimate) -> None:
     """
     st.session_state["estimate_original"] = estimate.model_copy(deep=True)
     st.session_state["override_history"] = []
+
+
+# ---------------------------------------------------------------------------
+# Phase T6.4.d — per-line undo UI helpers (pure functions, easy to test)
+# ---------------------------------------------------------------------------
+#
+# Per-line revert lets an operator who clicked "Apply" on a 200-row
+# vendor batch roll back line 47 alone, without resetting the whole
+# estimate via the T6.2 global "Reset all overrides" button. The
+# affordance is rendered as a "↶ revert" button next to every line
+# whose ``override_snapshots`` stack is non-empty; clicking it pops
+# the stack-top snapshot via :func:`revert_last_override_in_estimate`
+# and re-renders.
+#
+# The helpers below are pure (no Streamlit calls, no session-state
+# reads) so the test suite can exercise them without an ``AppTest``
+# harness — same convention as the T6.2 / T6.3 helpers above.
+
+
+def _format_snapshot_label(snapshot: CostLineOverrideSnapshot) -> str:
+    """Human-readable single-line label for one override snapshot.
+
+    Used by the revert toast and the per-line "show undo history"
+    expander. Format::
+
+        ``<source-tag> @ <HH:MM UTC> $<unit_cost>/unit``
+
+    Empty source tag (no leading provenance — i.e. the snapshot
+    captures the priced-from-cost-DB defaults) renders as
+    ``"(priced default)"`` so an operator never sees a bare ``@``.
+    The timestamp is formatted as HH:MM (UTC) — the operator's
+    mental model is "I clicked Apply about 5 minutes ago", not
+    "I clicked Apply on 2026-05-28T19:15:42".
+    """
+    tag = snapshot.source_tag or "(priced default)"
+    ts = snapshot.applied_at
+    try:
+        when = ts.strftime("%H:%M UTC")
+    except Exception:
+        when = "?"
+    return f"{tag} @ {when}  \u2014  ${snapshot.unit_cost:,.2f}/unit"
+
+
+def _build_revert_history_rows(
+    line: CostLine,
+    line_index: int,
+) -> list[dict[str, Any]]:
+    """Project the line's snapshot stack into UI-renderable dict rows.
+
+    Returns one dict per snapshot in stack order (oldest first). The
+    Streamlit "show undo history" expander renders this list as a
+    table; the test suite asserts the projection matches the
+    underlying snapshots exactly.
+    """
+    rows: list[dict[str, Any]] = []
+    for depth, snap in enumerate(line.override_snapshots):
+        rows.append({
+            "Line #": line_index,
+            "Depth": depth,
+            "Source tag": snap.source_tag or "(priced default)",
+            "Captured (UTC)": snap.applied_at.isoformat(timespec="seconds"),
+            "Unit cost": round(float(snap.unit_cost), 2),
+            "Total cost": round(float(snap.total_cost), 2),
+            "Tier": (
+                snap.cost_source_tier.value
+                if isinstance(snap.cost_source_tier, CostSourceTier)
+                else str(snap.cost_source_tier)
+            ),
+        })
+    return rows
+
+
+def _apply_per_line_revert(
+    estimate: Estimate,
+    line_index: int,
+) -> tuple[Estimate, CostLineOverrideSnapshot | None]:
+    """Pure wrapper around :func:`revert_last_override_in_estimate`.
+
+    Same signature contract as the T6.2 ``_apply_operator_override``
+    helper: takes an estimate + a target index, returns
+    ``(new_estimate, popped_snapshot)``. Returns ``(estimate, None)``
+    when the targeted line has no snapshots — the UI uses ``None`` as
+    the "nothing to revert" signal and skips the toast.
+
+    Pure — no Streamlit calls. Tested directly in
+    ``tests/test_streamlit_undo_ui.py``.
+    """
+    return revert_last_override_in_estimate(estimate, line_index)
+
+
+def _revertable_line_indices(estimate: Estimate) -> list[int]:
+    """Return the 0-based indices of every line with at least one snapshot.
+
+    Used by the bulk-revert affordance to iterate "every line that
+    can be rolled back" without redundantly checking the snapshot
+    list inside the apply loop. Stable order — matches
+    ``estimate.line_items``.
+    """
+    return [
+        i for i, li in enumerate(estimate.line_items)
+        if li.override_snapshots
+    ]
+
+
+def _bulk_revert_all(
+    estimate: Estimate,
+) -> tuple[Estimate, list[CostLineOverrideSnapshot]]:
+    """Revert the most-recent override on every line that has one.
+
+    Returns the new estimate plus the list of popped snapshots in
+    the order the reverts ran. Lines without snapshots are
+    untouched. Useful when an operator applied the wrong CSV to
+    200 lines and wants to undo all of them in one click.
+
+    Reverts are idempotent in aggregate: applying the same plan
+    twice + bulk-revert reverts only the SECOND apply layer; the
+    first layer's snapshots stay intact and are recoverable via a
+    second bulk-revert call.
+    """
+    current = estimate
+    popped: list[CostLineOverrideSnapshot] = []
+    for idx in _revertable_line_indices(current):
+        current, snap = revert_last_override_in_estimate(current, idx)
+        if snap is not None:
+            popped.append(snap)
+    return current, popped
 
 
 # ---------------------------------------------------------------------------
@@ -2786,6 +2914,139 @@ if "estimate" in st.session_state:
                     st.session_state["override_history"] = []
                     st.success("All overrides reverted; history cleared.")
                     st.rerun()
+
+            # ------------------------------------------------------------------
+            # Phase T6.4.d — per-line override undo
+            # ------------------------------------------------------------------
+            #
+            # Stack-pop revert affordance for every line whose
+            # ``override_snapshots`` is non-empty. Lives inside the existing
+            # operator-override expander so all override-related controls
+            # cluster in one place. Two surfaces:
+            #
+            #   1. Per-line ``↶ revert`` button — one per revertable line.
+            #      Pops the stack-top snapshot via the pure helper
+            #      ``_apply_per_line_revert`` and re-renders.
+            #   2. Bulk ``↶ Revert all batch applies`` button — iterates
+            #      every revertable line and pops one snapshot each.
+            #      Useful when an operator applied the wrong vendor CSV
+            #      to 200 lines and wants to undo every line in one click.
+            #
+            # Distinct from the global "Reset all overrides" button above:
+            # that one wipes the entire override history back to the
+            # pre-override snapshot. Per-line undo is a single layer pop
+            # — multi-layer chains (priced default → batch → manual)
+            # require multiple clicks to fully unwind.
+
+            revertable_indices = _revertable_line_indices(estimate)
+            if revertable_indices:
+                st.markdown("##### Per-line override undo (Phase T6.4.d)")
+                st.caption(
+                    "Each row below has at least one captured pre-override "
+                    "snapshot. Click ``\u21B6 revert`` to pop the most "
+                    "recent override on that line and restore it to the "
+                    "previous state. Multi-layer chains (e.g. priced "
+                    "default \u2192 vendor batch \u2192 manual override) "
+                    "require one click per layer."
+                )
+
+                if st.button(
+                    "\u21B6 Revert all batch applies (in reverse order)",
+                    use_container_width=True,
+                    key="bulk_revert_all_button",
+                    help=(
+                        f"Pops the most recent snapshot on every "
+                        f"revertable line ({len(revertable_indices)} "
+                        f"line(s) currently have at least one snapshot). "
+                        f"Useful when the wrong CSV was applied. "
+                        f"This cannot be undone."
+                    ),
+                ):
+                    new_estimate, popped_list = _bulk_revert_all(estimate)
+                    st.session_state["estimate"] = new_estimate
+                    st.success(
+                        f"\u21B6 Reverted {len(popped_list)} override(s) "
+                        f"across {len(revertable_indices)} line(s). The "
+                        f"earlier override layer (if any) is preserved "
+                        f"and can be reverted with another click."
+                    )
+                    st.rerun()
+
+                # Per-line revert table. Columns: line #, description,
+                # current unit cost, depth (snapshot count), revert button.
+                # Streamlit doesn't support a native per-row button column
+                # in dataframes, so we render rows as a simple repeating
+                # 5-column layout — survives narrow widths and is
+                # accessible to keyboard users.
+                for idx in revertable_indices:
+                    li = estimate.line_items[idx]
+                    snap_top = li.override_snapshots[-1]
+                    col_idx, col_desc, col_uc, col_depth, col_btn = st.columns(
+                        [0.6, 4.0, 1.2, 0.8, 1.4]
+                    )
+                    col_idx.write(f"#{idx}")
+                    desc_short = (
+                        (li.description[:60] + "\u2026")
+                        if len(li.description) > 60
+                        else li.description
+                    )
+                    col_desc.write(desc_short)
+                    col_uc.write(f"${li.unit_cost:,.2f}/{li.unit}")
+                    col_depth.write(f"{len(li.override_snapshots)} layer(s)")
+                    if col_btn.button(
+                        "\u21B6 revert",
+                        key=f"per_line_revert_button_{idx}",
+                        help=(
+                            f"Roll back to: {_format_snapshot_label(snap_top)}"
+                        ),
+                        use_container_width=True,
+                    ):
+                        new_estimate, popped = _apply_per_line_revert(
+                            estimate, idx
+                        )
+                        st.session_state["estimate"] = new_estimate
+                        if popped is not None:
+                            st.success(
+                                f"\u21B6 Reverted line #{idx} to "
+                                f"{popped.source_tag or '(priced default)'} "
+                                f"(captured "
+                                f"{popped.applied_at.strftime('%H:%M UTC')}; "
+                                f"unit_cost ${popped.unit_cost:,.2f})."
+                            )
+                        else:
+                            st.warning(
+                                f"Line #{idx} had no snapshot to revert."
+                            )
+                        st.rerun()
+
+                with st.expander(
+                    f"Show full undo history "
+                    f"({sum(len(estimate.line_items[i].override_snapshots) for i in revertable_indices)} "
+                    f"snapshot(s) across {len(revertable_indices)} line(s))",
+                    expanded=False,
+                ):
+                    history_rows: list[dict[str, Any]] = []
+                    for idx in revertable_indices:
+                        history_rows.extend(
+                            _build_revert_history_rows(
+                                estimate.line_items[idx], idx
+                            )
+                        )
+                    if history_rows:
+                        hist_df = pd.DataFrame(history_rows)
+                        st.dataframe(
+                            hist_df,
+                            hide_index=True,
+                            use_container_width=True,
+                            column_config={
+                                "Unit cost": st.column_config.NumberColumn(
+                                    format="$%.2f"
+                                ),
+                                "Total cost": st.column_config.NumberColumn(
+                                    format="$%.2f"
+                                ),
+                            },
+                        )
 
         # ------------------------------------------------------------------
         # Phase T6.3 — Batch operator overrides from vendor CSV
