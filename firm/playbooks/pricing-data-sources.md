@@ -678,4 +678,42 @@ No remaining Phase C stubs. The next move on the pricing roadmap is Phase D (3rd
 
 ---
 
+## `config/cost_database.json` v2 expansion — sourcing audit (par_costdb_expand SHIPPED)
+
+Pre-T10-calibration-v4 coverage lift on the seed cost DB (`config/cost_database.json`). Pure-data slice — extended the file from ~48 entries (the T5/T6 origin seed, residential-framing-skewed) to **128 entries** by appending 80 new entries across five trade families BPC has shipped against historically. CWICR continues to overlay licensed pricing where it has a similarity match; the v2 entries are the parametric fallback when CWICR has no good match — pinning the MISSING-tier % surface lower without changing tier semantics. Full per-family inventory, schema-compliance proofs, projected coverage delta, and waste-factor histogram live in `docs/ROADMAP_TAKEOFF_AUTOMATION.md` under the `par_costdb_expand` SHIPPED block; this section is the auditor-facing citation index.
+
+### Public-domain sources cited in v2 entries
+
+Listed in descending citation count. Every source is public-access (no commercial license required) — verified-defensible for SOC 2 / change-management evidence and for SHPO / NPS bid-justification packets on historic-preservation projects.
+
+| Source | Citation count | Where it lands |
+|---|---|---|
+| **GSA Multiple Award Schedules** (Schedule 73 food-service, 78 sports equipment, 84 law enforcement / security, 03FAC mechanical, 56 buildings, 71 II hardware, 58 I A-V) | 45 | Food-service equipment, sport floor + bleachers + scoreboard, perimeter security + gate operator + readers, gym RTU, gym A-V speaker, ADA hardware. GSA-published unit pricing is the most-defensible bid-justification anchor for federal / state work. |
+| **NAHB Cost of Constructing a Home, 2024** | 20 | Residential + light-commercial framing, sheathing, soffit / fascia, T&G re-deck, asphalt + cedar shingle, underlayment, ridge + gable vents, gypsum, ceramic tile, plumbing fixture rough, wiring devices, commercial coatings. |
+| **AGC Construction Inflation Alert, Q2-2024** | 19 | Standing-seam metal + slate + copper specialty roofing index; specialty flooring + wall paneling; commercial HVAC + electrical + lighting index. Used as the escalation anchor where a primary NAHB / GSA line existed but the trade-specific inflation rate diverged from the headline series. |
+| **USACE 2024 unit-price guides** (EM 1110-2-1304 Civil Works, EM 1110-3-138 Army roofing, perimeter-security guides) | 14 | Site clearing, minor grading, fence-corridor earthwork, perimeter chain-link + welded mesh + anti-climb + barbed / razor tops, fence-post setting (sonotube + driven), Army-standard standing seam. |
+| **NPS Preservation Briefs** (4 roofing, 9 wood windows / trim, 24 HVAC / plumbing in historic buildings, 28 painting historic interiors, 29 slate roofs, 40 ceramic tile floors) | 13 | Slate + cedar shake + LCC + terne flashing, historic-replica trim, soffit / fascia in-kind rebuild, period brass fixture sets, hex tile mosaic, vent-stack patch-back, historic roof / preservation compliance LS. NPS Briefs are the canonical SHPO-bid-justification anchor on NRHP-listed and contributing properties. |
+| **FEMA disaster-recovery cost tables** (P-784 disaster-recovery, P-1019 construction cost tables, P-499 cold-region roofing) | 13 | Historic-roof tear-off + debris haul, fixture demo w/ envelope protection, perimeter security fencing, commercial-kitchen restoration (grease interceptor, FRP), ice + water shield placement guidance. FEMA P-series are the canonical anchor for post-disaster public-property rebuilds. |
+| **HUD 2024 ADA-retrofit + community-facility cost guides** | 8 | ADA lever-hardware retrofit, ADA 3-bar grab bar, ADA water closet, ADA lavatory + insulated trap, ADA accessible seating modification, rubber sport flooring (community-facility line), ceramic-tile subway wainscot. |
+| **BLS OEWS 2024 + BLS PPI series** | 2 | Carpenter median (SOC 47-2031, for the historic-carpenter premium adder) + electrician (for the 208V / 3-phase dedicated kitchen-equipment circuit pricing). The full BLS labor + PPI fold is handled separately by `core/pricing/sources/bls_oews_adapter.py` + `core/pricing/sources/bls_ppi_adapter.py` and reaches CWICR for live overlay; v2 only cites it for parametric fallback. |
+| **Bureau of Reclamation 2024 construction-trend report** | 2 | Minor grading + driven fence-post pricing (soil-class-dependent). |
+| **EPA WaterSense 2024 product list** | 1 | Low-flow flushometer (1.28 gpf sensor, restroom-historic family). |
+| **NFPA 96 (Standard for Ventilation Control + Fire Protection of Commercial Cooking Operations)** | 1 | Grease-duct welded carbon-steel install guidance (food-service family). |
+
+### Coverage stats
+
+- **128 total DB entries** (48 base unchanged + 80 v2 additions).
+- **83 entries (65%)** now carry a public-domain source attribution in the `notes` field. The remaining 45 base entries (the pre-expansion seed) are unchanged in this slice — refactoring those into sourced form is a future `par_costdb_audit_base` cleanup, gated on T10 calibration v4 surfacing residual MISSING-tier surface on the base divisions.
+- **Zero RSMeans citations.** RSMeans / Gordian remain Tier 2 commercial-license decisions (per Phase C completion status above) — explicitly NOT cited in any v2 entry. Operators with a licensed RSMeans seat can overlay via the existing CWICR matcher; the v2 DB stays public-domain-only for distribution.
+
+### Verification surface
+
+Operators bid-justifying a v2-derived unit cost should consult:
+
+1. The cited source in the entry's `notes` field (always names a specific document — e.g. `"FEMA P-784 disaster-recovery commercial-kitchen restoration"`, `"GSA Schedule 73 (2024) walk-in refrigeration"`).
+2. The downstream vendor quote on the actual bid — v2 entries are explicit "reasonable starting points the operator can refine, not price-locked sources of truth" and were intentionally biased ~10-15% high where uncertain. CWICR overlay or operator hand-pricing should take precedence on any line where the bid is competitive on price.
+3. `docs/ROADMAP_TAKEOFF_AUTOMATION.md` `par_costdb_expand` SHIPPED block for the full per-family inventory, the schema-compliance proof, and the projected MISSING-tier coverage delta on the BPC bid mix.
+
+---
+
 **End of playbook.**

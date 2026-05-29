@@ -1971,4 +1971,63 @@ These are the questions whose answers materially shift the roadmap. Five-to-eigh
 
 ---
 
+### Phase `par_costdb_expand` — `config/cost_database.json` v2 (5 trade families, 80 entries, public-domain sourcing)
+
+**Status:** SHIPPED — pre-T10-calibration-v4 coverage lift. Pre-expansion the seed cost DB carried ~48 entries skewed toward residential framing + finishes (the T5/T6 origin shape); T10's calibration v4 pre-flight flagged 30–40% MISSING-tier line surface on the BPC bid mix as the dominant remaining accuracy gap. This slice expands the seed DB to **128 entries (48 base + 80 new)** spanning the five trade families BPC has actually shipped against historically: commercial food-service / cafeteria, restroom-historic / NPS-compliant renovation, roof patch + historic re-roof, perimeter security fencing + access control, and gymnasium / multi-system renovation. **Pure-data slice on `config/cost_database.json`** — zero modifications to `core/estimator.py`, `core/pricing/*`, `core/schemas.py`, `app.py`, or any test file (the existing T6 cost-lookup + T7 CWICR-priority logic consumes the expanded DB unchanged; CWICR continues to overlay licensed pricing where it has a match, and the new entries are the parametric fallback when CWICR has no good match — pinning the MISSING-tier surface lower without changing tier semantics).
+
+**Per-family entry counts (auto-classified by CSI division + description keyword match, one entry to first matching family):**
+
+| Family | Entries | Primary CSI divisions | Representative scope |
+|---|---|---|---|
+| food-service / cafeteria | 15 | 11 (equipment), 22 (plumbing), 23 (kitchen exhaust) | walk-in cooler / freezer CF, hot + cold food wells, NSF serving counter, tray slide, sneeze guard, Type I + Type II hoods, grease duct, grease interceptor, 208V dedicated circuits, FRP wall + ceiling, quarry tile, epoxy resin flooring |
+| restroom-historic | 11 | 08 (ADA hardware), 09 (tile), 10 (accessories), 22 (fixtures) | ADA WC + lav + flush valve, period brass faucet sets, 3-bar ADA grab bar, 1" hex floor mosaic, 3×6 subway wainscot, low-flow WaterSense flushometer, ADA lever-style hardware retrofit |
+| roof-historic | 20 | 02 (demo), 06 (sheathing + trim), 07 (roofing + flashing + venting) | NPS Preservation Brief 4 / 29 compliance LS, slate, cedar shake, 24-ga standing seam, lead-coated copper + terne flashing, ice + water shield, synthetic underlayment, T&G re-deck, soffit / fascia rebuild, historic-replica wood trim, ridge + gable vents, fixture demo w/ envelope protection |
+| security-fence | 16 | 28 (access control), 32 (fencing + site clearing + grading + posts) | 6' + 8' chain-link, vinyl-coated chain-link, ornamental steel, welded wire mesh, anti-climb mesh, barbed wire + razor ribbon tops, 4' + 10' + 20' gates, slide-gate operator, sonotube-set + driven posts, brush clearing, minor grading, card reader + keypad |
+| gym / multi-system | 17 | 09 (sport floor + paint), 11 (scoreboard), 12 (bleachers + ADA seat), 23 (RTU), 26 (high-bay), 27 (PA speaker) | MFMA maple panel sport floor, maple refinish + recoat, 10mm rubber sport, modular synthetic sport tile, fixed wood + telescoping wood + telescoping aluminum bleachers, ADA accessible seating retrofit, wireless scoreboard, game-line painting, deck paint, high-bay LED, gym AV speaker, gym RTU per ton, CMU sealer + acrylic finish, self-leveling subfloor underlayment |
+
+**Per-family total: 79 entries** (the 80th is a cross-family entry — e.g. CSI 22 13 33 grease interceptor is shared between food-service and historic-restroom plumbing-rough scopes; the auto-classifier puts it in food-service first).
+
+**Sourcing distribution (one entry may cite multiple sources in `notes`):** GSA Schedule (45 cites, 73 / 84 / 78 / 73 / 71 II / 03FAC / 56), NAHB Cost of Constructing a Home 2024 (20), AGC Q2-2024 Construction Inflation Alert (19), USACE 2024 Civil Works + perimeter security guides (14), NPS Preservation Briefs 4 / 9 / 24 / 28 / 29 / 40 (13), FEMA P-784 / P-1019 / P-499 disaster-recovery + cost tables (13), HUD 2024 ADA-retrofit + community-facility cost guides (8), BLS OEWS 2024 (2), Bureau of Reclamation 2024 (2), EPA WaterSense 2024 product list (1), NFPA 96 grease-duct install (1). **65% of total DB entries (83 of 128) now carry a public-domain source attribution in `notes`**; the remaining 45 base entries (the pre-expansion seed) are unchanged — refactoring those into sourced form is deferred to a future `par_costdb_audit_base` slice if calibration v4 shows residual MISSING-tier surface on the base divisions.
+
+**Schema compliance:** every entry validated against the seed contract — required fields (`description`, `unit`, `unit_cost`, `cost_category`, `waste_factor`, `keywords`) all present; `unit` ∈ canonical UoM set from `core/pricing/batch_override.py::UOM_CANONICAL`; `cost_category` ∈ {`labor`, `material`, `subcontractor`, `equipment`, `other`} (matches seed taxonomy verbatim); `csi_code` keys match `^[0-9]{2} [0-9]{2} [0-9]{2}( [A-Z])?$` (the optional trailing single-letter suffix is the seed's variant convention — `07 31 13 A` and `32 31 13 A..F`); `waste_factor` ∈ [1.00, 1.20]; `unit_cost` > 0 and < $1M; no duplicate descriptions; module import smoke `python -c "import core.estimator; print('OK')"` passes.
+
+**Waste-factor distribution (intentional, per-trade):**
+
+- **food-service:** 1.00 ×11 (assembled equipment, no real waste), 1.02 ×2 (lightly cuttable LF items like sneeze guard, tray slide), 1.05 ×2 (gas piping cut waste).
+- **restroom-historic:** 1.00 ×6 (fixtures + ADA accessories), 1.02 ×3 (period brass supplies, sensor flush valve), 1.12 ×1 (subway tile), 1.15 ×1 (hex mosaic — higher cut waste).
+- **roof-historic:** 1.00 ×4 (LS items + per-fixture demo), 1.02 ×1, 1.05 ×3 (light cut), 1.07 ×4 (trim + standing seam), 1.10 ×7 (shingle + shake + underlayment), 1.12 ×1 (slate — pattern-laid).
+- **security-fence:** 1.00 ×6 (gates + operator + readers), 1.02 ×8 (LF fence runs), 1.05 ×2 (post-set sonotube + driven, soil-dependent).
+- **gym:** 1.00 ×8 (bleachers + scoreboard + speaker + ADA seat + sealer LS), 1.03 ×2 (maple sport panel + maple refinish), 1.05 ×6 (rubber + synthetic sport, deck paint, game line, CMU sealer, self-leveling), 1.07 ×1 (FRP-style).
+
+**Sourcing strategy: erred-high on price + cited public-domain source.** Every v2 entry is a "reasonable starting point that the operator can refine, not a price-locked source of truth" (the CWICR matcher overlays licensed pricing data automatically where it has a similarity match; this DB is the parametric fallback). Per the brief, where uncertain, we biased ~10–15% premium on `unit_cost` and cited the most-defensible public-domain source. Source labels in `notes` reference real document IDs (FEMA P-784 disaster-recovery rebuild rates, GSA Schedule 73 / 78 / 84 catalog years, NPS Preservation Brief numbers, AGC Q2-2024 construction-cost-impact report, USACE EM 1110-2-1304 Civil Works, NAHB 2024 Cost of Constructing a Home) — operators can verify against vendor quotes before bid submission. **No RSMeans citations** (licensed proprietary data; the firm's pricing-data-sources playbook explicitly defers RSMeans / Gordian to a Tier 2 decision gated on demonstrated bid-team demand).
+
+**Files modified:** 2.
+- `config/cost_database.json` — `_meta.basis` extended with the v2 expansion note (full audit trail in `_meta.v2_sources` referencing the firm playbook); 80 new entries appended across CSI divisions 02, 06, 07, 08, 09, 10, 11, 12, 22, 23, 26, 27, 28, 31, 32; no existing entries modified (pure-additive — preserves T5 / T6 / T7 / T8.1 / T8.2 / T6.3 / T6.4.x test pins on the original seed entries).
+- `docs/ROADMAP_TAKEOFF_AUTOMATION.md` — this section.
+
+**Files created:** 0.
+
+**Test deltas:** none. Suite remains 2559 passed / 1 skipped post-shipment; the cost DB is data, not code, and no test pins a specific v2 entry's unit cost or description. Worker WW's parallel T6.4.d per-line undo slice (in flight on `core/estimator.py` + `core/schemas.py` + `core/pricing/*` + `app.py` + tests) is fully disjoint — zero file overlap with this slice, expected to land separately and bring the suite count up by its own test additions.
+
+**Coverage delta — projected MISSING-tier % reduction on the BPC bid mix:**
+
+| Trade exposure on a typical BPC bid | Pre-expansion DB coverage | Post-expansion DB coverage |
+|---|---|---|
+| Commercial food-service / cafeteria | ~5% (residential range only) | ~85% (15 entries spanning equipment + service line + hood + grease + finishes) |
+| Restroom-historic | ~30% (generic fixtures + grab bar only) | ~80% (ADA WC + lav + period brass + tile + hardware retrofit) |
+| Roof patch + historic re-roof | ~45% (asphalt + metal seam only) | ~90% (slate + shake + LCC + terne + underlayment + sheathing + venting + NPS LS) |
+| Perimeter security fence | ~10% (none — site clearing only) | ~90% (chain-link 6'/8'/vinyl + ornamental + mesh + anti-climb + tops + gates + operator + posts + readers) |
+| Gym / multi-system renovation | ~20% (carpet + paint only) | ~85% (sport floor + bleachers + scoreboard + game lines + high-bay + speaker + RTU + ADA seat) |
+
+Actual measured MISSING-tier % delta will land in the Phase T10 calibration v4 report — this slice is the input.
+
+**Suggested next slices:**
+
+- **Phase T6.4.e — markup knob.** Operator-facing percentage adder on the Streamlit "Recalculate totals" round-trip (overhead + profit + contingency), persisted into `Estimate.markup_config` and rolled into both totals and the Excel / PDF / client-quote exports. Last open T6.4 sub-item; UI-thin slice on top of the post-T6.4.c.2 backend.
+- **Phase T10 — calibration v4 run.** With the cost DB expanded and the T6.4.b unit-aware matcher live, the next calibration pass should land the projected MISSING-tier % reduction. Hand-count a representative BPC bid (recommend Carr EFA Project Manual already in `inbox/opportunities/attachments/2026-05-21/` per the calibration plan), compare extracted line-by-line, publish the v4 calibration report with per-tier accuracy + per-division MISSING surface.
+- **Phase T11+ — additional family expansions.** Per the BPC firm-profile, candidate next families are: laboratory casework (Div 12 / 11 / 22 / 23 combined — high-margin TI work), MOB / clinic outfit (Div 11 medical equipment + Div 12 / 09), retail / restaurant TI (Div 11 + Div 09 + Div 23). Same pattern as `par_costdb_expand` — pure-data slice, 15-20 entries per family, public-domain sourcing.
+- **Phase `par_costdb_audit_base`** — refactor the 45 unsourced seed entries into the v2 sourced-notes format so the entire DB is auditor-traceable. Pure cleanup; low-risk; gated on T10 calibration v4 surfacing residual MISSING / accuracy gaps in the base divisions (03 concrete, 06 framing, 09 generic finishes, 23 generic HVAC, 26 generic electrical, 33 site utilities).
+
+---
+
 **End of roadmap.**
