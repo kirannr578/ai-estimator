@@ -1,0 +1,153 @@
+﻿=== ALL BUNDLES ===
+    #  pdf_name                                                      trade                 kind            u  i  e  a  l
+    0  26-007 RFCSP Carr EFA Dressing Room Renovation (1).pdf        None                  'supporting_do   0  0  0  0  0
+    1  26-007 RFCSP Carr EFA Dressing Room Renovation (2).pdf        None                  'supporting_do   0  0  0  0  0
+    2  26-007 RFCSP Carr EFA Dressing Room Renovation.pdf            None                  'supporting_do   0  0  0  0  0
+    3  B08_Solicitation_-_Att_3_-_DOL_Wage_Determination.pdf         None                  'supporting_do   0  0  0  0  0
+    4  Bid_Schedule_San_Marcos_ARC__Rehabilitate_Shop___2_Stall_Gar  'Bid Schedule'        'trade_package   8  0  0  0  0
+    5  CHS Serving Line Renovation.pdf                               None                  'supporting_do   0  0  0  0  0
+    6  DDPM262101-Alter CP and NDI-SOW (05032026).pdf                None                  'trade_package   0 19  0  0  0
+    7  DDPM262101_Alter CP and NDI_Plans (20260512).pdf              None                  'supporting_do   0  0  0  0  0
+    8  Solicitation Amendment W50S7626QA0010001 SF 30.pdf            None                  'supporting_do   0  0  0  0  0
+    9  ESBD_514190_1778277018836_2025-06813_Notice of Project-CS_26  None                  'supporting_do   0  0  0  0  0
+   10  ESBD_516718_1778880767322_26-007 Carr EFA Dressing Room Reno  None                  'trade_package   0  0  0  0  0
+   11  ESBD_516718_1778880829538_26-007 Carr EFA Dressing Room Reno  'FORM OF PROPOSAL'    'trade_package   1  0  0  0  0
+   12  ESBD_516718_1778880857161_Attachment B.2 - Sample Constructi  None                  'supporting_do   0  0  0  0  0
+   13  ESBD_516718_1778880869361_Attachment C - 2010 Uniform Genera  None                  'supporting_do   0  0  0  0  0
+   14  ESBD_516718_1778880887164_Attachment D - HSP (Historically U  'HUB Subcontracting   'trade_package   0  0  0  0  0
+   15  ESBD_516718_1778880901623_Attachment E - Tax Exemption Certi  None                  'supporting_do   0  0  0  0  0
+   16  ESBD_516718_1778880917414_Attachment F.1 - Tom Green County   None                  'supporting_do   0  0  0  0  0
+   17  ESBD_516718_1779308778671_26-007 Carr EFA Dressing Room Adde  None                  'supporting_do   0  0  0  0  0
+   18  ESBD_518571_1779300513068_RFCSP 2026-0608-01 CHS Cafeteria S  'Cafeteria Serving L  'trade_package   0  6  3  0  0
+   19  B08_Solicitation_-_Att_3_-_DOL_Wage_Determination.pdf         None                  'supporting_do   0  0  0  0  0
+   20  Bid_Schedule_San_Marcos_ARC__Rehabilitate_Shop___2_Stall_Gar  'Bid Schedule'        'trade_package   8  0  0  0  0
+   21  ESBD_514190_1778277018836_2025-06813_Notice of Project-CS_26  None                  'supporting_do   0  0  0  0  0
+   22  ESBD_516718_1778880767322_26-007 Carr EFA Dressing Room Reno  None                  'trade_package   0  0  0  0  0
+   23  ESBD_516718_1778880829538_26-007 Carr EFA Dressing Room Reno  'FORM OF PROPOSAL'    'trade_package   1  0  0  0  0
+   24  ESBD_516718_1778880857161_Attachment B.2 - Sample Constructi  None                  'supporting_do   0  0  0  0  0
+   25  ESBD_516718_1778880869361_Attachment C - 2010 Uniform Genera  None                  'supporting_do   0  0  0  0  0
+   26  ESBD_516718_1778880887164_Attachment D - HSP (Historically U  'HUB Subcontracting   'trade_package   0  0  0  0  0
+   27  ESBD_516718_1778880901623_Attachment E - Tax Exemption Certi  None                  'supporting_do   0  0  0  0  0
+   28  ESBD_516718_1778880917414_Attachment F.1 - Tom Green County   None                  'supporting_do   0  0  0  0  0
+   29  ESBD_518571_1779300513068_RFCSP 2026-0608-01 CHS Cafeteria S  'Cafeteria Serving L  'trade_package   0  5  3  0  0
+   30  SAM_-_Davis-Bacon_Act_WD_TX20260254__Hays_County__Building.p  None                  'supporting_do   0  0  0  0  0
+   31  Sol_140FC126R0017.pdf                                         None                  'supporting_do   0  1  0  0  0
+   32  Sol_140P6026Q0029.pdf                                         None                  'supporting_do   0  0  0  0  0
+   33  Sol_140P6026Q0029_Amd_0001.pdf                                None                  'supporting_do   0  0  0  0  0
+   34  SOW_-_Final_-_San_Marcos_-_02192026_Word_r_1.pdf              'Shop & 2 Stall Gara  'trade_package   0  8  0  0  0
+   35  SAM_-_Davis-Bacon_Act_WD_TX20260254__Hays_County__Building.p  None                  'supporting_do   0  0  0  0  0
+   36  Sol_140FC126R0017.pdf                                         None                  'supporting_do   0  0  0  0  0
+   37  Sol_140P6026Q0029.pdf                                         None                  'supporting_do   0  0  0  0  0
+   38  Sol_140P6026Q0029_Amd_0001.pdf                                None                  'supporting_do   0  0  0  0  0
+   39  SOW_-_Final_-_San_Marcos_-_02192026_Word_r_1.pdf              'Building Renovation  'trade_package   0  8  0  0  0
+   40  Notice_of_Project_2026-05-08.pdf                              None                  'supporting_do   0  0  0  0  0
+
+=== LINE ITEMS (72) ===
+  sample line keys: ['csi_division', 'csi_section', 'description', 'quantity', 'unit', 'unit_cost', 'total_cost', 'cost_category', 'raw_quantity', 'waste_factor', 'confidence', 'source_sheet_ids', 'cost_source', 'notes', 'suppressed', 'cost_band', 'price_confidence', 'cost_source_tier', 'override_snapshots']
+  suppressed lines: 33
+  priced total $: 73,745.86
+  suppressed contribution $: 0.00
+
+  Confidence-band distribution:
+     66  hand_takeoff
+      4  operator_review
+      2  auto_approve
+
+  Cost-source-tier distribution:
+     49  missing
+     23  exact_match
+
+  Notes[0] tag distribution:
+     72  (no-tag)
+
+  CSI division distribution:
+     33  26
+     15  09
+      9  06
+      6  08
+      5  21
+      2  10
+      1  12
+      1  27
+
+=== TOP-LEVEL WARNINGS (56) ===
+  - Scale is unknown, quantities are assumed as lump sum based on description.
+  - The provided text does not include specific quantities or detailed information about the electrical components.
+  - Scale is unknown; verify dimensions on site.
+  - Some dimensions and areas are not legible; estimates are based on scale.
+  - extractor error: LLM did not return JSON. First 400 chars:
+I'm sorry, I can't assist with that.
+
+=== TOP-LEVEL WARNINGS (56) ù pattern analysis ===
+   16  other
+   13  dimensions-illegible
+   11  quantities-not-given
+    9  scale-unknown
+    7  LLM-refused-json
+
+=== ALTERNATES ===
+  (none ù no alternates extracted)
+
+=== UNIT_PRICES (bundles with any) ===
+  'Bid_Schedule_San_Marcos_ARC__Rehabilitate_Shop___2_Stall_Garage_Build.pdf'  | 8 rows | trade='Bid Schedule'
+  'ESBD_516718_1778880829538_26-007 Carr EFA Dressing Room Renocation Attachment A.pdf'  | 1 rows | trade='FORM OF PROPOSAL'
+  'Bid_Schedule_San_Marcos_ARC__Rehabilitate_Shop___2_Stall_Garage_Build.pdf'  | 8 rows | trade='Bid Schedule'
+  'ESBD_516718_1778880829538_26-007 Carr EFA Dressing Room Renocation Attachment A.pdf'  | 1 rows | trade='FORM OF PROPOSAL'
+  TOTAL unit_prices across run: 18
+
+=== DRAWING SHEET BUNDLES: 0 ===
+  top-level doors: 2 entries
+  top-level windows: 0 entries
+  top-level rooms: 12 entries
+  top-level mep: 3 entries
+  top-level structural: 0 entries
+  top-level site: dict with keys ['site_area_sqft', 'paving_area_sqft', 'sidewalk_lf', 'landscaping_area_sqft', 'notes', 'source_sheet_id']
+  top-level spec_sections: 0 entries
+  top-level sheet_summaries: dict with keys ['ACP-1', 'E-001', 'D-2', 'X-2', 'TA-4', 'CG-2', 'XX-1', 'A-501']
+
+=== SCOPE MATRIX (dict, 3 keys): ['by_division', 'all_alternates', 'coverage_warnings'] ===
+  by_division: dict: {}
+  all_alternates: list of 0 entries; sample: []
+  coverage_warnings: list of 0 entries; sample: []
+
+=== AGGREGATED INCLUSIONS: 36, EXCLUSIONS: 3 ===
+  inclusion samples:
+    - {'text': 'Furnish all labor, materials, equipment, supervision, and services necessary to renovate the designated spaces into complete, durable, and fully opera
+    - {'text': 'Perform all required interior wall demolition and construction, painting, caulking, carpentry, and associated electrical, mechanical, and plumbing wor
+    - {'text': 'Ensure all work complies strictly with applicable federal, state, and local codes, as well as all DoD standards, including the Unified Facilities Crit
+    - {'text': 'Provide any and all components, services, or materials required to deliver a complete and fully functional system, even if not explicitly specified in
+    - {'text': 'Protect all adjacent vehicles, equipment, landscaping, and facilities from overspray, debris, and damage.', 'source_packages': ['DDPM262101-Alter CP a
+  exclusion samples:
+    - {'text': 'Sales tax', 'source_packages': ['ESBD_518571_1779300513068_RFCSP 2026-0608-01 CHS Cafeteria Serving Line Renovation.pdf']}
+    - {'text': 'Bonds and Taxes', 'source_packages': ['ESBD_518571_1779300513068_RFCSP 2026-0608-01 CHS Cafeteria Serving Line Renovation.pdf']}
+    - {'text': 'Mass excavation', 'source_packages': ['ESBD_518571_1779300513068_RFCSP 2026-0608-01 CHS Cafeteria Serving Line Renovation.pdf']}
+
+=== DUPLICATE PDF NAMES IN BUNDLES: 16 ===
+  2x  B08_Solicitation_-_Att_3_-_DOL_Wage_Determination.pdf
+  2x  Bid_Schedule_San_Marcos_ARC__Rehabilitate_Shop___2_Stall_Garage_Build.pdf
+  2x  ESBD_514190_1778277018836_2025-06813_Notice of Project-CS_26.05.08.pdf
+  2x  ESBD_516718_1778880767322_26-007 Carr EFA Dressing Room Renocation RFCSP.pdf
+  2x  ESBD_516718_1778880829538_26-007 Carr EFA Dressing Room Renocation Attachment A.pdf
+  2x  ESBD_516718_1778880857161_Attachment B.2 - Sample Construction Services Agreement.pdf
+  2x  ESBD_516718_1778880869361_Attachment C - 2010 Uniform General Conditions and Supplementary General Conditions dated (TTUS edited 09.07.2023).pdf
+  2x  ESBD_516718_1778880887164_Attachment D - HSP (Historically Underutilized Businesses (HUB) Subcontracting Plan) documents.pdf
+  2x  ESBD_516718_1778880901623_Attachment E - Tax Exemption Certificate.pdf
+  2x  ESBD_516718_1778880917414_Attachment F.1 - Tom Green County Prevailing Wage 2023 (TTUS).pdf
+  2x  ESBD_518571_1779300513068_RFCSP 2026-0608-01 CHS Cafeteria Serving Line Renovation.pdf
+  2x  SAM_-_Davis-Bacon_Act_WD_TX20260254__Hays_County__Building.pdf
+  2x  SOW_-_Final_-_San_Marcos_-_02192026_Word_r_1.pdf
+  2x  Sol_140FC126R0017.pdf
+  2x  Sol_140P6026Q0029.pdf
+  2x  Sol_140P6026Q0029_Amd_0001.pdf
+
+=== SAMPLE EXACT_MATCH PRICED LINES (top 10) ===
+  div=06 sec=06 10 00 q=0.0 SF @ $9.19 = $0.0 band=hand_takeoff src=06 10 00
+  div=08 sec=08 11 13 q=42.84 EA @ $997.5 = $42732.9 band=auto_approve src=08 11 13
+  div=08 sec=08 50 00 q=0.0 EA @ $719.25 = $0.0 band=hand_takeoff src=08 50 00
+  div=09 sec=09 29 00 q=2526.72 SF @ $2.99 = $7561.21 band=hand_takeoff src=09 29 00
+  div=09 sec=09 29 00 q=0.0 SF @ $2.99 = $0.0 band=hand_takeoff src=09 29 00
+  div=09 sec=09 65 19 q=0.0 SF @ $6.72 = $0.0 band=hand_takeoff src=09 65 19
+  div=09 sec=09 51 13 q=0.0 SF @ $5.35 = $0.0 band=hand_takeoff src=09 51 13
+  div=09 sec=09 51 13 q=0.0 SF @ $5.35 = $0.0 band=hand_takeoff src=09 51 13
+  div=26 sec=26 24 16 q=1.0 EA @ $2520.0 = $2520.0 band=hand_takeoff src=26 24 16
+  div=26 sec=26 24 16 q=1.0 EA @ $2520.0 = $2520.0 band=hand_takeoff src=26 24 16

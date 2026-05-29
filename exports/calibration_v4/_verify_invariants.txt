@@ -1,0 +1,34 @@
+﻿=== INVARIANT CHECKS ===
+  Total line items: 72
+  Priced (unsuppressed): 39
+  Suppressed: 33
+
+  Sum of priced.total_cost: $73,745.86
+  Sum of suppressed.total_cost: $0.00
+  reported subtotal:        $51,789.15
+
+  region_multiplier: 1.05
+  sum_priced (= subtotal): match=False
+
+  contingency_pct: 10.0
+  overhead_pct:    10.0
+  profit_pct:      5.0
+  expected grand_total: $65,798.12
+  reported grand_total: $65,798.11
+  grand_total invariant: match=True
+
+  Suppressed lines contribute to subtotal? NO
+
+=== COMBINED CONFIDENCE INVARIANT ===
+  Lines missing confidence values: 0/72
+
+  Bands: {'hand_takeoff': 66, 'auto_approve': 2, 'operator_review': 4}
+  Tiers: {'missing': 49, 'exact_match': 23}
+
+  by_division sum: $51,789.15 (must equal subtotal)
+  by_division == subtotal: True
+
+=== EXCEL SHEETS ===
+  Sheets: ['Project Info', 'Summary', 'Line Items', 'Operator Review Queue', 'Hand Takeoff Queue', 'Rooms', 'Doors', 'Bid Packages', 'Scope Matrix', 'Supporting Documents', 'Scope Coverage', 'Sheets', 'Warnings']
+  'Bid Packages' present: True
+  'Scope Matrix' present: True
