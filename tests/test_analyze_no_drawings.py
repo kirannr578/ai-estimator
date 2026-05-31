@@ -209,6 +209,89 @@ def test_filter_out_drawing_pdfs_keeps_malformed_pdf(
 
 
 # ---------------------------------------------------------------------------
+# v5a follow-up: real-world miss cases (Carr EFA + Harrington Lab303)
+# ---------------------------------------------------------------------------
+#
+# Calibration v5a (CALIBRATION_REPORT.md §F-5 note) flagged
+# `t10_followup_classifier_hint_depth`: the 311-page Carr EFA Project
+# Manual and the Harrington_Lab303_Specifications PDF classified as
+# UNKNOWN under `--no-drawings` because the body-text hint sampler only
+# looked at the first 3 pages. The follow-up fix samples first 5 +
+# middle 5 + last 5 pages AND adds a filename signal for /spec/ and
+# /project[-_\s]*manual|book/.
+#
+# These tests stub both miss cases (small page count, no body hints) and
+# verify the filename signal alone keeps them under the classifier-based
+# `--no-drawings` filter. We deliberately do NOT synthesise the actual
+# 311-page bundle here -- that fixture lives in
+# tests/test_pdf_processor_classifier_depth.py (deeper-sampling proof);
+# this file just pins the analyze.py-level wiring.
+
+
+def test_filter_out_drawing_pdfs_keeps_carr_efa_project_manual(
+    tmp_path: Path,
+) -> None:
+    """Real-world Carr EFA filename: ``26-007 Carr EFA Dressing Room
+    Renovation Project Manual.pdf``. Pre-follow-up, this slipped through
+    as UNKNOWN under ``--no-drawings`` because the body-hint sampler
+    only saw the front 3 pages. The filename signal now catches it
+    regardless of where the body hints sit.
+    """
+    pdf = _make_pdf(
+        tmp_path / "26-007 Carr EFA Dressing Room Renovation Project Manual.pdf",
+        # No PROJECT_MANUAL hint phrases in body -- the filename signal
+        # is what must keep this PDF in the kept set.
+        pages=["Generic intro page without classifier hint phrases."]
+        * 5,
+    )
+    kept = _filter_out_drawing_pdfs([pdf])
+    assert kept == [pdf], (
+        "v5a follow-up: Carr EFA Project Manual must be KEPT by "
+        "--no-drawings (filename signal classifies it as PROJECT_MANUAL)."
+    )
+
+
+def test_filter_out_drawing_pdfs_keeps_harrington_lab303_specifications(
+    tmp_path: Path,
+) -> None:
+    """Real-world Harrington Lab303 filename:
+    ``Harrington_Lab303_Specifications.pdf``. Filename signal catches it
+    even with a stub body devoid of canonical hint phrases.
+    """
+    pdf = _make_pdf(
+        tmp_path / "Harrington_Lab303_Specifications.pdf",
+        pages=["Generic intro page without classifier hint phrases."]
+        * 5,
+    )
+    kept = _filter_out_drawing_pdfs([pdf])
+    assert kept == [pdf], (
+        "v5a follow-up: Harrington Lab303 Specifications must be KEPT "
+        "by --no-drawings (filename signal classifies it as PROJECT_MANUAL)."
+    )
+
+
+def test_filter_out_drawing_pdfs_still_drops_drawings_with_spec_in_name(
+    tmp_path: Path,
+) -> None:
+    """A drawing PDF whose name happens to contain "specifications" --
+    e.g. ``roof_specifications_drawing.pdf`` -- must STILL be dropped
+    under ``--no-drawings``. The drawing-set veto runs ahead of the
+    new project-manual filename signal so this case stays classified
+    as UNKNOWN.
+    """
+    pdf = _make_pdf(
+        tmp_path / "roof_specifications_drawing.pdf",
+        pages=["FLOOR PLAN\nSheet A-101"],
+    )
+    kept = _filter_out_drawing_pdfs([pdf])
+    assert kept == [], (
+        "Drawing-set veto must beat the new project-manual filename "
+        "signal: a drawing PDF with 'specifications' in its name must "
+        "still be filtered out by --no-drawings."
+    )
+
+
+# ---------------------------------------------------------------------------
 # _filter_by_max_size_mb (new --max-pdf-mb rescue flag)
 # ---------------------------------------------------------------------------
 

@@ -232,6 +232,26 @@ _PROJECT_MANUAL_HINTS = (
     "SOLICITATION AMENDMENT",
 )
 
+# Filename-side bias toward PROJECT_MANUAL. Calibration v5a follow-up
+# `t10_followup_classifier_hint_depth` documented that 311-page Project
+# Manuals and stand-alone Specifications PDFs sometimes lack any of the
+# body-text hint phrases above in the sampled page range (their hints sit
+# under section labels like "DIVISION 01 GENERAL REQUIREMENTS" rather than
+# "GENERAL CONDITIONS"). The filename signal lets us route those to
+# PROJECT_MANUAL when the doc is otherwise text-dense.
+#
+# The regexes are anchored on filename separators (start-of-string, ``_``,
+# ``-``, whitespace, or ``.``) so substring collisions like "spectacles.pdf"
+# or "inspect_report.pdf" do NOT match. The drawing-set veto runs first in
+# :func:`_classify_document`, so filenames like "roof_specifications_drawing.pdf"
+# or "Project_Manual_Drawings.pdf" still classify as drawings — the
+# filename signal here only fires once the drawing veto has passed.
+_PROJECT_MANUAL_NAME_RES = (
+    re.compile(r"(?:^|[_\-\s.])project[_\-\s]*manual(?:[_\-\s.]|$)", re.IGNORECASE),
+    re.compile(r"(?:^|[_\-\s.])project[_\-\s]*book(?:[_\-\s.]|$)", re.IGNORECASE),
+    re.compile(r"(?:^|[_\-\s.])spec(?:ification)?s?(?:[_\-\s.]|$)", re.IGNORECASE),
+)
+
 # Filenames that mark a doc as a supporting / boilerplate exhibit
 # (amendments, wage determinations, general conditions, sample contracts).
 # Checked BEFORE the bid-package filename signals so that e.g.
@@ -289,7 +309,9 @@ def _classify_document(
       4. bid-package filename (Sol_, ESBD_, RFCSP, SOW_, legacy NN.NN_-_, …)
       5. body-text bid-form hints
       6. body-text bid-package hints (legacy + government RFP)
-      7. body-text project-manual hints
+      7. project-manual signal — body-text hint OR
+         specifications / project-manual / project-book filename pattern
+         (gated on page-count cap + text density)
       8. tiny-brochure fallback
     """
     upper = text.upper()
@@ -297,6 +319,9 @@ def _classify_document(
 
     # 1. Drawing-set veto. A doc whose filename screams "drawings" must go
     #    through the per-page sheet path even if it has stray RFP text.
+    #    This runs ahead of the PROJECT_MANUAL filename signal below so a
+    #    name like "roof_specifications_drawing.pdf" still falls through
+    #    to the per-page sheet path.
     if any(rx.search(pdf_name) for rx in _DRAWING_FILENAME_RES):
         return SheetType.UNKNOWN
 
@@ -336,11 +361,30 @@ def _classify_document(
     if bid_hits >= 2 or gov_hits >= 2:
         return SheetType.BID_PACKAGE
 
-    # 7. Project manual / boilerplate text: at least one project-manual phrase
-    #    in body text, page count within the bundle cap, and meaningful text
-    #    density (rules out drawing-only pages with a stray TOC hit).
+    # 7. Project manual / specifications.
+    #
+    #    Two complementary triggers, both gated on bundle-page cap +
+    #    meaningful text density (so a drawing PDF with an incidental
+    #    "Exhibit" word or a misleading "Specifications.pdf" filename
+    #    does not slip into the bundle path):
+    #
+    #      a) At least one body-text PROJECT_MANUAL hint phrase
+    #         (TABLE OF CONTENTS, GENERAL CONDITIONS, WAGE DETERMINATION,
+    #         …) — sampled by the caller across the front, middle, and
+    #         tail of the document (see :func:`_sample_page_indices`).
+    #      b) Filename signal — /project[-_\s]*manual/, /project[-_\s]*book/,
+    #         or /spec(ification)?s?/ on filename-separator boundaries.
+    #         This catches the v5a follow-up cases (Carr EFA 311-page
+    #         Project Manual, Harrington Lab303 Specifications) whose
+    #         body hints either sit beyond the sampled pages or use
+    #         non-canonical section headers.
     pm_hits = sum(1 for h in _PROJECT_MANUAL_HINTS if h in upper)
-    if pm_hits >= 1 and page_count <= _BUNDLE_PAGE_CAP and avg_chars_per_page > 600:
+    project_manual_name = any(rx.search(pdf_name) for rx in _PROJECT_MANUAL_NAME_RES)
+    if (
+        (pm_hits >= 1 or project_manual_name)
+        and page_count <= _BUNDLE_PAGE_CAP
+        and avg_chars_per_page > 600
+    ):
         return SheetType.PROJECT_MANUAL
 
     # 8. Tiny brochure / flyer (1-3 pages, mostly text).
@@ -385,13 +429,103 @@ def _pdf_content_hash(path: str | os.PathLike) -> str:
     return h.hexdigest()
 
 
+# --- Classifier sampling ----------------------------------------------------
+#
+# Calibration v5a follow-up `t10_followup_classifier_hint_depth` discovered
+# that the original first-3-pages-only sampling missed body-text hints
+# buried deeper in long PROJECT_MANUAL docs (the Carr EFA 311-page bundle
+# put GENERAL CONDITIONS / WAGE DETERMINATION around pages 100-150 and
+# bid-form attachments at the tail). We now sample first 5 + 5 evenly-
+# spread body-stripe pages + last 5 (deduped + sorted), capped at 15
+# distinct reads even on a 1000-page doc.
+#
+# The middle 5 pages are spread across the central 60% of the document
+# (at 20 %, 35 %, 50 %, 65 %, 80 % positions) rather than clumped around
+# the centroid. A clumped sample misses spec sections that sit at the
+# first quartile of a long manual (Carr EFA's TOC + GENERAL CONDITIONS
+# sit at ~30 % of the document, well outside any centroid-sized window).
+#
+# For PDFs with ≤3 pages we read every page, preserving the pre-fix
+# short-circuit exactly (no behaviour change on tiny brochures / single-
+# page bid schedules / cover sheets). For 4-10 page PDFs we fall back to
+# a centered stripe (no point spreading samples on a doc that small).
+
+_SAMPLE_FIRST_PAGES = 5
+_SAMPLE_MIDDLE_PAGES = 5
+_SAMPLE_LAST_PAGES = 5
+
+# Fractional positions for the spread middle stripe — 5 points across the
+# central 60 % of the doc, evenly spaced. Tuned so any spec section that
+# occupies >= ~15 % of a long manual is sampled at least once.
+_SAMPLE_SPREAD_FRACTIONS = (0.20, 0.35, 0.50, 0.65, 0.80)
+
+
+def _sample_page_indices(page_count: int) -> list[int]:
+    """Return up to 15 distinct page indices covering front / body / tail.
+
+    Layout:
+
+    * ``page_count <= 3``  — every page (matches pre-fix short-circuit).
+    * ``page_count <= 10`` — first 5 + centered middle 5 + last 5
+      (with heavy dedupe overlap on small docs; result is the full
+      ``range(page_count)`` for ``page_count`` in 4–10).
+    * ``page_count > 10``  — first 5 + 5 pages at the 20/35/50/65/80
+      percentile positions + last 5. Total never exceeds 15 distinct
+      indices even on a 1000-page doc.
+    """
+    if page_count <= 0:
+        return []
+    if page_count <= 3:
+        return list(range(page_count))
+
+    indices: set[int] = set()
+    indices.update(range(min(_SAMPLE_FIRST_PAGES, page_count)))
+    indices.update(range(max(page_count - _SAMPLE_LAST_PAGES, 0), page_count))
+
+    if page_count > 10:
+        # Spread sample across the central 60 % of the document so a spec
+        # section sitting at the first quartile (Carr EFA scenario) still
+        # gets hit. Clamp to the last valid index to avoid IndexError on
+        # the 80 %-position rounding up.
+        for frac in _SAMPLE_SPREAD_FRACTIONS:
+            indices.add(min(int(page_count * frac), page_count - 1))
+    else:
+        # 4–10 page PDFs: centered stripe is plenty. With dedupe vs the
+        # first/last buckets this typically yields ``range(page_count)``.
+        mid = page_count // 2
+        half = _SAMPLE_MIDDLE_PAGES // 2
+        middle_start = max(0, mid - half)
+        middle_end = min(page_count, middle_start + _SAMPLE_MIDDLE_PAGES)
+        indices.update(range(middle_start, middle_end))
+
+    return sorted(indices)
+
+
+def _gather_classifier_sample(doc: fitz.Document) -> tuple[str, float]:
+    """Read the joined text + average-chars-per-page of the sampled indices.
+
+    The avg is computed over the *number of sampled pages*, not the total
+    document page count, so the density gate in :func:`_classify_document`
+    behaves intuitively on long docs (the v5a F-5 fix assumes avg-chars is
+    a per-page density signal, not a per-document one).
+    """
+    page_count = len(doc)
+    indices = _sample_page_indices(page_count)
+    if not indices:
+        return "", 0.0
+    text = "".join((doc[i].get_text("text") or "") for i in indices)
+    avg = len(text) / len(indices)
+    return text, avg
+
+
 def _classify_pdf_kind(pdf_path: str | os.PathLike) -> SheetType:
     """Classify a PDF as a document-level :class:`SheetType` for filtering.
 
-    Opens the PDF, reads the first 3 pages of text, and delegates to
+    Opens the PDF, reads text from up to 15 sampled pages (first 5 + middle
+    5 + last 5; see :func:`_sample_page_indices`), and delegates to
     :func:`_classify_document`. The return is the same value
     :func:`process_pdfs` would compute internally — surfacing it here lets
-    `analyze.py --no-drawings` filter out drawing-set PDFs (those that
+    ``analyze.py --no-drawings`` filter out drawing-set PDFs (those that
     classify to :attr:`SheetType.UNKNOWN`) before the expensive
     vision-extraction stage.
 
@@ -401,11 +535,8 @@ def _classify_pdf_kind(pdf_path: str | os.PathLike) -> SheetType:
     pdf_path = Path(pdf_path)
     with fitz.open(pdf_path) as doc:
         page_count = len(doc)
-        first_text = "".join(
-            (doc[i].get_text("text") or "") for i in range(min(3, page_count))
-        )
-        avg_chars = (len(first_text) / max(min(3, page_count), 1)) if page_count else 0.0
-        return _classify_document(pdf_path.name, first_text, page_count, avg_chars)
+        sample_text, avg_chars = _gather_classifier_sample(doc)
+        return _classify_document(pdf_path.name, sample_text, page_count, avg_chars)
 
 
 def _read_full_text(doc: fitz.Document, max_pages: int = 60) -> str:
@@ -508,12 +639,12 @@ def process_pdfs(
 
         with fitz.open(pdf_path) as doc:
             page_count = len(doc)
-            # --- Step 1: cheap doc-level classification using first 3 pages text ---
-            first_text = "".join(
-                (doc[i].get_text("text") or "") for i in range(min(3, page_count))
-            )
-            avg_chars = (len(first_text) / max(min(3, page_count), 1))
-            doc_type = _classify_document(pdf_path.name, first_text, page_count, avg_chars)
+            # --- Step 1: cheap doc-level classification ---
+            # Sample first 5 + middle 5 + last 5 pages (capped at 15 reads)
+            # so hints buried deep in 300-page Project Manuals still surface.
+            # See :func:`_sample_page_indices` for the rationale.
+            sample_text, avg_chars = _gather_classifier_sample(doc)
+            doc_type = _classify_document(pdf_path.name, sample_text, page_count, avg_chars)
 
             if doc_type in document_level_types:
                 full_text = _read_full_text(doc)
@@ -527,7 +658,7 @@ def process_pdfs(
                     full_text=full_text,
                     page_count=len(doc),
                     thumbnail_path=str(thumb_path),
-                    title_hint=_guess_title(first_text),
+                    title_hint=_guess_title(sample_text),
                 ))
                 continue
 
