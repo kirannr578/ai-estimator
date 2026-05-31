@@ -330,7 +330,7 @@ LINE_PATTERNS: list[tuple[re.Pattern[str], str]] = [
         ),
         r"\g<1>" + DUNS + r"\g<2>",
     ),
-    # TX HUB cert — many phrasings; carry the expired flag
+    # TX HUB cert — many phrasings; carry the active flag (renewed 2026-05-30 per user; new expiration pending user confirmation)
     (
         re.compile(
             r"(TX\s+HUB(?:\s+Cert)?(?:\s+\(if\s+applicable\))?\s*[:\-\u2013]\s*[`']?)"
@@ -339,10 +339,10 @@ LINE_PATTERNS: list[tuple[re.Pattern[str], str]] = [
         ),
         r"\g<1>VID "
         + HUB_VID
-        + " \u2014 EXPIRED 2024-08-31 per source cert; user to confirm renewal"
+        + " \u2014 ACTIVE (renewed 2026-05-30 per user; new expiration [USER TO CONFIRM: new expiration date]; prior cycle expired 2024-08-31)"
         + r"\g<2>",
     ),
-    # MBE cert number
+    # MBE cert number — active per 2026-05-30 user renewal confirmation
     (
         re.compile(
             r"(MBE(?:\s+\u2014?\s*Certificate\s+number|\s+cert(?:ificate)?\s+(?:number|#))?"
@@ -351,7 +351,7 @@ LINE_PATTERNS: list[tuple[re.Pattern[str], str]] = [
         ),
         r"\g<1>"
         + MBE_NUM
-        + " (DFW MSDC) \u2014 EXPIRED 2024-08-31 per source cert; user to confirm renewal"
+        + " (DFW MSDC) \u2014 ACTIVE (renewed 2026-05-30 per user; new expiration [USER TO CONFIRM: new expiration date]; prior cycle expired 2024-08-31)"
         + r"\g<2>",
     ),
 ]

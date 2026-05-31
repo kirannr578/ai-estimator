@@ -24,7 +24,7 @@
 | 1i. Office phone | (469) 213-1838 |
 | 1j. Primary email | contactus@blueprintconstructs.com |
 | 1k. Website | https://www.blueprintconstructs.com |
-| 1l. Texas HUB-certified? | `{{HUB_STATUS_YES_NO}}` (verify current — VID 1874292998900 expired 2024-08-31 per source; recertification required before any HSP that lists BPC as HUB self-perform contributor) |
+| 1l. Texas HUB-certified? | `{{HUB_STATUS_YES_NO}}` (active — VID 1874292998900 renewed 2026-05-30 per user confirmation; prior cycle expired 2024-08-31. Capture new expiration `[USER TO CONFIRM: new expiration date]` before any HSP that asks for a specific cert expiration date) |
 | 1m. Texas HUB VID (if certified) | `1874292998900` |
 | 1n. UEI (federal) | LM4YHVQ71QG7 |
 | 1o. CAGE (federal) | 9LET0 |

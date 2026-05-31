@@ -49,9 +49,9 @@ Reference: [`firm/firm-profile.json`](../firm-profile.json), [`firm/firm-profile
 
 | Threshold | Required value | BPC value | Status |
 |---|---|---|---|
-| TX HUB cert (firm-side) | Active if claiming HUB self-perform credit | VID `1874292998900` — **expired per source 2024-08-31; user to confirm renewal** | 🔴 Recertify if claiming any HUB self-perform credit |
-| MBE cert (DFW MSDC) | Cascades into TX HUB recognition under DFW MSDC / TX Comptroller MOU | DL09279 — expired per source 2024-08-31 | 🔴 Recertify |
-| SBE cert (DFW MSDC) | Useful for HSP self-perform sourcing | DL09279 — expired per source 2024-08-31 | 🔴 Recertify |
+| TX HUB cert (firm-side) | Active if claiming HUB self-perform credit | VID `1874292998900` — **renewed 2026-05-30 per user; new expiration `[USER TO CONFIRM: new expiration date]`** (prior cycle expired 2024-08-31) | ✅ Active — capture new expiration before HSP submission |
+| MBE cert (DFW MSDC) | Cascades into TX HUB recognition under DFW MSDC / TX Comptroller MOU | DL09279 — renewed 2026-05-30 per user; new expiration `[USER TO CONFIRM: new expiration date]` (prior cycle expired 2024-08-31) | ✅ Active — capture new expiration |
+| SBE cert (DFW MSDC) | Useful for HSP self-perform sourcing | DL09279 — renewed 2026-05-30 per user; new expiration `[USER TO CONFIRM: new expiration date]` (prior cycle expired 2024-08-31) | ✅ Active — capture new expiration |
 | TX Comptroller franchise tax good-standing | Auto-disqualification if not good-standing | TX Taxpayer ID `32082600456`; TX SOS file `0804376974`; TX WebFile `XT287610` | ⚠️ Verify good-standing before each bid via [Texas Taxable Entity Search](https://mycpa.cpa.state.tx.us/coa/) |
 | TX CMBL (Centralized Master Bidder List) | Required to be listed for state-vendor visibility | Status TBD | ⚠️ Confirm |
 | TX state-vendor # | Required for some agency portals | TBD | ⚠️ Confirm |

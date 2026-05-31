@@ -35,7 +35,7 @@
 | Past performance — lab projects (if lab) | No prior lab-specific project | Lead with lab-adjacent finish-out (institutional) + sub depth; position lab specialty subs prominently |
 | Key personnel depth | Only Rocky (PIC) has fully-documented bio | Identify + bio + cred each role BEFORE submission |
 | Safety record | EMR + 300/300A history not in firm-profile | Pull from WC carrier; surface; if numbers are strong, lead with them |
-| HSP firm-side credit | TX HUB cert expired per source | Recertify; if not in time, do not claim HUB self-perform; lead with HUB sub commitment |
+| HSP firm-side credit | TX HUB cert ✅ active (renewed 2026-05-30 per user; prior cycle expired 2024-08-31; new expiration `[USER TO CONFIRM: new expiration date]`) | Claim HUB self-perform credit on BPC-self-perform scope; combine with HUB sub commitments for stronger HSP narrative |
 | Insurance | Existing GL expired per source | Pull current COIs; verify Umbrella ≥ $5M if institutional SGC requires |
 | Bonding capacity above $1M | Single-project $1M established; aggregate unknown | Confirm with surety; ask for letter showing both single + aggregate |
 

@@ -40,7 +40,7 @@ Apply the published weights to BPC's likely scores against each factor:
 | Price | Tight markup discipline; bondable proven at $1M+ | TX state CSP evaluators value past-performance + team depth equally with price; pure-price leadership doesn't guarantee win | `{{SCORE}}` | `{{WEIGHTED}}` |
 | Past performance | Hindu Temple (institutional reno) + Holiday Inn (occupied commercial reno) + Lavon RV Park ($1M bondability) | Owner-side reference contacts marked `[USER TO FILL]`; bio depth for non-PIC personnel marked `[USER TO FILL]` | `{{SCORE}}` | `{{WEIGHTED}}` |
 | Technical approach | Specific project understanding from site visit + pre-response meeting; phased sequencing per `{{OCCUPANCY_CONSTRAINT}}` | Lab / specialty-trade depth varies | `{{SCORE}}` | `{{WEIGHTED}}` |
-| HSP compliance | TX HUB pool deep for most trades; can hit 50–70% HUB commit on most renovation work | TX HUB cert + MBE cert expired per source files — recertify before any claim | `{{SCORE}}` | `{{WEIGHTED}}` |
+| HSP compliance | TX HUB pool deep for most trades; can hit 50–70% HUB commit on most renovation work | TX HUB cert + MBE cert ✅ active (renewed 2026-05-30 per user; prior cycle expired 2024-08-31; new expiration `[USER TO CONFIRM: new expiration date]`) — combine BPC self-perform credit with HUB sub commitments | `{{SCORE}}` | `{{WEIGHTED}}` |
 | Schedule | Lump-sum + critical-path discipline | Aggressive schedule risk if SC < 70 cal days for single-room reno | `{{SCORE}}` | `{{WEIGHTED}}` |
 | Safety | OSHA 30 supervision; safety plan boilerplate | EMR + 300/300A history `[USER TO FILL]` | `{{SCORE}}` | `{{WEIGHTED}}` |
 | **Total** | | | | `{{TOTAL}}` |

@@ -62,7 +62,7 @@ See [`06-scope-outline.md`](./06-scope-outline.md) for the trade-by-trade BPC se
 
 | Question | Answer |
 |---|---|
-| BPC SBE / MBE / HUB cert relevant at this tier? | ⚠️ — DFW MSDC channel suggests Ready Construction is solicits MBE participation, but private 7-Eleven projects are not state/federally funded so HUB scoring does not apply. Recertified MBE/SBE still helps as a positioning credential. |
+| BPC SBE / MBE / HUB cert relevant at this tier? | ✅ — DFW MSDC channel suggests Ready Construction solicits MBE participation; while the private 7-Eleven project is not state/federally funded (so HUB scoring does not apply), the MBE/SBE certs are now **active** (renewed 2026-05-30 per user confirmation; prior cycle expired 2024-08-31; new expiration `[USER TO CONFIRM: new expiration date]`) and are a live positioning credential for Ready Construction's owner reporting. |
 | Insurance / additional-insured posture | 🔴 — Ready Construction will require COI naming Ready Construction (and likely 7-Eleven, Inc. + the property owner) as additional insured; current COI status expired per `firm/firm-profile.json`, surface renewal before quote. |
 | Bonding | Sub bonds atypical at this tier on private commercial GC work; Ready Construction will likely accept un-bonded sub quotes. |
 | Past-perf fit | ✅ — Lavon RV Park (ground-up new construction) + Hindu Temple of Southlake (institutional finish-out) + Holiday Inn Hall Park (commercial reno) is a credible 3-pack. |

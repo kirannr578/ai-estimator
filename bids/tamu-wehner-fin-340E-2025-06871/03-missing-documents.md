@@ -73,8 +73,8 @@
 | 3 | Auto Liability carrier + limits | NOT FOUND in firm-profile | Rocky |
 | 4 | Umbrella / Excess carrier + limits | NOT FOUND in firm-profile | Rocky |
 | 5 | Bonding agent + capacity letter | Image-scan only in firm-profile | Rocky — contact bonding agent (see `outreach/05-email-bonding-agent.md`) |
-| 6 | TX HUB Certificate renewal | EXPIRED 2024-08-31 per firm-profile | Rocky — verify if renewed; if not, can't self-perform HUB-credited scope |
-| 7 | DFW MSDC MBE / SBE renewal | EXPIRED 2024-08-31 per firm-profile | Rocky |
+| 6 | TX HUB Certificate renewal | ✅ Renewed 2026-05-30 per user (prior cycle expired 2024-08-31 per firm-profile); new expiration `[USER TO CONFIRM: new expiration date]` | Rocky — capture new expiration date; BPC can now self-perform HUB-credited scope |
+| 7 | DFW MSDC MBE / SBE renewal | ✅ Renewed 2026-05-30 per user (prior cycle expired 2024-08-31 per firm-profile); new expiration `[USER TO CONFIRM: new expiration date]` | Rocky — capture new expiration date |
 | 8 | EMR (3-year) | NOT FOUND in firm-profile | Rocky — pull from WC carrier |
 | 9 | TRIR / LTIR (1-year) | NOT FOUND in firm-profile | Rocky — calculate from OSHA 300 logs |
 | 10 | Past-perf reference contacts (3 references) | `[USER TO FILL]` per firm-profile | Rocky — surface real names + emails + phones |

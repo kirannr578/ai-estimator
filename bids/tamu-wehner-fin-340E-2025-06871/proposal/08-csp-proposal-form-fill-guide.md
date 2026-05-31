@@ -86,8 +86,8 @@ Tax ID (EIN): 87-4292998
 TX Taxpayer ID: 32082600456
 SAM Status: Active
 Business Size: Small (per NAICS 236220 - $45M size standard)
-HUB Status: [USER TO FILL — recertification status per firm-profile EXPIRED 2024-08-31]
-MBE Status: DFW MSDC Certified [EXPIRED 2024-08-31 per firm-profile]
+HUB Status: ACTIVE — VID 1874292998900 (renewed 2026-05-30 per user; new expiration [USER TO CONFIRM: new expiration date]; prior cycle expired 2024-08-31)
+MBE Status: ACTIVE — DFW MSDC DL09279 (renewed 2026-05-30 per user; new expiration [USER TO CONFIRM: new expiration date]; prior cycle expired 2024-08-31)
 ```
 
 ## 7. Authorized signer

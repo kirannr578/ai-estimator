@@ -13,7 +13,7 @@ The HSP form is **REQUIRED** for this CSP per user email-body. It documents:
 
 ## 2. BPC's HSP posture
 
-> **CRITICAL:** BPC's HUB certificate is expired (per `firm/firm-profile.json` → 2024-08-31). BPC cannot self-credit HUB participation. The HSP is built **entirely from HUB sub commitments**.
+> **Updated 2026-05-30:** BPC's HUB certificate is **active** — renewed 2026-05-30 per user confirmation (prior cycle expired 2024-08-31 per `firm/firm-profile.json`); new expiration `[USER TO CONFIRM: new expiration date]`. The HSP combines BPC self-perform HUB credit (drywall, paint, flooring install, GC supervision) with HUB sub commitments for non-self-perform trades (architectural glazing, electrical, plumbing, HVAC).
 
 ## 3. Target HUB participation
 

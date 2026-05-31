@@ -84,7 +84,7 @@ Drawings + specs not yet on disk. See `04-scope-of-work.md` for trade-by-trade e
 - [ ] **CSP package retrieval** — Notice of Project document not in BPC email attachments; user must pull from ESBD posting (look at the attachment named `ESBD_513163_1778104136552_2025-06871_Notice of Project-CS_26.05.05.pdf` listed in the ESBD HTML body), then follow the link inside to download the full CSP package from the Trimble Unity Construct e-Builder portal
 - [ ] **Drawings + specs** — within the CSP package once retrieved
 - [ ] **Real takeoff quantities** — drawings required
-- [ ] **HUB cert renewal status** — Blue Print Constructs's HUB certificate expired 2024-08-31; user to confirm renewal status. Without renewal, **BPC cannot self-perform any HUB-scored portion** and must build HSP from HUB subs only.
+- [x] **HUB cert renewal status** — Blue Print Constructs's HUB certificate (VID 1874292998900) ✅ **renewed 2026-05-30 per user confirmation** (prior cycle expired 2024-08-31); new expiration `[USER TO CONFIRM: new expiration date]`. BPC **can now claim HUB self-perform credit** on this CSP; HSP strategy in `05-hsp-plan.md` should be reworked accordingly.
 - [ ] **MARRS glass wall installer** — specialty architectural glazing sub; BPC does not self-perform. User to identify and outreach a sub.
 - [ ] **Sub quotes** — can't solicit broadly until G1 + G2 close
 
@@ -94,7 +94,7 @@ Drawings + specs not yet on disk. See `04-scope-of-work.md` for trade-by-trade e
 
 1. **Email Cherise Toler (TAMU Procurement)** Thu 2026-05-28 AM at `ctoler@tamu.edu`; cc Matt Wiederstein at `matthew.wiederstein@sscserv.com`. Confirm post-missed-meeting eligibility; request the pre-proposal meeting sign-in sheet, recording, Q&A, and addenda; ask about a site walk of Rm 340E in the week of 6/1. (See `outreach/01-email-cherise-toler-eligibility.md`.)
 2. **Pull the CSP package from ESBD + Trimble Unity Construct** — open the ESBD posting (Solicitation ID SSC-2025-06871) in a regular browser; download the Notice of Project PDF; follow its embedded link to the full CSP package. (See `03-missing-documents.md` § 2 for step-by-step.)
-3. **Confirm Blue Print Constructs HUB certificate status** — per `firm/firm-profile.json` the cert expired 2024-08-31. If renewed, claim self-perform HUB credit; if not, build the HSP from HUB subs only. (See `05-hsp-plan.md` § 2.)
+3. **Blue Print Constructs HUB certificate status** — ✅ confirmed renewed 2026-05-30 per user (prior cycle expired 2024-08-31 per `firm/firm-profile.json`); new expiration `[USER TO CONFIRM: new expiration date]`. BPC may claim HUB self-perform credit on this CSP. (See `05-hsp-plan.md` § 2 — rework HSP to incorporate self-perform credit alongside HUB sub commitments.)
 4. **Identify and outreach a MARRS / architectural glazing sub** — specialty subcontractor for the corridor glass wall. (See `outreach/03-email-kelsie-szs-drawings.md` for A/E spec clarification on glass wall product specifics.)
 5. **Notify bonding agent + insurance broker** of the upcoming submission. Use the same templates as TAMU Harrington but with Wehner-specific project value range ($75K–$200K — see `price-references.md`). (See `outreach/05-email-bonding-agent.md` and `outreach/06-email-insurance-broker.md`.)
 

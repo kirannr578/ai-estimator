@@ -55,16 +55,14 @@ Most `[USER TO FILL]` markers in `bids/*/proposal/` collapse to a small set of f
 
 ## Action queue — top 20 highest-leverage unblocks
 
-1. **TX HUB recertification (Texas Comptroller)**
+1. ~~**TX HUB recertification (Texas Comptroller)**~~ — ✅ **Closed 2026-05-30 per user confirmation.**
     - File / section: `firm/compliance/README.md` §3 Texas state-government registrations / §12 Action priority queue
-    - Marker: Expired 2024-08-31 per `firm/firm-profile.json → licenses_and_certifications[0]`
-    - Unblock: BPC files HUB recertification via TX Comptroller HUB portal (VID 1874292998900); cascades into TAMU / ASU / TXDOT HSP scoring
-    - Effort: MED (2–3 wks turnaround)
-2. **MBE / SBE recertification (DFW MSDC)**
+    - Status: TX HUB / MBE / SBE certs renewed 2026-05-30 per user. Capture new expiration `[USER TO CONFIRM: new expiration date]` once user supplies it, then refresh `firm/firm-profile.json → licenses_and_certifications[0,1,2].expiration_date` and the cert PDFs under `BPC/`.
+    - Residual sub-task: User to supply the new expiration date so downstream `[USER TO CONFIRM: new expiration date]` placeholders can be swept in one pass.
+2. ~~**MBE / SBE recertification (DFW MSDC)**~~ — ✅ **Closed 2026-05-30 per user confirmation.**
     - File / section: `firm/compliance/README.md` §2 SBA / small-business certifications
-    - Marker: Cert DL09279 expired 2024-08-31
-    - Unblock: BPC files DFW MSDC recertification; cascades into HUB recognition + MWBE participation claims
-    - Effort: MED (3–4 wks)
+    - Status: Cert DL09279 renewed 2026-05-30 per user (prior cycle expired 2024-08-31). New expiration `[USER TO CONFIRM: new expiration date]`. Cascades into HUB recognition + MWBE participation claims now restored.
+    - Residual sub-task: Same as item #1 — capture new expiration date once user supplies.
 3. **Current insurance COI bundle (GL + WC + Auto + Umbrella)**
     - File / section: `firm/firm-profile.md` §7 Insurance; per-bid `outreach/*-email-insurance-broker.md`
     - Marker: GL policy SBCC-042443-00 expired 2024-09-25; WC/Auto/Umbrella not on file

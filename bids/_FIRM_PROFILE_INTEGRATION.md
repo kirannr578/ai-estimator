@@ -91,9 +91,9 @@ Items below are the gap between what the firm has on file (per `firm-profile.jso
 - [ ] **TIN matches IRS records** — mismatch blocks IPP payment. *(Not implied by the 2026-05-23 "active" confirmation; verify separately.)*
 
 ### Block 1 — Cert / insurance renewals (blocks all 4 active bids)
-- [ ] **TX HUB recertification** — VID 1874292998900, last cert expired 2024-08-31. Required for any TX state bid scoring HUB participation (TAMU, ASU).
-- [ ] **DFW MSDC MBE recertification** — DL09279, last cert expired 2024-08-31. Annual cycle. MBE recognition cascades into HUB recognition under the DFW MSDC / TX Comptroller MOU.
-- [ ] **DFW MSDC SBE recertification** — DL09279, expired 2024-08-31.
+- [x] **TX HUB recertification** — VID 1874292998900. ✅ **Renewed 2026-05-30 per user confirmation** (prior cycle expired 2024-08-31). New expiration `[USER TO CONFIRM: new expiration date]`; capture once user supplies, then update `firm/firm-profile.json`.
+- [x] **DFW MSDC MBE recertification** — DL09279. ✅ **Renewed 2026-05-30 per user confirmation** (prior cycle expired 2024-08-31). New expiration `[USER TO CONFIRM: new expiration date]`. MBE recognition cascades into HUB recognition under the DFW MSDC / TX Comptroller MOU.
+- [x] **DFW MSDC SBE recertification** — DL09279. ✅ **Renewed 2026-05-30 per user confirmation** (prior cycle expired 2024-08-31). New expiration `[USER TO CONFIRM: new expiration date]`.
 - [ ] **Current renewed COI** — surface the renewed Commercial GL policy + Workers Comp + Auto + Umbrella into `firm-profile.json → insurance`. Last GL on file expired 2024-09-25; nothing newer in BPC folder.
 - [ ] **Insurance broker contact** — name, agency, phone, email into `firm-profile.json → insurance.insurance_broker`. Each bid's `outreach/0X-email-insurance-broker.md` assumes a broker exists.
 

@@ -110,6 +110,6 @@ These items are not on the ESBD posting and need to be pulled from the CSP packa
 ## 8. Critical risk flags
 
 - **BPC missed the pre-proposal meeting** (May 19). Mitigation: confirm via Cherise Toler / Matt Wiederstein that a late-arriver firm can still submit a responsive proposal. See `07-risk-register.md` row 1.
-- **BPC's HUB certificate expired 2024-08-31** per `firm/firm-profile.json`. Mitigation: cannot self-perform any HUB-scored portion; must build HSP from HUB subs only. See `05-hsp-plan.md`.
+- **BPC's HUB certificate renewed 2026-05-30 per user confirmation** (prior cycle expired 2024-08-31 per `firm/firm-profile.json`); new expiration `[USER TO CONFIRM: new expiration date]`. BPC can now self-perform HUB-scored portions; HSP strategy in `05-hsp-plan.md` should be reworked to combine self-perform credit with HUB sub commitments.
 - **MARRS architectural glazing is a specialty trade BPC does not self-perform.** Need to identify and engage a sub immediately. See `outreach/03-email-kelsie-szs-drawings.md`.
 - **21-day window is tight** for a multi-trade project with HSP, drawings-based takeoff, multiple sub solicitations, and a missed pre-proposal meeting. See `07-risk-register.md` for full risk breakdown.

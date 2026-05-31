@@ -32,11 +32,11 @@
 
 ## Certifications (Texas state + DFW MSDC)
 
-> The following minority-owned and small-business certifications are on file; per `firm/compliance/README.md` the prior cycle expired 2024-08-31 and recertification is in progress. Confirm current status before submitting any document that scores these certifications.
+> The following minority-owned and small-business certifications are on file and **renewed 2026-05-30 per user confirmation**; per `firm/compliance/README.md` the new expiration date is pending user confirmation. Capture the new expiration date once supplied; confirm current status before submitting any document that scores these certifications.
 
-- **Texas HUB** (Historically Underutilized Business) — VID `1874292998900` — Tx Comptroller `[expired 2024-08-31 — recertification pending]`
-- **MBE** (Minority Business Enterprise) — DFW MSDC `DL09279` (NMSDC affiliate) `[expired 2024-08-31 — recertification pending]`
-- **SBE** (Small Business Enterprise) — DFW MSDC `DL09279` `[expired 2024-08-31 — recertification pending]`
+- **Texas HUB** (Historically Underutilized Business) — VID `1874292998900` — Tx Comptroller `[active; renewed 2026-05-30; new expiration USER TO CONFIRM: new expiration date]`
+- **MBE** (Minority Business Enterprise) — DFW MSDC `DL09279` (NMSDC affiliate) `[active; renewed 2026-05-30; new expiration USER TO CONFIRM: new expiration date]`
+- **SBE** (Small Business Enterprise) — DFW MSDC `DL09279` `[active; renewed 2026-05-30; new expiration USER TO CONFIRM: new expiration date]`
 
 ## Core competencies
 
@@ -95,7 +95,7 @@ Before saving the rendered PDF, the BPC owner verifies:
 - [ ] **Tagline** present, in BPC navy `#1B2A4E`
 - [ ] **UEI / CAGE / EIN / SAM-active** values current and accurate
 - [ ] **NAICS** complete and current (per `firm/firm-profile.json → naics_codes`)
-- [ ] **Certification statuses** marked accurately — do **not** claim a cert that is expired without the `[recertification pending]` tag, and do not claim a cert that is **not held**
+- [ ] **Certification statuses** marked accurately — TX HUB / MBE / SBE renewed 2026-05-30 per user; capture new expiration once user supplies the date. Do **not** claim a cert that is **not held**.
 - [ ] **Core competencies** + **Differentiators** organized in two columns (visual balance) per design notes
 - [ ] **Past-performance bullets** are the 3 picks appropriate to the audience (federal sources-sought / TX state / institutional — pick per audience using `firm/firm-profile.json → past_project_selection_rules`)
 - [ ] **POC block** is current — Rocky's email + office phone, not personal cell (PII discipline)

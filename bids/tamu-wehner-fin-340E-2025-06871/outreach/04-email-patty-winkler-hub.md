@@ -27,7 +27,7 @@ We're also pursuing the sister TAMU Harrington Education Center Lab 303 solicita
 
 4. **PARs (Progress Assessment Reports)** — Post-award, what's the cadence and submission portal for monthly PARs?
 
-5. **BPC HUB cert status** — Blue Print Constructs's TX HUB certificate (VID 1874292998900) expired on 8/31/2024. We're working on recertification through DFW MSDC. For Wehner specifically, this means BPC cannot self-credit HUB; we will build the HSP entirely from HUB-certified subs. Does that approach work for TAMU System CSP scoring, or is there a recommended path to claim some self-perform credit through a different program?
+5. **BPC HUB cert status** — Blue Print Constructs's TX HUB certificate (VID 1874292998900) was renewed on 2026-05-30 (the prior cycle had expired 8/31/2024). For Wehner, BPC will claim self-perform HUB credit on the BPC-self-perform scope (drywall, paint, flooring install, GC supervision) and combine that with HUB sub commitments for trades BPC does not self-perform (architectural glazing / electrical / plumbing / HVAC / flooring install where outsourced). Does that combined approach meet TAMU System CSP HUB-scoring expectations, and is there a specific Section 1 cert-expiration format the HSP should cite?
 
 Our target HUB participation for Wehner is **25-30%** of contract value, distributed across MARRS glazing, electrical, plumbing, HVAC, and flooring trades. We'll document outreach to minimum 3 HUB subs per trade for GFE.
 

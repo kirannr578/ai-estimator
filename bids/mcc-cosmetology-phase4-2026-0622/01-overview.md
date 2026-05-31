@@ -109,14 +109,14 @@ particular sub partners):
 
 | Question | Answer |
 |---|---|
-| BPC SBE / MBE / HUB cert relevant at this tier? | ✅ **Material**. Form 004213 has an explicit HUB acknowledgment paragraph — HCS will count BPC's HUB participation in HCS's MCC submission. BPC's certs **expired 2024-08-31** per `firm/firm-profile.json`; **recertify before quoting** or BPC delivers no HUB credit to HCS. |
+| BPC SBE / MBE / HUB cert relevant at this tier? | ✅ **Material and active**. Form 004213 has an explicit HUB acknowledgment paragraph — HCS will count BPC's HUB participation in HCS's MCC submission. BPC's certs were **renewed 2026-05-30 per user confirmation** (prior cycle expired 2024-08-31); new expiration `[USER TO CONFIRM: new expiration date]` per `firm/firm-profile.json`. Capture the new expiration before quoting so HCS's MCC roll-up cites a specific date. |
 | Insurance / additional-insured posture | ⚠️ — HCS will require COI naming HCS as AI; current COI status expired (CGL SBCC-042443-00 expired 2024-09-25 per profile). Renewal in flight before any private-GC sub-quote can close. |
 | Bonding | Sub bonds rarely required from MBE subs on private GC work; BPC's $1M floor sufficient if requested. |
 | Past-perf fit | ✅ Hindu Temple of Southlake + Holiday Inn Hall Park + cumulative SFH portfolio = credible 3-pack for institutional multi-trade interior reno. |
 | Geographic fit | ⚠️ 95 mi south of Frisco; loses 5% MCC scoring weight on "office location close to college" criterion regardless of price. Price travel honestly. |
 | Special hazards | None visible in spec book ToC. Cosmetology-specific MEP (shampoo bowls in 224001, fluid-applied flooring in 096700) confirmed. No spec section for hazardous-material abatement — Phase 4 of an older campus building still warrants surveying for legacy materials (asbestos floor tile / mastic, lead paint) before destructive demo; surface as an inclusion/exclusion in BPC's quote. |
 | **Davis-Bacon prevailing wage** | ✅ Applies (Section 007343 in PM ToC; federal-funding signal in PM §1.17). Pull McLennan-County DBA wage determination before pricing. WH-347 weekly certified payroll burden applies to BPC self-perform trades. |
-| Go / No-go recommendation | **Pursue.** Decision gate is no longer the site meeting (now optional) — it's whether (a) BPC HUB recertification can be in flight by 6/22 and (b) BPC's COI can be renewed naming HCS as AI by award. **Both are firm-side actions independent of the bid itself**, and both are blockers for any DFWMSDC-channel sub-bid in 2026 — not McLennan-specific. |
+| Go / No-go recommendation | **Pursue.** Decision gate is no longer the site meeting (now optional) — it's now narrowed to (a) ~~BPC HUB recertification~~ **closed 2026-05-30 per user confirmation** (capture new expiration date once user supplies) and (b) BPC's COI renewed naming HCS as AI by award. **(b) remains firm-side and is a blocker for any DFWMSDC-channel sub-bid in 2026** — not McLennan-specific. |
 
 ## Cross-references
 

@@ -45,7 +45,7 @@ Reference: [`firm/firm-profile.json`](../firm-profile.json), [`firm/firm-profile
 | Unique Entity ID (UEI) | 12-char alphanumeric, on SAM record | `LM4YHVQ71QG7` | ✅ |
 | CAGE Code | DLA-issued | `9LET0` | ✅ |
 | NAICS 236220 in registered NAICS list | Yes | Yes (primary for renovation pipeline) | ✅ |
-| Small-business assertion on NAICS 236220 | Yes (≤ $45M 3-yr avg revenue) | Self-attested small | ⚠️ Confirm annual revenue ≤ $45M before each bid; SBE cert (DFW MSDC DL09279) expired 2024-08-31 per source |
+| Small-business assertion on NAICS 236220 | Yes (≤ $45M 3-yr avg revenue) | Self-attested small | ⚠️ Confirm annual revenue ≤ $45M before each bid; SBE cert (DFW MSDC DL09279) renewed 2026-05-30 per user, new expiration `[USER TO CONFIRM: new expiration date]` (prior cycle expired 2024-08-31) |
 | Reps & Certs current per FAR 52.204-8 | Yes (≤ 12 months) | Unknown — needs SAM check | ⚠️ Verify before each bid |
 | EFT banking info current in SAM | Yes | Unknown | ⚠️ Verify |
 | TIN matches IRS | Yes | EIN 87-4292998 | ⚠️ Verify in SAM |

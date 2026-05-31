@@ -28,9 +28,9 @@ This RFQ has only one set-aside: 100% Small Business. Sub-categories (WOSB, EDWO
 
 | Socioeconomic | BPC status | Source |
 |---|---|---|
-| Minority-Owned Business Enterprise (MBE) | **Yes — DFW MSDC certified** (cert DL09279, expired 2024-08-31 per source file; recertification pending per firm-profile audit Block 1) | `firm/firm-profile.json → set_aside_eligibility.mbe_status` |
+| Minority-Owned Business Enterprise (MBE) | **Yes — DFW MSDC certified** (cert DL09279, ✅ renewed 2026-05-30 per user; new expiration `[USER TO CONFIRM: new expiration date]`; prior cycle expired 2024-08-31 per source file) | `firm/firm-profile.json → set_aside_eligibility.mbe_status` |
 | Small Business | **Yes** | Same |
-| TX HUB (state-only, not federal) | Previously certified (VID 1874292998900, expired 2024-08-31; recertification pending) | Same |
+| TX HUB (state-only, not federal) | **Active** (VID 1874292998900, ✅ renewed 2026-05-30 per user; new expiration `[USER TO CONFIRM: new expiration date]`; prior cycle expired 2024-08-31) | Same |
 | SBA 8(a) / SDVOSB / WOSB / HUBZone | **Not held / not applicable** | Same |
 
 For this federal RFQ, the only directly-impactful entry is Small Business + active SAM. MBE/HUB status is informational color.

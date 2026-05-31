@@ -57,6 +57,6 @@ These cascade in from [`firm/compliance/README.md`](../../compliance/README.md) 
 
 - **Only the Principal in Charge has a fully sourced bio.** All other key-personnel files are `[USER TO FILL]` skeletons. Federal SSEBs verify named personnel; do not submit a Volume II that lists fictitious people.
 - **EMR and OSHA 300 history are not on file.** Volume I (Safety section) and Volume II (Past Performance safety summary) cannot ship until provided.
-- **TX HUB / MBE / SBE certifications expired 2024-08-31.** Federal evaluators don't typically score TX HUB, but the capability statement and small-business reps must be re-verified — do not claim a status that is not currently held.
+- **TX HUB / MBE / SBE certifications renewed 2026-05-30 per user confirmation** (prior cycle expired 2024-08-31). New expiration date is pending user confirmation (`[USER TO CONFIRM: new expiration date]`). Federal evaluators don't typically score TX HUB, but the capability statement and small-business reps must reflect the current active status — capture the new expiration before claiming on any federal proposal that asks for a specific certification expiration.
 - **Insurance COIs may be stale** (last documented GL policy expired 2024-09-25). Volume IV bonding/insurance buildup needs current limits before pricing.
 - **Past-performance reference contacts are `[USER TO FILL]` on all three primary projects.** Volume III ships with live POCs only.

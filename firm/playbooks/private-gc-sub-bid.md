@@ -80,7 +80,7 @@ Reference: [`firm/firm-profile.json`](../firm-profile.json), [`firm/firm-profile
 | Primary-and-non-contributory wording available | Standard endorsement (ISO CG 20 01 or carrier equivalent) | Verify | ⚠️ |
 | Waiver-of-subrogation endorsement available | Standard | Verify | ⚠️ |
 | Bondability letter from surety (in case GC requests sub P&P) | One-line letter naming BPC's single-project + aggregate capacity | $1M floor established; coordinate with surety | ⚠️ |
-| TX HUB / MBE / SBE certs (door-openers, not scoring levers at this tier) | At least one current to leverage DFWMSDC + similar diversity channels | All three expired 2024-08-31 per `firm-profile.json` | 🔴 — recertify before next DFWMSDC-sourced pursuit ships |
+| TX HUB / MBE / SBE certs (door-openers, not scoring levers at this tier) | At least one current to leverage DFWMSDC + similar diversity channels | All three **renewed 2026-05-30 per user confirmation** (prior cycle expired 2024-08-31); new expiration `[USER TO CONFIRM: new expiration date]` per `firm-profile.json` | ✅ — active door-opener; capture new expiration date once user supplies |
 | OSHA 10 / 30 cards current for site supervision | Yes | Per `firm/firm-profile.json → key_personnel` | ⚠️ |
 | Vendor registrations on GC portals BPC will see most often | Yes (see §6) | `[USER TO FILL — BPC's portal presence: BuildingConnected? Procore? BuildBid? iSqFt? PlanGrid?]` | ⚠️ |
 | W-9 current calendar year + EIN | Standard | On file | ✅ |

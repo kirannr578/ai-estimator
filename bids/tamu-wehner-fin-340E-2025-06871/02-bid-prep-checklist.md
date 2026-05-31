@@ -7,8 +7,8 @@
 ## A. Firm registrations & licenses (one-time / annual)
 
 - [x] **A.1** — TAMU System vendor registration — TAMU CSP submissions accept any qualified Texas registered contractor; no separate TAMU-specific vendor registration is required
-- [ ] **A.2** — Texas Comptroller HUB certification — `[BPC HUB expired 2024-08-31 per firm-profile; user to confirm renewal status; if not renewed: HSP must be HUB-sub only]`
-- [ ] **A.3** — DFW MSDC MBE certificate (DL09279) — `[Expired 2024-08-31 per firm-profile; user to confirm renewal status; useful for HSP outreach to HUB subs through MSDC network]`
+- [x] **A.2** — Texas Comptroller HUB certification — `[VID 1874292998900 ✅ renewed 2026-05-30 per user; new expiration [USER TO CONFIRM: new expiration date]; prior cycle expired 2024-08-31. BPC may claim HUB self-perform credit; HSP combines self-perform credit + HUB sub commitments]`
+- [x] **A.3** — DFW MSDC MBE certificate (DL09279) — `[✅ renewed 2026-05-30 per user; new expiration [USER TO CONFIRM: new expiration date]; prior cycle expired 2024-08-31. Active MBE positioning for HSP outreach to HUB subs through MSDC network]`
 - [ ] **A.4** — Texas Sales & Use Tax registration — `[XT287610 per firm-profile; verify still active]`
 - [x] **A.5** — Federal UEI active (LM4YHVQ71QG7) — Active per SAM.gov
 
@@ -33,7 +33,7 @@
 
 ## D. HUB Subcontracting Plan (HSP)
 
-> **Critical:** BPC's HUB certificate is expired (per firm-profile). BPC **cannot self-perform** any HUB-credited portion. The HSP must demonstrate good-faith effort to subcontract to certified HUB subs.
+> **Update 2026-05-30:** BPC's HUB certificate is **active** — renewed 2026-05-30 per user confirmation (prior cycle expired 2024-08-31 per firm-profile); new expiration `[USER TO CONFIRM: new expiration date]`. BPC **can self-perform HUB-credited scope** on this CSP. The HSP should combine self-perform credit with HUB sub commitments to maximize the participation %. (Sub commitments still required for trades BPC does not self-perform.)
 
 - [ ] **D.1** — Identify the HSP form in the CSP package (Section 00 45 17.1 typical; may be TX State Subcontracting Plan Rev. 5/26 / VetHUB framework — same as Harrington)
 - [ ] **D.2** — Confirm the project-specific HUB goal from Patty Winkler / Brittany Crawley

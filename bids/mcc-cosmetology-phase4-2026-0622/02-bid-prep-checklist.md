@@ -39,8 +39,8 @@
 
 - [ ] **TX Comptroller good-standing** — verify no franchise-tax delinquency (firm-side)
 - [ ] **Insurance / COI** — renewed COI naming **HCS Inc.** as additional insured (CGL $1M/$2M, WC statutory, Auto $1M CSL minimum). The on-file CGL SBCC-042443-00 expired 2024-09-25 per `firm/firm-profile.json`; broker hand-off in flight
-- [ ] **DFW MSDC MBE / SBE recertification** — DL09279 expired 2024-08-31; in flight at firm
-- [ ] **TX HUB recertification** — VID 1874292998900 expired 2024-08-31; in flight at firm
+- [x] **DFW MSDC MBE / SBE recertification** — DL09279 ✅ renewed 2026-05-30 per user confirmation (prior cycle expired 2024-08-31); new expiration `[USER TO CONFIRM: new expiration date]`
+- [x] **TX HUB recertification** — VID 1874292998900 ✅ renewed 2026-05-30 per user confirmation (prior cycle expired 2024-08-31); new expiration `[USER TO CONFIRM: new expiration date]`
 - [ ] **Davis-Bacon labor compliance prep** — confirm BPC payroll software supports WH-347 weekly certified payroll (or arrange manual filing); confirm sub-tier flow-down in BPC's standard sub-PO template
 - [ ] **W-9 + DBA registration** — current copies on file with HCS
 
@@ -83,4 +83,4 @@
 - HCS may post addenda directly into the Box folder; **check daily 2026-06-15 → 2026-06-22**. Re-pull the entire ZIP, diff `attachments/` against the committed copy.
 - Spec §1.01 carries non-cosmetology language ("netting and artificial turf") — flag to HCS for RFI to RBDR as the first cleanup item before pricing build
 - Cosmetology classrooms are highly trade-specific (shampoo bowl plumbing per 224001, station electrical per 262xxx, fluid-applied chemical-resistant flooring per 096700) — these are spec'd in the project manual; pull the actual product manufacturers + alternates from each section before any sub outreach
-- The 95-mi geographic stretch + 5% MCC scoring weight on "office location close to college" make BPC's quote materially more expensive than a Waco-domiciled GC's quote unless BPC's HUB story compensates. Recertify HUB before quoting
+- The 95-mi geographic stretch + 5% MCC scoring weight on "office location close to college" make BPC's quote materially more expensive than a Waco-domiciled GC's quote unless BPC's HUB story compensates. HUB cert is now active (renewed 2026-05-30 per user); capture the new expiration date so HCS's MCC roll-up cites a specific date

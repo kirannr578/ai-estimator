@@ -73,7 +73,7 @@ Quote a broader package including managed-via-subs trades (Concrete Foundations,
 ## Compliance readiness (parallel track)
 
 - [ ] **Insurance** — current COI; broker hand-off if expired (target Day 5 latest)
-- [ ] **DFW MSDC MBE/SBE** — recertify if leveraging MBE positioning
+- [x] **DFW MSDC MBE/SBE** — ✅ renewed 2026-05-30 per user confirmation (prior cycle expired 2024-08-31); new expiration `[USER TO CONFIRM: new expiration date]`. Active MBE positioning available for Ready Construction's owner reporting.
 - [ ] **TX Comptroller good-standing** — verify no franchise-tax delinquency
 - [ ] **W-9** — current copy
 

@@ -54,7 +54,7 @@ Per Tex. Gov't Code Ch. 2161 and 34 TAC §20.284, every Texas state agency contr
 
 ## BPC's TX HUB status (firm-side)
 
-Per [`firm/compliance/README.md`](../../compliance/README.md), BPC's own TX HUB certification (VID 1874292998900) **expired 2024-08-31** per the source file. Recertify with the TX Comptroller before any HSP that lists BPC as a HUB self-perform contributor. The MBE / SBE certification with DFW MSDC (DL09279) similarly expired 2024-08-31; DFW MSDC MBE recognition cascades into TX HUB recognition under the MOU.
+Per [`firm/compliance/README.md`](../../compliance/README.md), BPC's own TX HUB certification (VID 1874292998900) was **renewed 2026-05-30 per user confirmation** (prior cycle expired 2024-08-31 per source). The MBE / SBE certification with DFW MSDC (DL09279) was likewise renewed 2026-05-30 per user; DFW MSDC MBE recognition cascades into TX HUB recognition under the MOU. The new expiration date is pending user confirmation (`[USER TO CONFIRM: new expiration date]`) — capture it before any HSP that claims a specific cert expiration in Section 1.
 
 ## Placeholder convention
 

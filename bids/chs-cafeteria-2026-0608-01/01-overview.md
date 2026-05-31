@@ -79,7 +79,7 @@
 
 | Question | Answer |
 |---|---|
-| TX HUB cert current? | 🔴 / ⚠️ — see [`firm/compliance/README.md`](../../../firm/compliance/README.md) |
+| TX HUB cert current? | ✅ — renewed 2026-05-30 per user (prior cycle expired 2024-08-31); new expiration `[USER TO CONFIRM: new expiration date]`. See [`firm/compliance/README.md`](../../../firm/compliance/README.md) |
 | TX franchise tax good-standing? | ⚠️ — verify via TX Taxable Entity Search |
 | TX CMBL enrolled? | 🔴 — confirm |
 | Insurance + Umbrella adequate for agency SGC? | 🔴 — pull current COIs + check Umbrella ≥ $5M for institutional |

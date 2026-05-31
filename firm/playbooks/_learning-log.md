@@ -167,7 +167,43 @@ The 2026-05-27 OneDrive batch was triaged in [`bids/_TRIAGE/2026-05-27-onedrive-
 - **Followups:**
   - [ ] **Recommend:** clone `bids/_TEMPLATES/texas-state-csp-hsp/` → `bids/_TEMPLATES/private-gc-sub-bid/`, strip public-procurement-code references, swap in GC-portal mechanics + sub-tier insurance addenda (per the new playbook §1 "Matching workspace template" note)
   - [ ] **Recommend:** seed the Day-3 priority reusable language blocks under `firm/proposal-library/sub-bid/` per the playbook §11 table (scope-letter template; cover-email template; COI-request-to-broker template; subcontract clause-review checklist; diversity-cert door-opener language; brand-standard scope clarifications)
-  - [ ] **Firm-side action (Rocky):** the playbook's §3 BPC-posture table re-surfaces the COI renewal (expired 2024-09-25) and the MBE / SBE / HUB recerts (all expired 2024-08-31) as 🔴 blockers — these were already on Rocky's followup list from the DFWMSDC entry; the playbook makes the blast-radius across every private-GC sub-bid explicit
+  - [ ] **Firm-side action (Rocky):** the playbook's §3 BPC-posture table re-surfaces the COI renewal (expired 2024-09-25) and the MBE / SBE / HUB recerts (all expired 2024-08-31) as 🔴 blockers — these were already on Rocky's followup list from the DFWMSDC entry; the playbook makes the blast-radius across every private-GC sub-bid explicit. ✅ **MBE / SBE / HUB recert closed 2026-05-30 — see entry below.** COI renewal remains open.
   - [ ] **Firm-side action (Rocky + counsel):** schedule a 30-min review with construction counsel on the two `[USER TO FILL — verify with counsel]` markers in §8 of the new playbook (Ch. 56 timing; Ch. 53 lien windows) before the first sub-bid where pay-if-paid language is non-negotiable
+
+---
+
+## 2026-05-30 (continued) — DFW MSDC cert recertification CLOSED (user confirmation)
+
+**Source:** User confirmation 2026-05-30 22:17 CT — verbatim: *"DFW MSDC certificates are renewed."*
+**Trigger:** Item (a) of `followups_2026_05_30_batch` (the unified followup queue from today's DFWMSDC digest ingest + Camp Maxey enrichment + private-GC sub-bid playbook author + cosmetology / TPO-reroof scope-template seeds).
+**Volume:** 1 firm-side unblock event.
+**Breakdown:** N/A (single-event log).
+
+### What changed
+- **TX HUB Certificate (VID 1874292998900)** — was 🔴 expired per source 2024-08-31; now ✅ **ACTIVE** per user confirmation 2026-05-30. New expiration date pending user confirmation (placeholder `[USER TO CONFIRM: new expiration date]` left inline in every audited file).
+- **DFW MSDC MBE Certificate (DL09279)** — was 🔴 expired per source 2024-08-31; now ✅ **ACTIVE** per user confirmation 2026-05-30. New expiration date pending user confirmation.
+- **DFW MSDC SBE Certificate (DL09279)** — was 🔴 expired per source 2024-08-31; now ✅ **ACTIVE** per user confirmation 2026-05-30. New expiration date pending user confirmation.
+- **Commercial GL policy SBCC-042443-00 (American Builders / Appalachian Underwriters, expired 2024-09-25)** — **NOT** addressed by this confirmation; remains 🔴 open. User confirmed certs only, not insurance.
+
+### Blast radius — files touched in this slice
+- **Source-of-truth:** `firm/firm-profile.json` (`licenses_and_certifications[0..2]` + `missing_data_flags`), `firm/firm-profile.md` §§5–6, `firm/compliance/README.md` §§2, 3, 12.
+- **Proposal library:** capability statement 1-pager, federal-volumes Volume II + README, HSP README + supplemental-form, proposal-library top-level README.
+- **Playbooks:** `private-gc-sub-bid.md` §3 BPC-posture row, `texas-state-csp-hsp.md` §3 cert table, `federal-sba-rfq-lpta.md` SBE row.
+- **Generator script:** `firm/_scripts/apply_firm_profile.py` Layer-2 regex substitutions (so newly scaffolded bids stop printing "EXPIRED 2024-08-31" by default).
+- **Bids — DFW MSDC pursue tier:** `mcc-cosmetology-phase4-2026-0622/` (README, 01-overview, 02-bid-prep-checklist, 07-risk-register), `7eleven-celina-2026-0605/` (01-overview, 02-bid-prep-checklist, 07-risk-register), `tmd-camp-maxey-roof-2026-0626/` (02-bid-prep-checklist, 07-risk-register).
+- **Bids — older active:** `tamu-wehner-fin-340E-2025-06871/` (README, 01-overview, 02-bid-prep-checklist, 03-missing-documents, 05-hsp-plan, 06-evaluation-strategy, 07-risk-register, outreach/04-email-patty-winkler-hub, proposal/01-executive-summary, proposal/08-csp-proposal-form-fill-guide, proposal/09-hsp-form-fill-guide), `tamu-harrington-2025-06813/proposal/01-executive-summary`, `chs-cafeteria-2026-0608-01/proposal/01-executive-summary` + `06-evaluation-strategy`, `b1710-office-refurb-FA667526Q0002/05-set-aside-eligibility`.
+- **Templates:** `bids/_TEMPLATES/texas-state-csp-hsp/csp-scoring-matrix.md`, `bids/_TEMPLATES/texas-state-csp-hsp/06-evaluation-strategy.md`.
+- **Docs:** `docs/SOURCE_DOC_QUEUE.md` item 1, `bids/_FIRM_PROFILE_INTEGRATION.md` Block 1.
+
+### Recurring patterns surfaced
+- **`[USER TO CONFIRM: new expiration date]` is the right placeholder shape for "we have a confirmed status change but lack the precise downstream value."** Cleaner than reusing `[USER TO FILL]` (which is for fresh-unknown data) — the renewed cert is known to exist, the date is the one missing field.
+- **TAMU-Wehner HSP strategy flips on this event.** With the HUB cert renewed, BPC can self-credit its self-perform scope (drywall, paint, flooring install, GC supervision) toward the HSP target instead of building the HSP entirely from HUB sub commitments. Net effect: stronger HSP narrative, lower GFE-documentation burden, more bid-level flexibility.
+- **Cert-renewal events have a wider blast radius than insurance-renewal events.** Insurance status lives in a small number of bid-side ACORD attachments + the firm-profile insurance block; cert status threads through evaluation-strategy matrices, HSP plans, exec-summary cover blocks, capability statements, and every bid-prep checklist. Future Worker convention: when the user reports a cert state change, audit-then-edit via `rg` over the full repo and expect ~30–40 files per cycle.
+
+### Followups
+- [ ] **Open: capture new expiration date** for TX HUB / MBE / SBE. Single placeholder `[USER TO CONFIRM: new expiration date]` instances are sprinkled across ~25 files; once the user supplies the actual date, sweep all in one pass via `rg -l "USER TO CONFIRM: new expiration date"` (placeholder marker is unique enough to be a clean find-and-replace target).
+- [ ] **Open: refresh source cert PDFs in `BPC/`** — `BPC/HUB.pdf`, `BPC/MBE.pdf`, `BPC/SBE.pdf` are still the prior (2023-08-09 → 2024-08-31) cycle. Replace with the new cycle's PDFs once received, then re-extract via `firm/_scripts/extract_sources.py` to refresh `firm/firm-profile.json` with the new dates.
+- [ ] **Open: Commercial GL renewal** (expired 2024-09-25). Separate from this confirmation; remains 🔴 blocker on any bid requiring COI. Track via `bids/_FIRM_PROFILE_INTEGRATION.md` Block 1.
+- [ ] **Note for clarification:** cert taxonomy worth confirming with the user — repo currently models three DL09279/HUB lines as if interchangeable, but the audit suggests we should consider tracking separately: (a) **MBE-NMSDC** (federal NMSDC affiliate, via DFW MSDC) vs. **MBE-MSDC-DFW only** (local council), (b) **SBA SBE 8(a)** vs. **HUBZone** vs. local-council SBE (current DL09279), (c) **Texas HUB** (TX Comptroller) vs. **federal SDB**. The MOU between DFW MSDC and the TX Comptroller cascades recognition in some directions but not all — splitting the schema into explicit fields would avoid future bid-side ambiguity.
 
 ---

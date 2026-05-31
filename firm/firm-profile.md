@@ -57,9 +57,9 @@
 
 | Designation | Status | Source / notes |
 |---|---|---|
-| Small business | **Yes** — SBA size-standard small per 13 CFR Part 121 | `BPC/SBE.pdf` (DFW MSDC SBE certificate DL09279) — **EXPIRED PER SOURCE FILE 2024-08-31**, recertify |
-| MBE (minority-owned) | **Yes** — DFW MSDC certified | `BPC/MBE.pdf` (DL09279) — **EXPIRED PER SOURCE FILE 2024-08-31** |
-| TX HUB | **Yes** — Texas Comptroller HUB program via DFW MSDC affiliate; VID 1874292998900 | `BPC/HUB.pdf` — **EXPIRED PER SOURCE FILE 2024-08-31** |
+| Small business | **Yes** — SBA size-standard small per 13 CFR Part 121 | `BPC/SBE.pdf` (DFW MSDC SBE certificate DL09279) — **ACTIVE; renewed 2026-05-30 per user confirmation; new expiration date `[USER TO CONFIRM: new expiration date]`** (prior cycle expired 2024-08-31 per source file) |
+| MBE (minority-owned) | **Yes** — DFW MSDC certified | `BPC/MBE.pdf` (DL09279) — **ACTIVE; renewed 2026-05-30 per user confirmation; new expiration date `[USER TO CONFIRM: new expiration date]`** (prior cycle expired 2024-08-31 per source file) |
+| TX HUB | **Yes** — Texas Comptroller HUB program via DFW MSDC affiliate; VID 1874292998900 | `BPC/HUB.pdf` — **ACTIVE; renewed 2026-05-30 per user confirmation; new expiration date `[USER TO CONFIRM: new expiration date]`** (prior cycle expired 2024-08-31 per source file) |
 | SBA 8(a) | [NOT FOUND IN BPC] — no certificate on file | — |
 | SDVOSB (service-disabled veteran-owned) | [NOT FOUND IN BPC] | — |
 | WOSB (woman-owned) | [NOT FOUND IN BPC] | — |
@@ -69,21 +69,24 @@
 
 ### TX HUB Certificate
 - **VID:** 1874292998900
-- **Issued:** 2023-08-09 / **Expired per source file:** 2024-08-31
+- **Issued:** 2023-08-09 / **Prior expiration per source file:** 2024-08-31
+- **Status (2026-05-30):** **RENEWED per user confirmation on 2026-05-30.** New expiration date: `[USER TO CONFIRM: new expiration date]`. Confirm with TX Comptroller whether the renewal is continuous from the prior cycle or a fresh certification (impacts historical-look-back questions on PQQs and capability statements).
 - **NAICS listed:** 236115, 236116, 236118, 236210, 236220
-- **Source:** `BPC/HUB.pdf`
+- **Source:** `BPC/HUB.pdf` (prior cycle); renewed 2026-05-30 per user confirmation
 
 ### MBE Certificate (DFW MSDC / NMSDC)
 - **Number:** DL09279
-- **Issued:** 2023-08-09 / **Expired per source file:** 2024-08-31 (annual recertification)
+- **Issued:** 2023-08-09 / **Prior expiration per source file:** 2024-08-31 (annual recertification)
+- **Status (2026-05-30):** **RENEWED per user confirmation on 2026-05-30.** New expiration date: `[USER TO CONFIRM: new expiration date]`. Annual recertification; confirm with DFW MSDC whether the renewal is continuous or a fresh certification.
 - **NAICS listed:** 236115, 236116, 236118, 236210, 236220
-- **Source:** `BPC/MBE.pdf`; welcome letter at `BPC/RK Residential Homes and Commercial Constructions LLC.pdf`
+- **Source:** `BPC/MBE.pdf` (prior cycle); welcome letter at `BPC/RK Residential Homes and Commercial Constructions LLC.pdf`; renewed 2026-05-30 per user confirmation
 
 ### SBE Certificate (DFW MSDC)
 - **Number:** DL09279
-- **Expired per source file:** 2024-08-31
+- **Prior expiration per source file:** 2024-08-31
+- **Status (2026-05-30):** **RENEWED per user confirmation on 2026-05-30.** New expiration date: `[USER TO CONFIRM: new expiration date]`.
 - **Commodities:** Flooring, drywall, sheetrock, painting, fence, power wash
-- **Source:** `BPC/SBE.pdf`
+- **Source:** `BPC/SBE.pdf` (prior cycle); renewed 2026-05-30 per user confirmation
 
 ### Other licenses (asked by bid forms)
 - TX RCAT (roofing): [NOT FOUND IN BPC — if held, supply; if not, mark N/A]

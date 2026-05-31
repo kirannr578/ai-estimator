@@ -38,8 +38,8 @@
 - [ ] **Insurance / COI** — current renewed COI naming **Adam's Trade & Services, Inc.** as AI (CGL $1M occurrence / $2M aggregate; Auto $1M CSL incl. Hired/Non-Owned; WC statutory; Cancellation notice 30 days "to the State"). The on-file CGL SBCC-042443-00 expired 2024-09-25 per `firm/firm-profile.md` §7 — broker hand-off in flight
 - [ ] **W-9** — confirm BPC's W-9 is current (per PDF §10.4.A)
 - [ ] **DBA registration** — confirm BPC DBA "Blue Print Constructs" docs current (Sec of State + DFW MSDC welcome letter on file)
-- [ ] **DFW MSDC MBE/SBE recertification** (DL09279 expired 2024-08-31) — surface as firm-side action; ATS / TMD may not score MBE participation, but the Owner is a state agency so HUB credit is theoretically valuable
-- [ ] **TX HUB recertification** (VID 1874292998900 expired 2024-08-31)
+- [x] **DFW MSDC MBE/SBE recertification** (DL09279) — ✅ renewed 2026-05-30 per user confirmation (prior cycle expired 2024-08-31); new expiration `[USER TO CONFIRM: new expiration date]`. ATS / TMD may not score MBE participation, but the Owner is a state agency so HUB credit is theoretically valuable.
+- [x] **TX HUB recertification** (VID 1874292998900) — ✅ renewed 2026-05-30 per user confirmation (prior cycle expired 2024-08-31); new expiration `[USER TO CONFIRM: new expiration date]`.
 
 ## Gate 4 — Scope clarification (questions due to ATS by 2026-06-09)
 

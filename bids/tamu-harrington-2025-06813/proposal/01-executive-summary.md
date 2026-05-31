@@ -18,7 +18,7 @@ Re: **Solicitation 2025-06813 — Harrington Education Center Lab 303 Renovation
 `Frisco, TX 75033`
 `(469) 213-1838 | contactus@blueprintconstructs.com | https://www.blueprintconstructs.com`
 Texas Comptroller Taxpayer ID: `32082600456`
-TX HUB Cert (if applicable): `VID 1874292998900 — EXPIRED 2024-08-31 per source cert; user to confirm renewal`
+TX HUB Cert (if applicable): `VID 1874292998900 — ACTIVE (renewed 2026-05-30 per user; new expiration [USER TO CONFIRM: new expiration date]; prior cycle expired 2024-08-31)`
 Federal EIN: `87-4292998`
 
 ## Date

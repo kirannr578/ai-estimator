@@ -1,6 +1,6 @@
 # 05 — HUB Subcontracting Plan strategy — TAMU Wehner 2025-06871
 
-> The HSP is **REQUIRED** for this CSP (per user email-body). BPC's HUB certificate expired 2024-08-31, so BPC **cannot claim self-perform HUB credit** unless the certificate is renewed in time. The HSP must therefore demonstrate good-faith effort to subcontract to certified HUB subs.
+> The HSP is **REQUIRED** for this CSP (per user email-body). BPC's HUB certificate was **renewed 2026-05-30 per user confirmation** (prior cycle expired 2024-08-31); new expiration `[USER TO CONFIRM: new expiration date]`. BPC **can claim self-perform HUB credit** on this CSP. The HSP should combine self-perform credit with HUB sub commitments where BPC does not self-perform the trade. GFE documentation for HUB sub solicitation is still recommended to maximize HSP scoring.
 
 ---
 
@@ -23,18 +23,16 @@ TAMU System CSPs typically use one of two HSP frameworks:
 
 Per `firm/firm-profile.json → licenses_and_certifications`:
 
-- TX HUB Certificate VID 1874292998900 — **EXPIRED 2024-08-31**
-- DFW MSDC MBE Certificate DL09279 — **EXPIRED 2024-08-31**
-- SBE Certificate DL09279 — **EXPIRED 2024-08-31**
+- TX HUB Certificate VID 1874292998900 — **ACTIVE** (renewed 2026-05-30 per user; prior cycle expired 2024-08-31; new expiration `[USER TO CONFIRM: new expiration date]`)
+- DFW MSDC MBE Certificate DL09279 — **ACTIVE** (renewed 2026-05-30 per user; prior cycle expired 2024-08-31; new expiration `[USER TO CONFIRM: new expiration date]`)
+- SBE Certificate DL09279 — **ACTIVE** (renewed 2026-05-30 per user; prior cycle expired 2024-08-31; new expiration `[USER TO CONFIRM: new expiration date]`)
 
-**Implication:**
-- BPC cannot self-credit any portion of the contract as HUB-self-perform
-- BPC must demonstrate good-faith effort to subcontract to HUB-certified subs
-- BPC's MBE/SBE/HUB heritage still helps in outreach (proves the firm has done MBE work), but cannot count toward the HSP goal calculation
+**Implication (post-renewal 2026-05-30):**
+- BPC **can self-credit** the BPC-self-perform portion of the contract (drywall, paint, flooring install, supervision/GC) as HUB-self-perform
+- BPC should **still pursue HUB sub commitments** for trades it doesn't self-perform (architectural glazing, electrical, plumbing, HVAC) to maximize HSP scoring
+- Combine the two for a stronger HSP narrative than either alone
 
-**Mitigation pathway (if user renews TX HUB before bid date):**
-- TX HUB recertification takes 4-8 weeks typically; user submission would be Thu 2026-05-28 (today is 2026-05-27 / due 2026-06-17)
-- Cannot rely on this; assume HSP-only-via-subs posture
+**Open action:** capture the new expiration date (`[USER TO CONFIRM: new expiration date]`) from the renewed cert PDF before HSP submission so Section 1 of the HSP cites a specific cert expiration.
 
 ## 3. HUB-eligible subcontracting opportunities (by trade)
 

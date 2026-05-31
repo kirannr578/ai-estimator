@@ -12,7 +12,7 @@
 | **Past Performance** | 15-25% | Quality of similar past projects, references | BPC has strong institutional past performance (Hindu Temple, Holiday Inn) + 250-500 SFH portfolio — see `proposal/04-past-performance.md` |
 | **Schedule / Construction Approach** | 10-15% | Realistic and detailed schedule + methodology | BPC presents a 90-120 day schedule with after-hours phasing to minimize Mays Business School disruption |
 | **Project Team / Experience** | 5-10% | Key personnel qualifications | Rocky (PMP, 22 yrs experience) + Patty Winkler (if HUB sub liaison) |
-| **HUB Participation / HSP** | 5-10% | % of HUB sub work + good-faith effort | BPC's HUB posture: expired cert + sub-only HSP. Target 25-30% HUB participation. |
+| **HUB Participation / HSP** | 5-10% | % of HUB sub work + good-faith effort | BPC's HUB posture: ✅ **active cert** (renewed 2026-05-30 per user; prior cycle expired 2024-08-31; new expiration `[USER TO CONFIRM: new expiration date]`). Combine self-perform credit with HUB sub commitments. Target 25-30%+ HUB participation. |
 | **Safety Record (EMR / TRIR)** | ~5% | Historical safety performance | EMR / TRIR `[USER TO FILL]` — BPC needs to surface from WC carrier |
 
 **Total: ~100% across 6 criteria.**
@@ -26,7 +26,7 @@
 - ✅ **Small business** — qualifies for HUB consideration of sub-tier; may help with TAMU's small-business preference
 
 ### Weaknesses
-- ❌ **HUB certificate expired** — cannot self-credit HUB participation
+- ~~❌ HUB certificate expired~~ — ✅ closed 2026-05-30 per user confirmation; BPC can now self-credit HUB participation
 - ❌ **Insurance / bonding documentation gaps** — current COI + bond letter from agent needed
 - ❌ **Safety performance numbers unknown** — EMR / TRIR not on file
 - ❌ **No MARRS glazing experience** — must subcontract

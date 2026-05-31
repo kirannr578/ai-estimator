@@ -68,7 +68,7 @@ These come from [`firm-profile.json → key_personnel_notes`](../firm-profile.js
 - **Only the Principal in Charge (Rocky Nudurupati) has a fully-documented bio.** All other key-personnel files are skeletons with `[USER TO FILL]` for name, credentials, project history. **Do not submit a proposal that names a fictitious person.**
 - **Past-performance reference contacts are `[USER TO FILL]`** on Hindu Temple, Holiday Inn, and Lavon RV Park — confirm a live POC who will pick up the phone before submitting.
 - **EMR and OSHA safety statistics are not on file.** Until provided, leave safety-plan numerics as `[USER TO FILL]`.
-- **TX HUB cert was expired per source.** If the HSP cites BPC as a HUB self-perform contributor, confirm current renewal first.
+- **TX HUB cert renewed 2026-05-30 per user confirmation** (prior cycle expired 2024-08-31 per source). New expiration date pending user confirmation — capture before any HSP that claims a specific TX HUB expiration in Section 1.
 - **Insurance COIs may be stale** (last documented GL policy expired 2024-09-25). Pull current COI from the agent before any submission that requires it.
 
 ---

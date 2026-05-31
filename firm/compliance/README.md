@@ -40,14 +40,14 @@ This registry is the **single source of truth** for what compliance assets Bluep
 | **WOSB / EDWOSB** | Not held per source | n/a | n/a | ⬜ | — |
 | **SDVOSB / VOSB** | Not held per source | n/a | n/a | ⬜ | — |
 | **DBE (federal Disadvantaged Business Enterprise)** | Not held per source | n/a | n/a | ⬜ | — |
-| **SBE (DFW MSDC)** | `DL09279` | `firm/firm-profile.json → licenses_and_certifications` | 2024-08-31 (per source) | 🔴 | Recertify with DFW MSDC |
-| **MBE (DFW MSDC, NMSDC affiliate)** | `DL09279` | `firm/firm-profile.json` | 2024-08-31 (per source) | 🔴 | Recertify with DFW MSDC; cascades into TX HUB recognition |
+| **SBE (DFW MSDC)** | `DL09279` | `firm/firm-profile.json → licenses_and_certifications` | **Renewed 2026-05-30 per user; new expiration `[USER TO CONFIRM: new expiration date]`** (prior cycle expired 2024-08-31 per source) | ✅ | Capture new expiration date once user supplies; refresh source cert PDF in `BPC/` |
+| **MBE (DFW MSDC, NMSDC affiliate)** | `DL09279` | `firm/firm-profile.json` | **Renewed 2026-05-30 per user; new expiration `[USER TO CONFIRM: new expiration date]`** (prior cycle expired 2024-08-31 per source) | ✅ | Capture new expiration date once user supplies; cascades into TX HUB recognition under DFW MSDC / TX Comptroller MOU |
 
 ## 3. Texas state-government registrations
 
 | Asset | Value | Where it lives | Expires / Renewal | Status | Action |
 |---|---|---|---|---|---|
-| **TX HUB cert** | VID `1874292998900` | TX Comptroller; `firm/firm-profile.json → licenses_and_certifications` | 2024-08-31 (per source) | 🔴 | Recertify with TX Comptroller before any HUB-claiming HSP |
+| **TX HUB cert** | VID `1874292998900` | TX Comptroller; `firm/firm-profile.json → licenses_and_certifications` | **Renewed 2026-05-30 per user; new expiration `[USER TO CONFIRM: new expiration date]`** (prior cycle expired 2024-08-31 per source) | ✅ | Capture new expiration date once user supplies; refresh source cert PDF in `BPC/`; reconfirm before any HSP that claims HUB self-perform credit |
 | **TX SOS file number** | `0804376974` | TX Secretary of State; `firm/firm-profile.json → sos_file_number` | Permanent (annual public-information report due) | ⚠️ | Verify annual report filed |
 | **TX Comptroller Taxpayer ID** | `32082600456` | TX Comptroller; `firm/firm-profile.json → tx_taxpayer_id` | Permanent | ✅ | — |
 | **TX Comptroller franchise-tax good standing** | Assumed current; verify per bid | TX Comptroller — Taxable Entity Search | Annual (May 15 cycle) | ⚠️ | Verify via [Taxable Entity Search](https://mycpa.cpa.state.tx.us/coa/) before each TX state bid |
@@ -157,9 +157,9 @@ Current state: not curated; build incrementally as each bid cycles. Target: 3 ve
 
 These are the items that block bids today. The user (or the bid-prep agent) should triage these in order before / during the next bid cycle:
 
-1. **TX HUB recertification** (🔴 — blocks any TX state HSP claim that lists BPC as HUB)
-2. **MBE / SBE recertification with DFW MSDC** (🔴 — same as #1)
-3. **Insurance refresh — pull current COIs from agent** (🔴 — blocks any bid that requires COI in submittal)
+1. ~~**TX HUB recertification**~~ — ✅ **Closed 2026-05-30 per user confirmation.** Capture new expiration date once user supplies (`[USER TO CONFIRM: new expiration date]`).
+2. ~~**MBE / SBE recertification with DFW MSDC**~~ — ✅ **Closed 2026-05-30 per user confirmation.** Same `[USER TO CONFIRM]` placeholder.
+3. **Insurance refresh — pull current COIs from agent** (🔴 — blocks any bid that requires COI in submittal; separate from cert renewal above, Commercial GL `SBCC-042443-00` still shows expired 2024-09-25 per source)
 4. **Identify + bio + cred each non-PIC key personnel role** (🔴 — blocks any bid requiring named project team)
 5. **Confirm SAM.gov registration + Reps & Certs currency** (🔴 if expired — blocks all federal)
 6. **Confirm TX Comptroller franchise-tax good standing** (🔴 if not good-standing — blocks all TX state)

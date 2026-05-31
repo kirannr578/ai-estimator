@@ -28,7 +28,7 @@ Blue Print Constructs is uniquely positioned for this project for four reasons:
 
 3. **Texas-based + TAMU-area** — We are a Frisco, Texas-based firm with active business in Brazos County (Texas A&M, College Station area) through our sister TAMU bid for the Harrington Education Center 2025-06813. We have established relationships with TAMU HUB Operations (Patty Winkler), SSC (your team), and the regional HUB subcontractor community.
 
-4. **Diverse-business heritage** — Blue Print Constructs is a Texas HUB-certified entity (recertification in progress), DFW MSDC MBE/SBE certified, and Texas-state small-business eligible. Our HSP for this project targets 25-30% HUB participation across MARRS glazing, electrical, plumbing, HVAC, and flooring trades.
+4. **Diverse-business heritage** — Blue Print Constructs is a Texas HUB-certified entity (renewed 2026-05-30 per the firm's compliance registry; new expiration `[USER TO CONFIRM: new expiration date]`), DFW MSDC MBE/SBE certified (same renewal), and Texas-state small-business eligible. Our HSP for this project combines BPC self-perform HUB credit with HUB sub commitments to target 25-30%+ HUB participation across MARRS glazing, electrical, plumbing, HVAC, and flooring trades.
 
 ## Schedule + delivery commitment
 

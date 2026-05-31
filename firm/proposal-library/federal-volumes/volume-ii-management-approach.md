@@ -25,7 +25,7 @@ Blue Print Constructs is the operating dba of **RK Residential Homes and Commerc
 
 ### 1.2 Federal small-business posture
 
-BPC self-certifies as a Small Business under NAICS 236220 (size standard $45M, 3-yr avg revenue) per its active SAM.gov record. Additional minority-owned and Texas-state HUB / MBE / SBE certifications via DFW MSDC are tracked in [`firm/compliance/README.md`](../../compliance/README.md) `[USER TO VERIFY — TX HUB / MBE / SBE recertification status before claiming on this proposal; per the compliance registry the prior cycle expired 2024-08-31]`.
+BPC self-certifies as a Small Business under NAICS 236220 (size standard $45M, 3-yr avg revenue) per its active SAM.gov record. Additional minority-owned and Texas-state HUB / MBE / SBE certifications via DFW MSDC are tracked in [`firm/compliance/README.md`](../../compliance/README.md); **renewed 2026-05-30 per user confirmation, new expiration `[USER TO CONFIRM: new expiration date]`** (prior cycle expired 2024-08-31).
 
 ### 1.3 Operating posture
 
