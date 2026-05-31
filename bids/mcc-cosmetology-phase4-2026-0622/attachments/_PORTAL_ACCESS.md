@@ -1,6 +1,14 @@
 # Portal access — MCC Cosmetology Phase 4 (HCS Box)
 
-> **[USER ACTION REQUIRED]** — The plans, specs, and Owner's Proposal Form for this opportunity are gated behind the HCS Box link below. Cursor agents have **no Box credentials and no browser MCP for portal-gated downloads**, so the user must pull these files manually.
+> ✅ **DOWNLOADED 2026-05-30 20:08 CT** — User pulled the HCS Box folder contents as
+> `Phase 4 CSC Module B Cosmetology.zip` (20.8 MB) into
+> `C:\Users\rnuduru1\OneDrive\Blueprint Constructs\Landmark\`. The Cursor agent extracted
+> the ZIP into `bids/mcc-cosmetology-phase4-2026-0622/attachments/` (3 PDFs: 414-page Project
+> Manual + 37-sheet Drawing Set + 2-page Section 004213 CSP Proposal Form). See
+> [`../source-files-manifest.md`](../source-files-manifest.md) for the full inventory.
+>
+> **Action posture below is now ADDENDUM MONITORING ONLY.** Re-pull the Box folder daily
+> from 2026-06-15 through 2026-06-22 to capture any addenda HCS posts.
 
 ## HCS plans portal (Box)
 
@@ -32,18 +40,16 @@ C:\Users\rnuduru1\OneDrive\Blueprint Constructs\HCS\05302026-mcc-cosmetology\00-
 
 Create the folder if it does not exist. Treat as read-only canonical source after the initial download.
 
-## Action items for the user
+## Action items for the user (DOWNLOADED — addendum-monitoring posture)
 
-- [ ] Open the Box link in a browser
-- [ ] If a Box account login is required, log in with the BPC corporate Box identity (or create one if BPC does not have one)
-- [ ] Download all available files into the staging folder above
-- [ ] Take a screenshot of the Box folder index showing every file's name + date + size, and save it as `_box-folder-index-{YYYY-MM-DD}.png` in `00-original-drop/`
-- [ ] Notify the bid lead so the next slice can re-update [`../01-overview.md`](../01-overview.md), [`../06-scope-outline.md`](../06-scope-outline.md), and [`../07-risk-register.md`](../07-risk-register.md) with the now-known content
+- [x] Open Box link, download ZIP, stage at OneDrive `Landmark/` (DONE 2026-05-30 20:08)
+- [x] Extract ZIP into `attachments/` (DONE — committed via this enrichment)
+- [x] Re-update [`../01-overview.md`](../01-overview.md) / [`../06-scope-outline.md`](../06-scope-outline.md) / [`../07-risk-register.md`](../07-risk-register.md) (DONE — committed via this enrichment)
+- [ ] **Daily Box re-pull 2026-06-15 → 2026-06-22** to detect addenda. Re-extract into a fresh folder, diff against `attachments/`, and append any new files to [`../source-files-manifest.md`](../source-files-manifest.md) with date-of-addition
 
-## If access fails
+## If addendum re-pull access ever fails
 
-- If the Box link is restricted to authenticated users only, email HCS Estimating at the Waco address above (254-829-3200) and request access. Reference solicitation: "MCC CSC Module B Cosmetology Phase 4 Renovation, sub-quote due 2026-06-22 10:00 CT".
-- If the Box folder is empty or missing the Owner's Proposal Form, email HCS Estimating to request the form be added to the share.
+- If the Box link returns 403 / requires a login, email HCS Estimating at the Waco address above (254-829-3200) and request access. Reference solicitation: "MCC CSC Module B Cosmetology Phase 4 Renovation, sub-quote due 2026-06-22 10:00 CT".
 
 ## Security note
 

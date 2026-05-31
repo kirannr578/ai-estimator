@@ -1,8 +1,23 @@
 # Watchlist: Adam's Trade & Services — Powderly Bldg. 1 (no solicitation #)
 
+> ✅ **CONVERTED 2026-05-30 evening** to pursue scaffold at
+> [`bids/tmd-camp-maxey-roof-2026-0626/`](../tmd-camp-maxey-roof-2026-0626/). The Camp Maxey
+> Roof Replacement Project Information PDF received by the user 2026-05-30 19:49 CT supplied
+> the previously-missing scope: **TMD-owned roof replacement** (lower + upper roofs on
+> Bldg. 1, full TPO + HD ISO + perimeter plywood + drip edge / counterflashing / gutters /
+> downspouts) at the same address (6351 US 271 N Powderly TX 75473) with the same prime
+> (Adam's Trade & Services), same PM (Patrick Grabowski), same site-visit slots (Mon 6/1
+> 8 AM or 1 PM CT), and same quote-due date (Fri 6/26 EOD) as this watchlist tracked. All
+> conversion criteria below are met (see §7 Conversion criteria); the active workspace at
+> [`bids/tmd-camp-maxey-roof-2026-0626/`](../tmd-camp-maxey-roof-2026-0626/) is now the
+> canonical record. This watchlist file is retained for lineage / audit; do not edit it
+> further (any updates land in the pursue scaffold).
+
 **Watchlist created:** 2026-05-30
-**Sub-quote due (per digest):** **Friday, June 26, 2026 EOD**
-**Source:** DFWMSDC Construction Members digest, 2026-05-30, Opportunity #2
+**Watchlist closed:** 2026-05-30 evening (converted to pursue)
+**Sub-quote due (per digest, confirmed by Camp Maxey PDF):** **Friday, June 26, 2026 EOD**
+**Source (initial):** DFWMSDC Construction Members digest, 2026-05-30, Opportunity #2
+**Source (scope clarification, this resolution):** *Camp Maxey Roof Replacement Project Information -2.pdf* (Adam's Trade, dated 2026-05-26; received by user 2026-05-30 19:49 CT)
 
 ---
 
@@ -109,6 +124,5 @@ Verbatim text from digest:
 
 | Date | Decision / Note |
 |---|---|
-| 2026-05-30 | Watchlist created. No scope; site visit 6/1 is the decision gate. User to email Patrick Grabowski for scope summary. |
-| TBD | Site visit attended (or skipped intentionally) |
-| TBD | Convert → pursue scaffold OR → no-go memo |
+| 2026-05-30 (early) | Watchlist created from DFWMSDC digest #2. No scope; site visit 6/1 is the decision gate. User to email Patrick Grabowski for scope summary. |
+| 2026-05-30 (evening) | **CONVERTED to pursue scaffold.** User-supplied Camp Maxey Roof Replacement Project Information PDF (Adam's Trade, 2026-05-26) provides the scope: TMD-owned roof replacement on Bldg. 1, lower + upper TPO over HD ISO. All conversion criteria in §7 met. Active workspace: [`bids/tmd-camp-maxey-roof-2026-0626/`](../tmd-camp-maxey-roof-2026-0626/). Note: Conversion was triggered by document arrival, not by the 6/1 site visit (which had not yet occurred). |

@@ -39,7 +39,6 @@ Each watchlist entry contains:
 | File | Sol # | Agency | Expected open | Type |
 |---|---|---|---|---|
 | `saan-san-juan-restrooms-140P1226Q0025.md` | 140P1226Q0025 | NPS Lakewood MABO | mid-May 2026 (possibly already posted) | Historic preservation; weak past-perf concern |
-| `powderly-bldg1-adams-trade-2026-0626.md` | none (private GC) | Adam's Trade & Services, Inc. (Powderly TX) | Open — quote due 2026-06-26 | Private GC sub-bid; scope undisclosed in digest; site visit 2026-06-01 is the decision gate. **[USER ACTION REQUIRED]** attend site visit or email PM for scope summary. |
 | `longhorn-little-elm-bcibelisle.md` | none (private GC) | BCI Belisle (Longhorn Steakhouse, Little Elm TX) | Open — sub-quote due not stated in digest | Private GC sub-bid (restaurant fit-out); plans gated behind password-protected portal. **[USER ACTION REQUIRED]** log in at `www.bcibelisle.com` (password `littleelm`) within 48 hr — best geographic match in 2026-05-30 digest (Little Elm is BPC's home town). |
 
 ## Resolved / closed watchlist items
@@ -47,6 +46,7 @@ Each watchlist entry contains:
 | Original key | Resolution date | Resolution |
 |---|---|---|
 | `opp_4024120_clarify` (phantom — never had a file in this directory) | 2026-05-30 | **Not resolved.** The 2026-05-27 OneDrive batch (`Landmark/05272026/`) was triaged in [`bids/_TRIAGE/2026-05-27-onedrive-batch.md`](../_TRIAGE/2026-05-27-onedrive-batch.md) and found to contain 5 distinct opportunities, **none** of which reference project number `4024120` or the literal phrase "Renovation of Park and Recreation Center Facilities". Grep across the entire repo for `4024120` returns only references created during this triage. The watchlist key appears to be a stale reference. Outcomes from the batch — 4 new active workspaces (Allen Veterans Memorial, HHSC Bldg 500 Mech, TPWD Old Tunnel Stairs, USACE Fort Hood Staging) + 1 no-go (TMD Camp Mabry modular RFI) — are tracked under `bids/<slug>/` and `bids/_NO_GO/` respectively. See [`firm/playbooks/_learning-log.md`](../../firm/playbooks/_learning-log.md) entry #8 for the open data-quality question to Rocky. |
+| [`powderly-bldg1-adams-trade-2026-0626.md`](./powderly-bldg1-adams-trade-2026-0626.md) | 2026-05-30 evening | **Converted to pursue scaffold** at [`bids/tmd-camp-maxey-roof-2026-0626/`](../tmd-camp-maxey-roof-2026-0626/). The Camp Maxey Roof Replacement Project Information PDF received by user 2026-05-30 19:49 CT supplied the previously-missing scope (TMD-owned roof replacement on Bldg. 1: lower + upper TPO over HD ISO). Same prime (Adam's Trade & Services), same PM (Patrick Grabowski), same site-visit slots (Mon 6/1 8 AM / 1 PM CT), same quote-due date (Fri 6/26 EOD) as the watchlist tracked — confirmed identical opportunity. Conversion criteria in §7 of the watchlist file all met. The watchlist file is retained for lineage with a CONVERTED banner; the pursue scaffold is now canonical. |
 
 ## Cadence
 
