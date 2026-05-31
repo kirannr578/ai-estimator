@@ -39,6 +39,8 @@ Each watchlist entry contains:
 | File | Sol # | Agency | Expected open | Type |
 |---|---|---|---|---|
 | `saan-san-juan-restrooms-140P1226Q0025.md` | 140P1226Q0025 | NPS Lakewood MABO | mid-May 2026 (possibly already posted) | Historic preservation; weak past-perf concern |
+| `powderly-bldg1-adams-trade-2026-0626.md` | none (private GC) | Adam's Trade & Services, Inc. (Powderly TX) | Open — quote due 2026-06-26 | Private GC sub-bid; scope undisclosed in digest; site visit 2026-06-01 is the decision gate. **[USER ACTION REQUIRED]** attend site visit or email PM for scope summary. |
+| `longhorn-little-elm-bcibelisle.md` | none (private GC) | BCI Belisle (Longhorn Steakhouse, Little Elm TX) | Open — sub-quote due not stated in digest | Private GC sub-bid (restaurant fit-out); plans gated behind password-protected portal. **[USER ACTION REQUIRED]** log in at `www.bcibelisle.com` (password `littleelm`) within 48 hr — best geographic match in 2026-05-30 digest (Little Elm is BPC's home town). |
 
 ## Cadence
 

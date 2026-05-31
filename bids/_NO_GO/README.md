@@ -36,6 +36,9 @@ Each memo answers 5 questions:
 |---|---|---|---|
 | `2026-05-22-mcfaddin-nwr-fence-140FC126Q0015.md` | 140FC126Q0015 | 2026-05-22 (closed before notification) | Window closed |
 | `2026-05-19-garland-inwood-blvd-REQ00002146.md` | REQ00002146 | 2026-05-19 (closed before notification) | Window closed |
+| `2026-05-30-plano-legacy-trail-pond-2026-0422-B.md` | 2026-0422-B | 2026-07-06 (open at decision time) | Scope mismatch — hydraulic dredging / pond restoration outside BPC NAICS lane |
+| `2026-05-30-kingsville-storm-water-26-04.md` | 26-04 (CDBG-MIT GLO 22-085-009-D237) | 2026-06-11 (open at decision time) | Scope mismatch (heavy-civil storm-drainage utility) + out of region (Kingsville ~360 mi south of DFW) |
+| `2026-05-30-utd-ece-bootcamp-UTD20260301-AN.md` | UTD20260301-AN | 2026-06-19 (open at decision time) | Industry mismatch — non-credit education / workforce-development services, not construction |
 
 ## Revived opportunities (moved to active workspaces)
 
