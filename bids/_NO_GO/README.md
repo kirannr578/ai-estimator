@@ -39,6 +39,7 @@ Each memo answers 5 questions:
 | `2026-05-30-plano-legacy-trail-pond-2026-0422-B.md` | 2026-0422-B | 2026-07-06 (open at decision time) | Scope mismatch — hydraulic dredging / pond restoration outside BPC NAICS lane |
 | `2026-05-30-kingsville-storm-water-26-04.md` | 26-04 (CDBG-MIT GLO 22-085-009-D237) | 2026-06-11 (open at decision time) | Scope mismatch (heavy-civil storm-drainage utility) + out of region (Kingsville ~360 mi south of DFW) |
 | `2026-05-30-utd-ece-bootcamp-UTD20260301-AN.md` | UTD20260301-AN | 2026-06-19 (open at decision time) | Industry mismatch — non-credit education / workforce-development services, not construction |
+| `2026-05-30-tmd-camp-mabry-modular-rfi-TMD26-CFMO-RFI001.md` | TMD26-CFMO-RFI001 | RFI response 2026-07-14 (open at decision time) | Scope mismatch — RFI for prefab modular-office rental (NIGP 971-08 / 971-40), not BPC's NAICS 236220 construction lane |
 
 ## Revived opportunities (moved to active workspaces)
 
