@@ -1500,6 +1500,20 @@ class SheetExtraction(BaseModel):
     # silently dropping zero takeoff rows. Default False keeps every
     # pre-T10 fixture / persisted JSON backwards-compatible.
     refused: bool = False
+    # T10 v6 G-1 — per-bundle bid-alternates from the deterministic
+    # regex + LLM-fallback path in
+    # :func:`core.extractors._extract_alternates_for_bundle`. Populated
+    # by ``extract_bid_package`` / ``extract_bid_form`` once they have
+    # the LLM response in hand, then drained by :func:`core.takeoff.reconcile`
+    # into the ``extra_alternates=`` parameter of
+    # :func:`core.takeoff.aggregate_alternates_across_packages` so any
+    # alternates that the single-shot LLM missed (truncation, unusual
+    # layouts like ``Option 001`` / ``01220 Schedule of Alternates``)
+    # still reach the project-level rollup. Default ``[]`` keeps every
+    # pre-G-1 fixture / persisted JSON backwards-compatible. The legacy
+    # ``bid_package.alternates`` (list of :class:`Alternate`) channel is
+    # unchanged.
+    alternate_lines: list[AlternateLine] = Field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------

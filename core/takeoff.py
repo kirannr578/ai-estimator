@@ -768,6 +768,14 @@ def reconcile(
     site_info_acc: list[SiteInfo] = []
     raw_takeoffs: list[TakeoffItem] = []
     bid_packages: list[BidPackage] = []
+    # T10 v6 G-1 — collect per-page deterministic + LLM-fallback alternate
+    # lines that ``extract_bid_package`` / ``extract_bid_form`` populated on
+    # each :class:`SheetExtraction.alternate_lines`. Drained below into the
+    # ``extra_alternates=`` parameter of
+    # :func:`aggregate_alternates_across_packages` so records produced by
+    # the per-page path (which the legacy single-shot LLM misses on any
+    # RFCSP > ~120 KB total text) still reach the project rollup.
+    extra_alternate_lines: list[AlternateLine] = []
     warnings: list[str] = []
     summaries: dict[str, str] = sheet_summaries or {}
     # Phase T2: per-sheet door-schedule pre-pass → typed TakeoffItem rows.
@@ -871,6 +879,14 @@ def reconcile(
             site_info_acc.append(ex.site)
         if ex.bid_package:
             bid_packages.append(ex.bid_package)
+        # T10 v6 G-1 — drain per-extraction alternate lines into the
+        # cross-package buffer. ``getattr`` keeps the path safe for any
+        # pre-G-1 :class:`SheetExtraction` payload deserialized from
+        # disk that predates the field (default ``[]`` on the model
+        # also covers this — the ``getattr`` is belt-and-suspenders).
+        ex_alts = getattr(ex, "alternate_lines", None) or []
+        if ex_alts:
+            extra_alternate_lines.extend(ex_alts)
         raw_takeoffs.extend(ex.raw_takeoffs)
         warnings.extend(ex.warnings)
         if ex.summary:
@@ -1196,13 +1212,20 @@ def reconcile(
     # Phase T9.0 — aggregate priced alternates across bid packages.
     # Bridges legacy :class:`Alternate` records into the new
     # :class:`AlternateLine` shape and deduplicates duplicates that
-    # appear in multiple bid forms. Operators / downstream code can
-    # ALSO append :class:`AlternateLine` records produced via the
-    # deterministic + LLM-fallback path on raw bid-form page text;
-    # those flow in through the ``extra_alternates`` parameter of
-    # :func:`aggregate_alternates_across_packages` when the caller
-    # invokes it directly (e.g. the Streamlit T9.1 review tab).
-    aggregated_alternates = aggregate_alternates_across_packages(bid_packages)
+    # appear in multiple bid forms. T10 v6 G-1: also drains the
+    # per-extraction ``alternate_lines`` (populated by the per-page
+    # deterministic + LLM-fallback path in
+    # :func:`core.extractors._extract_alternates_for_bundle`) through
+    # the ``extra_alternates=`` parameter so records the single-shot
+    # LLM missed (truncation, ``Option 001`` / ``01220 Schedule of
+    # Alternates`` layouts) still reach the project rollup. Operators
+    # and the Streamlit T9.1 review tab can also call
+    # :func:`aggregate_alternates_across_packages` directly with
+    # additional ``extra_alternates``.
+    aggregated_alternates = aggregate_alternates_across_packages(
+        bid_packages,
+        extra_alternates=extra_alternate_lines,
+    )
 
     return ProjectModel(
         rooms=rooms,

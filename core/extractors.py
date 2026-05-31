@@ -981,11 +981,22 @@ def extract_bid_package(bundle: "DocumentBundle", llm: LLMClient) -> SheetExtrac
     if bp is not None and not _bid_package_has_content(bp):
         bp = None
     summary = (bp.summary if bp and bp.summary else "") or str(data.get("summary") or "")
+
+    # T10 v6 G-1 — drain the per-page deterministic + LLM-fallback path
+    # into ``SheetExtraction.alternate_lines``. Single-shot LLM extraction
+    # on the truncated whole-document body misses alternates pages that
+    # land in the truncated middle (Carr EFA RFCSP p.42 is well past
+    # the 60 KB head/tail window) and misses bare-``Option 001`` federal
+    # SF18 layouts even when the page survives truncation; the per-page
+    # path closes both gaps.
+    alternate_lines = _extract_alternates_for_bundle(bundle, llm)
+
     return SheetExtraction(
         sheet_id=sheet_id,
         summary=summary,
         bid_package=bp,
         warnings=([str(w) for w in _safe_list(data, "warnings")] if isinstance(data, dict) else []),
+        alternate_lines=alternate_lines,
     )
 
 
@@ -1107,11 +1118,16 @@ def extract_bid_form(bundle: "DocumentBundle", llm: LLMClient) -> SheetExtractio
         bp = bp.model_copy(update={"trade_name": "Bid Form"})
 
     summary = (bp.summary if bp and bp.summary else "") or str(data.get("summary") or "")
+
+    # T10 v6 G-1 — see the matching comment in :func:`extract_bid_package`.
+    alternate_lines = _extract_alternates_for_bundle(bundle, llm)
+
     return SheetExtraction(
         sheet_id=sheet_id,
         summary=summary or f"Bid form extracted ({len(bp.unit_prices) if bp else 0} unit-price lines).",
         bid_package=bp,
         warnings=([str(w) for w in _safe_list(data, "warnings")] if isinstance(data, dict) else []),
+        alternate_lines=alternate_lines,
     )
 
 
@@ -1290,6 +1306,113 @@ def extract_alternates_via_llm(
             if line.confidence > 0.70:
                 line = line.model_copy(update={"confidence": 0.70})
             out.append(line)
+    return out
+
+
+_BUNDLE_LLM_FALLBACK_CAP: int = 3
+"""T10 v6 G-1 — cap on LLM-fallback invocations per bundle.
+
+``extract_alternates_via_llm`` runs only on pages where the section
+detector fired AND the deterministic regex returned zero alternates.
+Even with that gate the marginal cost is bounded per-page; this cap
+provides a hard ceiling per bundle so a pathological document with
+many alternates-styled section headers cannot run away with cost.
+Three covers every observed real-world case (the worst RFCSP in the
+v5a corpus had 5 section-detector hits and 1 zero-deterministic hit).
+"""
+
+
+def _extract_alternates_for_bundle(
+    bundle: "DocumentBundle", llm: LLMClient
+) -> list[AlternateLine]:
+    """T10 v6 G-1 — per-page deterministic + LLM-fallback alternates extraction.
+
+    Walks every page of the bundle's source PDF via ``fitz``, runs the
+    deterministic regex parser
+    (:func:`core.extraction.bid_form_alternates.extract_alternates_from_page`)
+    on each page, and gates the LLM fallback
+    (:func:`extract_alternates_via_llm`) via
+    :func:`core.extraction.bid_form_alternates.should_invoke_llm_fallback`
+    capped at :data:`_BUNDLE_LLM_FALLBACK_CAP` invocations per bundle.
+
+    Per-page deterministic + LLM-fallback results are merged via
+    :func:`core.extraction.bid_form_alternates.reconcile_alternate_sources`,
+    then the per-page lists are concatenated into a single bundle-level
+    list. Returns ``[]`` on any I/O or parsing error — alternates are
+    additive, never failure-critical.
+
+    This is the wiring closure for G-1: the deterministic +
+    LLM-fallback extractor module was implemented and unit-tested at
+    HEAD ``9ad21a8`` but had **zero call sites** in
+    :func:`extract_bundle` / :func:`extract_bid_package` /
+    :func:`extract_bid_form`, so the calibration v5a output showed
+    0 alternates across 25 bundles despite the unit tests being
+    green. See ``exports/calibration_v5/G1_INVESTIGATION.md``.
+    """
+    from .extraction.bid_form_alternates import (
+        extract_alternates_from_page,
+        reconcile_alternate_sources,
+        should_invoke_llm_fallback,
+    )
+
+    try:
+        import fitz  # PyMuPDF
+    except Exception as exc:  # pragma: no cover - fitz is a hard dep elsewhere
+        logger.warning(
+            "_extract_alternates_for_bundle(%s): fitz unavailable (%s); skipping.",
+            bundle.pdf_name, exc,
+        )
+        return []
+
+    try:
+        doc = fitz.open(bundle.pdf_path)
+    except Exception as exc:
+        logger.warning(
+            "_extract_alternates_for_bundle(%s): fitz.open failed (%s); skipping.",
+            bundle.pdf_name, exc,
+        )
+        return []
+
+    out: list[AlternateLine] = []
+    llm_calls = 0
+    try:
+        for i, page in enumerate(doc):
+            try:
+                page_text = page.get_text("text") or ""
+            except Exception:
+                continue
+            if not page_text.strip():
+                continue
+
+            det = extract_alternates_from_page(
+                page_text,
+                bid_package_id=bundle.pdf_name,
+                source_sheet=f"{bundle.pdf_name} p.{i + 1}",
+            )
+
+            llm_extracted: list[AlternateLine] = []
+            if (
+                llm_calls < _BUNDLE_LLM_FALLBACK_CAP
+                and should_invoke_llm_fallback(page_text, det)
+            ):
+                llm_calls += 1
+                llm_extracted = extract_alternates_via_llm(
+                    page_text,
+                    llm,
+                    bid_package_id=bundle.pdf_name,
+                    source_sheet=f"{bundle.pdf_name} p.{i + 1}",
+                )
+
+            if not det and not llm_extracted:
+                continue
+            merged = reconcile_alternate_sources(det, llm_extracted)
+            out.extend(merged)
+    finally:
+        try:
+            doc.close()
+        except Exception:
+            pass
+
     return out
 
 
